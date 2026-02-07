@@ -1855,17 +1855,22 @@ export class GameEngine {
     }
     mesh.castShadow = true;
 
-    // Spawn at arena edge
+    // Spawn at fixed distance from player, but always inside arena
     const angle = Math.random() * Math.PI * 2;
-    const dist = ARENA.halfSize - 2;
-    const pos = new THREE.Vector3(
-      this.player.position.x + Math.cos(angle) * dist * (0.5 + Math.random() * 0.5),
-      type === "bat" ? 1.5 : 0.5,
-      this.player.position.z + Math.sin(angle) * dist * (0.5 + Math.random() * 0.5)
-    );
-    // Clamp
-    pos.x = Math.max(-ARENA.halfSize + 2, Math.min(ARENA.halfSize - 2, pos.x));
-    pos.z = Math.max(-ARENA.halfSize + 2, Math.min(ARENA.halfSize - 2, pos.z));
+    const spawnDist = 25 + Math.random() * 15; // 25-40 units from player
+    let sx = this.player.position.x + Math.cos(angle) * spawnDist;
+    let sz = this.player.position.z + Math.sin(angle) * spawnDist;
+    // Clamp inside arena
+    sx = Math.max(-ARENA.halfSize + 2, Math.min(ARENA.halfSize - 2, sx));
+    sz = Math.max(-ARENA.halfSize + 2, Math.min(ARENA.halfSize - 2, sz));
+    // If clamped too close to player (< 15 units), push to opposite side
+    const dx = sx - this.player.position.x;
+    const dz = sz - this.player.position.z;
+    if (Math.sqrt(dx * dx + dz * dz) < 15) {
+      sx = Math.max(-ARENA.halfSize + 2, Math.min(ARENA.halfSize - 2, this.player.position.x - Math.cos(angle) * spawnDist));
+      sz = Math.max(-ARENA.halfSize + 2, Math.min(ARENA.halfSize - 2, this.player.position.z - Math.sin(angle) * spawnDist));
+    }
+    const pos = new THREE.Vector3(sx, type === "bat" ? 1.5 : 0.5, sz);
 
     mesh.position.copy(pos);
     this.scene.add(mesh);
@@ -1949,14 +1954,28 @@ export class GameEngine {
     const trimTarget = Math.min(300, 150 + this.player.level * 5);
     this.cleanupDead();
     if (this.enemies.length > maxEnemies) {
-      // Remove farthest
-      this.enemies.sort((a, b) =>
-        b.position.distanceToSquared(this.player.position) -
-        a.position.distanceToSquared(this.player.position)
-      );
-      while (this.enemies.length > trimTarget) {
-        const e = this.enemies.pop()!;
-        this.scene.remove(e.mesh);
+      // Remove farthest non-boss enemies that are far from player
+      const bossTypes = new Set(Object.keys(BOSSES));
+      const removable = this.enemies
+        .filter(e => !bossTypes.has(e.type) && e.isAlive)
+        .sort((a, b) =>
+          b.position.distanceToSquared(this.player.position) -
+          a.position.distanceToSquared(this.player.position)
+        );
+      let removed = 0;
+      const toRemove = this.enemies.length - trimTarget;
+      for (const e of removable) {
+        if (removed >= toRemove) break;
+        // Only remove if far enough (>30 units)
+        if (e.position.distanceToSquared(this.player.position) > 900) {
+          e.isAlive = false;
+          this.scene.remove(e.mesh);
+          removed++;
+        }
+      }
+      // Clean up dead references
+      for (let i = this.enemies.length - 1; i >= 0; i--) {
+        if (!this.enemies[i].isAlive) this.enemies.splice(i, 1);
       }
     }
   }
