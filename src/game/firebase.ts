@@ -2,13 +2,13 @@ import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyD2jB7svTRPRg2b61fePnObAitYFCgixOc",
-  authDomain: "hordecraft-a2fc1.firebaseapp.com",
-  projectId: "hordecraft-a2fc1",
-  storageBucket: "hordecraft-a2fc1.firebasestorage.app",
-  messagingSenderId: "988839877470",
-  appId: "1:988839877470:web:6576eed388a3b75d698dcf",
-  measurementId: "G-B4YWM7NSXB",
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
 const app = initializeApp(firebaseConfig);
