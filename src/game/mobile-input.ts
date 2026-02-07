@@ -83,7 +83,7 @@ export class MobileInputManager {
       touchAction: "none",
       userSelect: "none",
     });
-    jumpBtn.textContent = "⬆️";
+    jumpBtn.textContent = "🦘";
     jumpBtn.addEventListener("touchstart", (e) => {
       e.preventDefault();
       this.jumpPressed = true;
@@ -114,7 +114,7 @@ export class MobileInputManager {
       touchAction: "none",
       userSelect: "none",
     });
-    slideBtn.textContent = "💨";
+    slideBtn.textContent = "🏃";
     slideBtn.addEventListener("touchstart", (e) => {
       e.preventDefault();
       this.slidePressed = true;

@@ -1486,9 +1486,9 @@ export class GameEngine {
 
     const moveDir = new THREE.Vector3();
     if (this.isMobile && this.mobileInput.isMoving) {
-      // Mobile joystick: moveX is left-right, moveY is up-down (inverted for forward)
+      // Mobile joystick: moveX is left-right, moveY is up-down
       moveDir.add(forward.clone().multiplyScalar(-this.mobileInput.moveY));
-      moveDir.add(right.clone().multiplyScalar(this.mobileInput.moveX));
+      moveDir.add(right.clone().multiplyScalar(-this.mobileInput.moveX));
     } else {
       if (this.input.moveForward) moveDir.add(forward);
       if (this.input.moveBack) moveDir.sub(forward);
