@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { InputManager } from "./input";
 import { MobileInputManager } from "./mobile-input";
-import { PLAYER, CAMERA, ARENA, ENEMIES, WEAPONS, XP_TABLE, SCORE, COLORS, BOSSES } from "./constants";
+import { PLAYER, CAMERA, ARENA, ENEMIES, WEAPONS, XP_TABLE, SCORE, COLORS, BOSSES, EVOLUTIONS } from "./constants";
 import * as Audio from "./audio";
 import { getCharacter, type CharacterDef } from "./characters";
 export { Audio };
@@ -9,6 +9,7 @@ import { t } from "./i18n";
 import type {
   GameState, PlayerState, EnemyInstance, XPGem, Projectile,
   WeaponState, UpgradeOption, GameStats, ShockWaveEffect, LightningEffect, FireSegment,
+  VortexEffect, MetaState,
 } from "./types";
 
 export class GameEngine {
@@ -88,6 +89,13 @@ export class GameEngine {
 
   // Fire trail tracking
   private lastFirePos = new THREE.Vector3();
+
+  // Vortex tracking
+  private vortexes: VortexEffect[] = [];
+
+  // Meta progression
+  private metaState: MetaState = this.loadMetaState();
+  private metaExtraChoiceCount = 0;
 
   // Boss system
   activeBoss: EnemyInstance | null = null;
@@ -1157,6 +1165,27 @@ export class GameEngine {
     this.gameTime = 0;
     this.spawnTimer = 0;
 
+    // Apply meta permanent upgrades
+    const meta = this.metaState.permanentUpgrades;
+    const metaHp = meta["metaHp"] || 0;
+    const metaDmg = meta["metaDamage"] || 0;
+    const metaSpd = meta["metaSpeed"] || 0;
+    const metaXp = meta["metaXp"] || 0;
+    const metaMag = meta["metaMagnet"] || 0;
+    const metaStart = meta["metaStartLevel"] || 0;
+    this.metaExtraChoiceCount = meta["metaExtraChoice"] || 0;
+
+    this.player.maxHp += metaHp * 5;
+    this.player.hp = this.player.maxHp;
+    this.player.damageMultiplier *= 1 + metaDmg * 0.02;
+    this.player.speed *= 1 + metaSpd * 0.03;
+    this.player.xpMultiplier *= 1 + metaXp * 0.05;
+    this.player.magnetRange *= 1 + metaMag * 0.10;
+    if (metaStart > 0) {
+      this.player.level = 1 + metaStart;
+      this.player.xpToNext = XP_TABLE.getRequired(this.player.level);
+    }
+
     // Starting weapon based on character
     const weaponId = ch.startWeapon;
     const weaponDef = WEAPONS[weaponId as keyof typeof WEAPONS];
@@ -1189,6 +1218,8 @@ export class GameEngine {
     this.lightnings = [];
     this.fireSegments.forEach(f => { if (f.mesh.parent) this.scene.remove(f.mesh); });
     this.fireSegments = [];
+    this.vortexes.forEach(v => { if (v.mesh.parent) this.scene.remove(v.mesh); });
+    this.vortexes = [];
 
     const startY = this.getTerrainHeight(0, 0);
     this.playerMesh.position.set(0, startY - 2, 0);
@@ -1261,6 +1292,7 @@ export class GameEngine {
     this.updateShockWaves(cappedDt);
     this.updateLightnings(cappedDt);
     this.updateFireSegments(cappedDt);
+    this.updateVortexes(cappedDt);
     this.updateXPGems(cappedDt);
     this.updateSpawning(cappedDt);
     this.updateBoss(cappedDt);
@@ -1555,12 +1587,28 @@ export class GameEngine {
     for (const enemy of this.enemies) {
       if (!enemy.isAlive) continue;
 
+      // Slow timer
+      if (enemy.slowTimer > 0) {
+        enemy.slowTimer -= dt * 1000;
+        if (enemy.slowTimer <= 0) { enemy.slowTimer = 0; enemy.slowAmount = 0; }
+      }
+
+      // Burn DoT
+      if (enemy.burnTimer > 0) {
+        enemy.burnTimer -= dt * 1000;
+        if (enemy.isAlive) {
+          this.damageEnemy(enemy, enemy.burnDamage * dt, true);
+        }
+        if (enemy.burnTimer <= 0) { enemy.burnTimer = 0; enemy.burnDamage = 0; }
+      }
+
       // Move toward player
       const dir = new THREE.Vector3().subVectors(playerPos, enemy.position).normalize();
       const isBat = enemy.type === "bat";
+      const effectiveSpeed = enemy.speed * (1 - enemy.slowAmount);
 
-      enemy.position.x += dir.x * enemy.speed * dt;
-      enemy.position.z += dir.z * enemy.speed * dt;
+      enemy.position.x += dir.x * effectiveSpeed * dt;
+      enemy.position.z += dir.z * effectiveSpeed * dt;
       const enemyTerrainY = this.getTerrainHeight(enemy.position.x, enemy.position.z);
       if (isBat) {
         enemy.position.y = enemyTerrainY + 1.5 + Math.sin(this.gameTime * 3 + enemy.id) * 0.3;
@@ -1645,6 +1693,10 @@ export class GameEngine {
       hitTimer: 0,
       xpValue: stats.xp,
       color: stats.color,
+      slowTimer: 0,
+      slowAmount: 0,
+      burnTimer: 0,
+      burnDamage: 0,
     });
   }
 
@@ -1854,6 +1906,10 @@ export class GameEngine {
       hitTimer: 0,
       xpValue: stats.xp,
       color: stats.color,
+      slowTimer: 0,
+      slowAmount: 0,
+      burnTimer: 0,
+      burnDamage: 0,
     };
 
     this.enemies.push(boss);
@@ -1915,11 +1971,23 @@ export class GameEngine {
         case "lightningArc":
           if (weapon.timer <= 0) {
             this.fireLightningArc(weapon);
-            weapon.timer = (1 / WEAPONS.lightningArc.fireRate) * cdReduction;
+            weapon.timer = weapon.level >= 6 ? 0.1 : (1 / WEAPONS.lightningArc.fireRate) * cdReduction;
           }
           break;
         case "fireTrail":
           this.updateFireTrail(dt, weapon);
+          break;
+        case "frostNova":
+          if (weapon.timer <= 0) {
+            this.fireFrostNova(weapon);
+            weapon.timer = (1 / WEAPONS.frostNova.fireRate) * cdReduction;
+          }
+          break;
+        case "voidVortex":
+          if (weapon.timer <= 0) {
+            this.fireVoidVortex(weapon);
+            weapon.timer = (1 / WEAPONS.voidVortex.fireRate) * cdReduction;
+          }
           break;
       }
     }
@@ -1927,9 +1995,10 @@ export class GameEngine {
 
   private updateOrbitBlade(dt: number, weapon: WeaponState) {
     const w = WEAPONS.orbitBlade;
-    const count = w.baseCount + weapon.level - 1;
+    const evolved = weapon.level >= 6;
+    const count = evolved ? 8 : w.baseCount + weapon.level - 1;
     const range = w.range + weapon.level * 0.3;
-    const speed = w.baseSpeed + weapon.level * 0.2;
+    const speed = evolved ? (w.baseSpeed + weapon.level * 0.2) * 3 : w.baseSpeed + weapon.level * 0.2;
     const damage = w.baseDamage * (1 + (weapon.level - 1) * 0.3) * this.player.damageMultiplier;
 
     this.orbitAngle += speed * Math.PI * 2 * dt;
@@ -1955,9 +2024,13 @@ export class GameEngine {
     const closest = this.getClosestEnemy(WEAPONS.boneToss.range);
     if (!closest) return;
 
-    const count = WEAPONS.boneToss.baseCount + Math.floor((weapon.level - 1) / 2);
+    const evolved = weapon.level >= 6;
+    const count = evolved ? 3 : WEAPONS.boneToss.baseCount + Math.floor((weapon.level - 1) / 2);
     const damage = WEAPONS.boneToss.baseDamage * (1 + (weapon.level - 1) * 0.25) * this.player.damageMultiplier;
     const penetration = weapon.level >= 3 ? 1 : 0;
+    // Evolved: force 100% crit by temporarily boosting crit chance
+    const origCrit = this.player.critChance;
+    if (evolved) this.player.critChance = 1.0;
 
     for (let i = 0; i < count; i++) {
       const dir = new THREE.Vector3()
@@ -1989,6 +2062,7 @@ export class GameEngine {
         hitEnemies: new Set(),
       });
     }
+    if (evolved) this.player.critChance = origCrit;
   }
 
   private fireShockWave(weapon: WeaponState) {
@@ -2081,7 +2155,7 @@ export class GameEngine {
       this.scene.add(flash);
       setTimeout(() => this.scene.remove(flash), 150);
 
-      this.damageEnemy(closest, chainDamage);
+      this.damageEnemy(closest, chainDamage, false, "lightning");
       hitSet.add(closest.id);
       currentPos = closest.position.clone();
       chainDamage *= 0.8; // damage falloff
@@ -2091,10 +2165,12 @@ export class GameEngine {
   private updateFireTrail(dt: number, weapon: WeaponState) {
     const dist = this.player.position.distanceTo(this.lastFirePos);
     if (dist > 1) {
-      const dps = WEAPONS.fireTrail.damagePerSecond * (1 + (weapon.level - 1) * 0.3) * this.player.damageMultiplier;
+      const evolved = weapon.level >= 6;
+      const dps = WEAPONS.fireTrail.damagePerSecond * (1 + (weapon.level - 1) * 0.3) * this.player.damageMultiplier * (evolved ? 5 : 1);
       const duration = WEAPONS.fireTrail.duration + weapon.level * 500;
+      const trailWidth = WEAPONS.fireTrail.width * (evolved ? 3 : 1);
 
-      const fireGeo = new THREE.PlaneGeometry(WEAPONS.fireTrail.width, 1);
+      const fireGeo = new THREE.PlaneGeometry(trailWidth, 1);
       const fireMat = new THREE.MeshBasicMaterial({
         color: COLORS.fire,
         transparent: true,
@@ -2115,6 +2191,138 @@ export class GameEngine {
       });
 
       this.lastFirePos.copy(this.player.position);
+    }
+  }
+
+  private fireFrostNova(weapon: WeaponState) {
+    Audio.playFrostNova();
+    const range = WEAPONS.frostNova.range + weapon.level * 0.8;
+    const damage = WEAPONS.frostNova.baseDamage * (1 + (weapon.level - 1) * 0.3) * this.player.damageMultiplier;
+    const slowAmount = WEAPONS.frostNova.slowAmount + weapon.level * 0.05;
+    const slowDuration = WEAPONS.frostNova.slowDuration;
+    const evolved = weapon.level >= 6;
+
+    const effectiveRange = evolved ? 30 : range;
+    const effectiveSlow = evolved ? 1.0 : slowAmount;
+    const effectiveSlowDur = evolved ? 3000 : slowDuration;
+
+    // Visual: expanding icy blue ring
+    const ringGeo = new THREE.RingGeometry(0.1, 0.3, 32);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0x88ddff,
+      transparent: true,
+      opacity: 0.7,
+      side: THREE.DoubleSide,
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.copy(this.player.position).add(new THREE.Vector3(0, 0.1, 0));
+    this.scene.add(ring);
+
+    this.shockWaves.push({
+      position: this.player.position.clone(),
+      mesh: ring,
+      timer: 0,
+      maxTime: 0.5,
+      maxRadius: effectiveRange,
+      damage: 0, // damage applied separately below
+    });
+
+    // Damage + slow enemies in range
+    for (const enemy of this.enemies) {
+      if (!enemy.isAlive) continue;
+      if (enemy.position.distanceTo(this.player.position) < effectiveRange) {
+        this.damageEnemy(enemy, damage, false, "ice");
+        enemy.slowAmount = Math.max(enemy.slowAmount, effectiveSlow);
+        enemy.slowTimer = effectiveSlowDur;
+      }
+    }
+  }
+
+  private fireVoidVortex(weapon: WeaponState) {
+    Audio.playVoidVortex();
+    const damage = WEAPONS.voidVortex.baseDamage * (1 + (weapon.level - 1) * 0.3) * this.player.damageMultiplier;
+    const evolved = weapon.level >= 6;
+    const radius = evolved ? 12 : WEAPONS.voidVortex.range + weapon.level * 0.5;
+    const pullForce = evolved ? 20 : WEAPONS.voidVortex.pullForce + weapon.level;
+    const duration = (WEAPONS.voidVortex.duration + weapon.level * 500) / 1000;
+
+    // Random position near player
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 5 + Math.random() * 10;
+    const pos = this.player.position.clone().add(new THREE.Vector3(Math.cos(angle) * dist, 0.5, Math.sin(angle) * dist));
+
+    // Visual: dark purple vortex group
+    const group = new THREE.Group();
+    const coreMat = new THREE.MeshBasicMaterial({ color: 0x440088, transparent: true, opacity: 0.6 });
+    const core = new THREE.Mesh(new THREE.TorusGeometry(radius * 0.3, 0.2, 8, 16), coreMat);
+    core.rotation.x = -Math.PI / 2;
+    group.add(core);
+    const outerMat = new THREE.MeshBasicMaterial({ color: 0x660099, transparent: true, opacity: 0.3 });
+    const outer = new THREE.Mesh(new THREE.RingGeometry(radius * 0.2, radius * 0.6, 16), outerMat);
+    outer.rotation.x = -Math.PI / 2;
+    group.add(outer);
+    // Purple particles
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const p = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.15),
+        new THREE.MeshBasicMaterial({ color: 0xaa44ff })
+      );
+      p.position.set(Math.cos(a) * radius * 0.4, 0.2, Math.sin(a) * radius * 0.4);
+      group.add(p);
+    }
+    group.position.copy(pos);
+    this.scene.add(group);
+
+    this.vortexes.push({
+      position: pos,
+      mesh: group,
+      timer: duration,
+      maxTime: duration,
+      damage,
+      pullForce,
+      radius,
+    });
+  }
+
+  private updateVortexes(dt: number) {
+    for (let i = this.vortexes.length - 1; i >= 0; i--) {
+      const v = this.vortexes[i];
+      v.timer -= dt;
+      const progress = 1 - v.timer / v.maxTime;
+
+      if (v.timer <= 0) {
+        this.scene.remove(v.mesh);
+        this.vortexes.splice(i, 1);
+        continue;
+      }
+
+      // Spin animation
+      v.mesh.rotation.y += dt * 5;
+      // Fade out in last 20%
+      const fade = v.timer < v.maxTime * 0.2 ? v.timer / (v.maxTime * 0.2) : 1;
+      v.mesh.children.forEach(child => {
+        if (child instanceof THREE.Mesh) {
+          (child.material as THREE.MeshBasicMaterial).opacity = fade * 0.6;
+        }
+      });
+
+      // Pull and damage enemies
+      for (const enemy of this.enemies) {
+        if (!enemy.isAlive) continue;
+        const dist = enemy.position.distanceTo(v.position);
+        if (dist < v.radius) {
+          // Pull toward center
+          const dir = new THREE.Vector3().subVectors(v.position, enemy.position).normalize();
+          enemy.position.add(dir.multiplyScalar(v.pullForce * dt));
+          // Damage
+          if (enemy.hitTimer <= 0) {
+            this.damageEnemy(enemy, v.damage * dt, true);
+            enemy.hitTimer = 0.3;
+          }
+        }
+      }
     }
   }
 
@@ -2205,7 +2413,7 @@ export class GameEngine {
       for (const enemy of this.enemies) {
         if (!enemy.isAlive) continue;
         if (enemy.position.distanceTo(seg.position) < WEAPONS.fireTrail.width) {
-          this.damageEnemy(enemy, seg.damagePerSecond * dt, true);
+          this.damageEnemy(enemy, seg.damagePerSecond * dt, true, "fire");
         }
       }
     }
@@ -2215,7 +2423,7 @@ export class GameEngine {
 
   private lastHitSoundTime = 0;
 
-  private damageEnemy(enemy: EnemyInstance, damage: number, silent = false) {
+  private damageEnemy(enemy: EnemyInstance, damage: number, silent = false, damageType: "physical" | "fire" | "ice" | "lightning" = "physical") {
     // Critical hit
     let finalDamage = damage;
     let isCrit = false;
@@ -2248,7 +2456,7 @@ export class GameEngine {
       }
     }
 
-    // Flash red - traverse all meshes in group
+    // Flash red + impact scale
     if (!silent) {
       enemy.mesh.traverse((child) => {
         if (child instanceof THREE.Mesh && child.material) {
@@ -2259,9 +2467,37 @@ export class GameEngine {
           }
         }
       });
+      // Impact scale
+      const origScale = enemy.mesh.scale.clone();
+      enemy.mesh.scale.multiplyScalar(1.1);
+      setTimeout(() => { enemy.mesh.scale.copy(origScale); }, 80);
+    }
+
+    // Damage type effects
+    if (damageType === "fire" && enemy.isAlive) {
+      // Apply burn DoT: 3 ticks over 3 seconds of 30% each
+      enemy.burnDamage = (finalDamage * 0.3) / 1; // per second (0.9 total over 3s)
+      enemy.burnTimer = 3000;
+    }
+    if (damageType === "ice" && enemy.isAlive) {
+      enemy.slowAmount = Math.max(enemy.slowAmount, WEAPONS.frostNova.slowAmount);
+      enemy.slowTimer = Math.max(enemy.slowTimer, WEAPONS.frostNova.slowDuration);
     }
 
     if (enemy.hp <= 0) {
+      // Lightning chain on kill
+      if (damageType === "lightning") {
+        let chainTarget: EnemyInstance | null = null;
+        let chainDist = 5;
+        for (const e of this.enemies) {
+          if (!e.isAlive || e.id === enemy.id) continue;
+          const d = e.position.distanceTo(enemy.position);
+          if (d < chainDist) { chainDist = d; chainTarget = e; }
+        }
+        if (chainTarget) {
+          this.damageEnemy(chainTarget, finalDamage * 0.5, false, "physical");
+        }
+      }
       this.killEnemy(enemy);
     }
   }
@@ -2309,7 +2545,7 @@ export class GameEngine {
     
     const scale = isCrit ? 0.8 : 0.6;
     sprite.scale.set(scale, scale * 0.5, 1);
-    sprite.position.copy(position).add(new THREE.Vector3(0, 1, 0));
+    sprite.position.copy(position).add(new THREE.Vector3((Math.random() - 0.5) * 0.8, 1, (Math.random() - 0.5) * 0.3));
     
     this.scene.add(sprite);
     
@@ -2329,6 +2565,12 @@ export class GameEngine {
       // Float upward
       dmg.mesh.position.y += dt * 2;
       
+      // Pop effect: scale up then down
+      const popProgress = dmg.timer / 0.8;
+      const popScale = popProgress < 0.15 ? 1 + (popProgress / 0.15) * 0.5 : 1.5 - (popProgress - 0.15) * 0.77;
+      const baseScale = dmg.mesh.scale.x > 0.7 ? 0.8 : 0.6;
+      dmg.mesh.scale.set(baseScale * popScale, baseScale * 0.5 * popScale, 1);
+
       // Fade out
       const material = dmg.mesh.material as THREE.SpriteMaterial;
       material.opacity = 1 - (dmg.timer / 0.8);
@@ -2344,14 +2586,24 @@ export class GameEngine {
   // ========== PARTICLES ==========
 
   private createDeathParticles(position: THREE.Vector3, color: number) {
-    const particleCount = 5 + Math.floor(Math.random() * 4); // 5-8 particles
-    
+    const particleCount = 8 + Math.floor(Math.random() * 5); // 8-12 particles
+
+    // Death flash
+    const flash = new THREE.Mesh(
+      new THREE.SphereGeometry(0.4, 6, 4),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 })
+    );
+    flash.position.copy(position);
+    this.scene.add(flash);
+    setTimeout(() => this.scene.remove(flash), 100);
+
     for (let i = 0; i < particleCount; i++) {
+      const size = 0.08 + Math.random() * 0.15;
       const geometry = Math.random() > 0.5 
-        ? new THREE.BoxGeometry(0.15, 0.15, 0.15)
-        : new THREE.OctahedronGeometry(0.1, 0);
+        ? new THREE.BoxGeometry(size, size, size)
+        : new THREE.OctahedronGeometry(size * 0.7, 0);
       
-      const material = new THREE.MeshBasicMaterial({ color });
+      const material = new THREE.MeshBasicMaterial({ color, transparent: true });
       const mesh = new THREE.Mesh(geometry, material);
       
       mesh.position.copy(position).add(new THREE.Vector3(
@@ -2361,9 +2613,9 @@ export class GameEngine {
       ));
       
       const velocity = new THREE.Vector3(
-        (Math.random() - 0.5) * 4,
-        Math.random() * 3 + 1,
-        (Math.random() - 0.5) * 4
+        (Math.random() - 0.5) * 5,
+        Math.random() * 4 + 1,
+        (Math.random() - 0.5) * 5
       );
       
       this.scene.add(mesh);
@@ -2449,6 +2701,9 @@ export class GameEngine {
       // Apply gravity and update position
       particle.velocity.y -= 9.8 * dt;
       particle.mesh.position.add(particle.velocity.clone().multiplyScalar(dt));
+      // Spin particles
+      particle.mesh.rotation.x += dt * 8;
+      particle.mesh.rotation.z += dt * 6;
       
       // Fade out
       const material = particle.mesh.material as THREE.MeshBasicMaterial;
@@ -2491,8 +2746,11 @@ export class GameEngine {
         continue;
       }
 
-      // Spin
+      // Spin + pulse + bob
       gem.mesh.rotation.y += dt * 3;
+      const pulse = 1 + Math.sin(this.gameTime * 4 + gem.id) * 0.15;
+      gem.mesh.scale.setScalar(pulse);
+      gem.position.y += Math.sin(this.gameTime * 3 + gem.id * 0.7) * 0.3 * dt;
 
       // Magnet
       const dist = gem.position.distanceTo(this.player.position);
@@ -2559,6 +2817,8 @@ export class GameEngine {
         { id: "shockWave", ...WEAPONS.shockWave },
         { id: "lightningArc", ...WEAPONS.lightningArc },
         { id: "fireTrail", ...WEAPONS.fireTrail },
+        { id: "frostNova", ...WEAPONS.frostNova },
+        { id: "voidVortex", ...WEAPONS.voidVortex },
       ];
       for (const w of allWeapons) {
         if (!owned.has(w.id)) {
@@ -2612,9 +2872,30 @@ export class GameEngine {
       }
     }
 
-    // Pick 3 random
+    // Evolution options
+    for (const [evoId, evo] of Object.entries(EVOLUTIONS)) {
+      const weapon = this.weapons.find(w => w.id === evo.weapon);
+      const passiveLvl = this.passiveUpgrades[evo.passive] || 0;
+      if (weapon && weapon.level >= 5 && weapon.level < 6 && passiveLvl >= 5) {
+        pool.push({
+          id: `evo_${evoId}`,
+          name: evo.evolvedName,
+          icon: evo.evolvedIcon,
+          description: evo.description,
+          type: "evolution",
+          apply: () => {
+            weapon.level = 6;
+            weapon.name = evo.evolvedName;
+            weapon.icon = evo.evolvedIcon;
+            Audio.playEvolution();
+          },
+        });
+      }
+    }
+
+    // Pick 3 + extra choice random
     const shuffled = pool.sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, 3);
+    return shuffled.slice(0, 3 + this.metaExtraChoiceCount);
   }
 
   private getWeaponUpgradeDesc(id: string, level: number): string {
@@ -2624,6 +2905,8 @@ export class GameEngine {
       case "shockWave": return "+çap, +hasar";
       case "lightningArc": return `+${level} zincir hedefi`;
       case "fireTrail": return "+süre, +hasar";
+      case "frostNova": return "+çap, +yavaşlatma";
+      case "voidVortex": return "+çap, +çekim gücü";
       default: return "+güç";
     }
   }
@@ -2870,6 +3153,10 @@ export class GameEngine {
       this.stats.kills / 10 +
       this.stats.bossKills * 50
     );
+    // Meta progression
+    this.metaState.gold += this.stats.gold;
+    this.metaState.totalRuns++;
+    this.saveMetaState();
     this.onStateChange?.(this.state);
   }
 
@@ -2902,9 +3189,10 @@ export class GameEngine {
     const range = WEAPONS.orbitBlade.range + weapon.level * 0.3;
 
     // Ensure correct number of meshes
+    const isEvolved = weapon.level >= 6;
     while (this.orbitBladeMeshes.length < count) {
       const bladeGeo = new THREE.BoxGeometry(0.6, 0.1, 0.15);
-      const bladeMat = new THREE.MeshBasicMaterial({ color: COLORS.orbBlade });
+      const bladeMat = new THREE.MeshBasicMaterial({ color: isEvolved ? 0x44aaff : COLORS.orbBlade });
       const blade = new THREE.Mesh(bladeGeo, bladeMat);
       this.scene.add(blade);
       this.orbitBladeMeshes.push(blade);
@@ -2936,5 +3224,39 @@ export class GameEngine {
   dispose() {
     this.renderer.dispose();
     this.input.dispose();
+  }
+
+  // ========== META PROGRESSION ==========
+
+  private loadMetaState(): MetaState {
+    try {
+      const raw = localStorage.getItem("hordecraft_meta");
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return { gold: 0, permanentUpgrades: {}, unlockedCharacters: ["knight"], totalRuns: 0 };
+  }
+
+  private saveMetaState() {
+    try {
+      localStorage.setItem("hordecraft_meta", JSON.stringify(this.metaState));
+    } catch {}
+  }
+
+  getMetaState(): MetaState { return this.metaState; }
+
+  getUpgradeCost(id: string, level: number): number {
+    return Math.floor(100 * Math.pow(1.5, level));
+  }
+
+  buyPermanentUpgrade(id: string): boolean {
+    const maxLevel = id === "metaStartLevel" ? 3 : id === "metaExtraChoice" ? 1 : 10;
+    const current = this.metaState.permanentUpgrades[id] || 0;
+    if (current >= maxLevel) return false;
+    const cost = this.getUpgradeCost(id, current);
+    if (this.metaState.gold < cost) return false;
+    this.metaState.gold -= cost;
+    this.metaState.permanentUpgrades[id] = current + 1;
+    this.saveMetaState();
+    return true;
   }
 }

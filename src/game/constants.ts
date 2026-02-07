@@ -88,6 +88,33 @@ export const WEAPONS = {
     duration: 3000,
     width: 1.5,
   },
+  frostNova: {
+    name: "Frost Nova",
+    icon: "❄️",
+    baseDamage: 15,
+    fireRate: 0.25,
+    range: 5,
+    slowAmount: 0.3,
+    slowDuration: 2000,
+  },
+  voidVortex: {
+    name: "Void Vortex",
+    icon: "🌀",
+    baseDamage: 10,
+    fireRate: 0.15,
+    range: 6,
+    pullForce: 8,
+    duration: 3000,
+  },
+};
+
+export const EVOLUTIONS: Record<string, { weapon: string; passive: string; evolvedName: string; evolvedIcon: string; description: string }> = {
+  stormBlade: { weapon: "orbitBlade", passive: "speed", evolvedName: "Storm Blade", evolvedIcon: "⚡⚔️", description: "8 electric blades, 2x speed" },
+  deathBarrage: { weapon: "boneToss", passive: "crit", evolvedName: "Death Barrage", evolvedIcon: "💀🦴", description: "Triple bones, all crit" },
+  thunderGod: { weapon: "lightningArc", passive: "cooldown", evolvedName: "Thunder God", evolvedIcon: "🌩️", description: "Constant lightning, no cooldown" },
+  infernoPath: { weapon: "fireTrail", passive: "damage", evolvedName: "Inferno Path", evolvedIcon: "🌋🔥", description: "Trail explodes, massive damage" },
+  absoluteZero: { weapon: "frostNova", passive: "hp", evolvedName: "Absolute Zero", evolvedIcon: "🧊❄️", description: "Freezes all enemies 3s" },
+  singularity: { weapon: "voidVortex", passive: "magnet", evolvedName: "Singularity", evolvedIcon: "🕳️🌀", description: "Massive vortex, pulls everything" },
 };
 
 export const XP_TABLE = {

@@ -97,6 +97,27 @@ const translations = {
   "char.speed": { tr: "Hız", en: "Speed" },
   "char.damage": { tr: "Hasar", en: "Damage" },
   "char.crit": { tr: "Kritik", en: "Crit" },
+
+  // Frost Nova & Void Vortex
+  "upgrade.frostNova": { tr: "+çap, +yavaşlatma", en: "+range, +slow" },
+  "upgrade.voidVortex": { tr: "+çap, +çekim gücü", en: "+range, +pull force" },
+
+  // Evolutions
+  "evolution.stormBlade": { tr: "⚡⚔️ Fırtına Kılıcı — 8 elektrik bıçak, 2x hız", en: "⚡⚔️ Storm Blade — 8 electric blades, 2x speed" },
+  "evolution.deathBarrage": { tr: "💀🦴 Ölüm Yağmuru — 3 kemik, hep kritik", en: "💀🦴 Death Barrage — Triple bones, all crit" },
+  "evolution.thunderGod": { tr: "🌩️ Gök Tanrısı — Sürekli yıldırım", en: "🌩️ Thunder God — Constant lightning" },
+  "evolution.infernoPath": { tr: "🌋🔥 Cehennem Yolu — Patlamalı iz, dev hasar", en: "🌋🔥 Inferno Path — Explosive trail, massive damage" },
+  "evolution.absoluteZero": { tr: "🧊❄️ Mutlak Sıfır — Tüm düşmanları dondur", en: "🧊❄️ Absolute Zero — Freezes all enemies" },
+  "evolution.singularity": { tr: "🕳️🌀 Tekillik — Dev girdap, her şeyi çeker", en: "🕳️🌀 Singularity — Massive vortex, pulls everything" },
+
+  // Meta upgrades
+  "meta.hp": { tr: "Kalıcı Can+", en: "Permanent HP+" },
+  "meta.damage": { tr: "Kalıcı Hasar+", en: "Permanent Damage+" },
+  "meta.speed": { tr: "Kalıcı Hız+", en: "Permanent Speed+" },
+  "meta.xp": { tr: "Kalıcı XP+", en: "Permanent XP+" },
+  "meta.magnet": { tr: "Kalıcı Mıknatıs+", en: "Permanent Magnet+" },
+  "meta.startLevel": { tr: "Başlangıç Seviyesi+", en: "Starting Level+" },
+  "meta.extraChoice": { tr: "Ekstra Seçenek", en: "Extra Choice" },
 } as const;
 
 type TranslationKey = keyof typeof translations;

@@ -359,6 +359,118 @@ export function setSFXVolume(v: number) {
   if (sfxGain) sfxGain.gain.value = Math.max(0, Math.min(1, v));
 }
 
+export function playFrostNova() {
+  const c = getCtx(); if (!c) return;
+  // Icy crystalline burst
+  const osc = c.createOscillator();
+  const gain = c.createGain();
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(1200, c.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(300, c.currentTime + 0.3);
+  gain.gain.setValueAtTime(0.2, c.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.01, c.currentTime + 0.35);
+  const filter = c.createBiquadFilter();
+  filter.type = "highpass";
+  filter.frequency.value = 400;
+  osc.connect(filter);
+  filter.connect(gain);
+  gain.connect(sfxGain!);
+  osc.start();
+  osc.stop(c.currentTime + 0.35);
+  // Shimmer
+  const osc2 = c.createOscillator();
+  const g2 = c.createGain();
+  osc2.type = "triangle";
+  osc2.frequency.setValueAtTime(2000, c.currentTime);
+  osc2.frequency.exponentialRampToValueAtTime(800, c.currentTime + 0.25);
+  g2.gain.setValueAtTime(0.1, c.currentTime);
+  g2.gain.exponentialRampToValueAtTime(0.01, c.currentTime + 0.3);
+  osc2.connect(g2);
+  g2.connect(sfxGain!);
+  osc2.start();
+  osc2.stop(c.currentTime + 0.3);
+}
+
+export function playVoidVortex() {
+  const c = getCtx(); if (!c) return;
+  // Deep whooshing vortex
+  const osc = c.createOscillator();
+  const gain = c.createGain();
+  osc.type = "sawtooth";
+  osc.frequency.setValueAtTime(60, c.currentTime);
+  osc.frequency.linearRampToValueAtTime(120, c.currentTime + 0.2);
+  osc.frequency.linearRampToValueAtTime(40, c.currentTime + 0.6);
+  gain.gain.setValueAtTime(0.15, c.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.01, c.currentTime + 0.6);
+  const filter = c.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.value = 300;
+  osc.connect(filter);
+  filter.connect(gain);
+  gain.connect(sfxGain!);
+  osc.start();
+  osc.stop(c.currentTime + 0.6);
+}
+
+export function playEvolution() {
+  const c = getCtx(); if (!c) return;
+  // Epic transformation sound
+  const notes = [262, 330, 392, 523, 659, 784, 1047];
+  notes.forEach((freq, i) => {
+    const osc = c.createOscillator();
+    const gain = c.createGain();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    const t = c.currentTime + i * 0.08;
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.2, t + 0.04);
+    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
+    osc.connect(gain);
+    gain.connect(sfxGain!);
+    osc.start(t);
+    osc.stop(t + 0.4);
+  });
+}
+
+export function playBurn() {
+  const c = getCtx(); if (!c) return;
+  // Subtle sizzle
+  const bufferSize = c.sampleRate * 0.08;
+  const buffer = c.createBuffer(1, bufferSize, c.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) {
+    data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.5)) * 0.3;
+  }
+  const noise = c.createBufferSource();
+  noise.buffer = buffer;
+  const gain = c.createGain();
+  gain.gain.value = 0.05;
+  const filter = c.createBiquadFilter();
+  filter.type = "highpass";
+  filter.frequency.value = 3000;
+  noise.connect(filter);
+  filter.connect(gain);
+  gain.connect(sfxGain!);
+  noise.start();
+  noise.stop(c.currentTime + 0.08);
+}
+
+export function playFreeze() {
+  const c = getCtx(); if (!c) return;
+  // Ice cracking
+  const osc = c.createOscillator();
+  const gain = c.createGain();
+  osc.type = "square";
+  osc.frequency.setValueAtTime(800, c.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(200, c.currentTime + 0.15);
+  gain.gain.setValueAtTime(0.15, c.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.01, c.currentTime + 0.2);
+  osc.connect(gain);
+  gain.connect(sfxGain!);
+  osc.start();
+  osc.stop(c.currentTime + 0.2);
+}
+
 export function setMusicVolume(v: number) {
   if (musicGain) musicGain.gain.value = Math.max(0, Math.min(1, v));
 }

@@ -41,6 +41,10 @@ export interface EnemyInstance {
   hitTimer: number;
   xpValue: number;
   color: number;
+  slowTimer: number;
+  slowAmount: number;
+  burnTimer: number;
+  burnDamage: number;
 }
 
 export interface XPGem {
@@ -77,8 +81,25 @@ export interface UpgradeOption {
   name: string;
   icon: string;
   description: string;
-  type: "weapon" | "passive";
+  type: "weapon" | "passive" | "evolution";
   apply: () => void;
+}
+
+export interface VortexEffect {
+  position: THREE.Vector3;
+  mesh: THREE.Group;
+  timer: number;
+  maxTime: number;
+  damage: number;
+  pullForce: number;
+  radius: number;
+}
+
+export interface MetaState {
+  gold: number;
+  permanentUpgrades: Record<string, number>;
+  unlockedCharacters: string[];
+  totalRuns: number;
 }
 
 export interface GameStats {
