@@ -1,0 +1,23 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Nicknames: anyone can read, anyone can create (but not overwrite)
+    match /nicknames/{nickId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasAll(['nickname', 'pin', 'claimedAt'])
+                    && request.resource.data.nickname is string
+                    && request.resource.data.pin is string
+                    && request.resource.data.pin.size() == 4;
+      allow update, delete: if false;
+    }
+
+    // Scores: anyone can read, anyone can create (no edit/delete)
+    match /scores/{scoreId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasAll(['nickname', 'score', 'kills', 'survivalTime', 'level', 'maxCombo', 'date'])
+                    && request.resource.data.score is number;
+      allow update, delete: if false;
+    }
+  }
+}

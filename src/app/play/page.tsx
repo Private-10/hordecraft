@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { GameEngine } from "@/game/engine";
 import type { GameState, UpgradeOption } from "@/game/types";
 import { t, getLang, setLang, type Lang } from "@/game/i18n";
+import { getActiveNickname, registerNickname, claimNickname, isNicknameClaimed, logoutNickname } from "@/game/nickname";
 
 export default function PlayPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -22,13 +23,46 @@ export default function PlayPage() {
   const [mounted, setMounted] = useState(false);
   const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
   const [isPointerLocked, setIsPointerLocked] = useState(false);
+  const [nickname, setNicknameState] = useState("");
+  const [pin, setPin] = useState("");
+  const [nickError, setNickError] = useState("");
+  const [nickMode, setNickMode] = useState<"idle" | "register" | "claim">("idle");
+  const [nickLoggedIn, setNickLoggedIn] = useState(false);
+  const [nickClaimed, setNickClaimed] = useState(false);
+  const [nickChecking, setNickChecking] = useState(false);
+  const [nickBusy, setNickBusy] = useState(false);
+  const [scoreSubmitted, setScoreSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [showNicknameInput, setShowNicknameInput] = useState(false);
+
+  const submitScore = async (data: Record<string, unknown>) => {
+    try {
+      // Save to Firestore
+      const { db } = await import("@/game/firebase");
+      const { collection, addDoc } = await import("firebase/firestore");
+      await addDoc(collection(db, "scores"), {
+        ...data,
+        date: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.error("Score submit failed:", e);
+      // Fallback: save locally
+      try {
+        const key = "hordecraft_scores";
+        const existing = JSON.parse(localStorage.getItem(key) || "[]");
+        existing.push({ ...data, date: new Date().toISOString() });
+        localStorage.setItem(key, JSON.stringify(existing));
+      } catch {}
+    }
+  };
 
   useEffect(() => {
     setMounted(true);
     setLangState(getLang());
-    const savedNick = getNickname();
+    const savedNick = getActiveNickname();
     if (savedNick && savedNick.trim().length >= 2) {
       setNicknameState(savedNick);
+      setNickLoggedIn(true);
     }
 
     const onMouseMove = (e: MouseEvent) => {
@@ -69,7 +103,7 @@ export default function PlayPage() {
         setSubmitting(false);
         setShowNicknameInput(false);
         // Auto-submit score
-        const saved = getNickname();
+        const saved = getActiveNickname();
         const name = (saved && saved.trim().length >= 2) ? saved.trim() : "Anonim";
         setTimeout(async () => {
           try {
@@ -207,40 +241,171 @@ export default function PlayPage() {
           <h1>{t("menu.title")}</h1>
           <p className="subtitle">{t("menu.subtitle")}</p>
 
-          {/* Nickname input */}
-          <div style={{ marginBottom: 8, marginTop: 10 }}>
-            <input
-              type="text"
-              placeholder={t("menu.nickname_placeholder")}
-              value={nickname}
-              onChange={(e) => {
-                const val = e.target.value.replace(/[^a-zA-Z0-9_\-çğıöşüÇĞİÖŞÜ ]/g, "").slice(0, 16);
-                setNicknameState(val);
-              }}
-              maxLength={16}
-              style={{
-                padding: "12px 20px", borderRadius: 10,
-                border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.08)",
-                color: "white", fontSize: 16, width: 250, textAlign: "center", outline: "none",
-              }}
-              onFocus={(e) => (e.target.style.borderColor = "#ff6b35")}
-              onBlur={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.2)")}
-            />
-            {nickname.trim().length > 0 && (
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>
-                {t("menu.nickname_hint")}
+          {/* Nickname Section */}
+          <div style={{ marginBottom: 8, marginTop: 10, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+            {nickLoggedIn ? (
+              /* Already logged in */
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+                <div style={{ fontSize: 16, color: "#ffd700", fontWeight: 700 }}>
+                  👤 {nickname}
+                </div>
+                <button
+                  className="btn btn-primary"
+                  onClick={startGame}
+                  style={{ width: 250 }}
+                >
+                  ✨ {lang === "tr" ? "OYNA" : "PLAY"}
+                </button>
+                <button
+                  onClick={() => { logoutNickname(); setNickLoggedIn(false); setNicknameState(""); setPin(""); setNickMode("idle"); }}
+                  style={{
+                    background: "none", border: "none", color: "rgba(255,255,255,0.3)",
+                    fontSize: 12, cursor: "pointer", textDecoration: "underline",
+                  }}
+                >
+                  {lang === "tr" ? "Çıkış yap" : "Logout"}
+                </button>
               </div>
+            ) : (
+              /* Not logged in — register/claim flow */
+              <>
+                <input
+                  type="text"
+                  placeholder={lang === "tr" ? "Takma adını gir..." : "Enter nickname..."}
+                  value={nickname}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/[^a-zA-Z0-9_\-çğıöşüÇĞİÖŞÜ ]/g, "").slice(0, 16);
+                    setNicknameState(val);
+                    setNickError("");
+                    setNickMode("idle");
+                    setNickClaimed(false);
+                  }}
+                  onBlur={async () => {
+                    if (nickname.trim().length >= 2) {
+                      setNickChecking(true);
+                      const claimed = await isNicknameClaimed(nickname.trim());
+                      setNickClaimed(claimed);
+                      setNickChecking(false);
+                    }
+                  }}
+                  maxLength={16}
+                  style={{
+                    padding: "12px 20px", borderRadius: 10,
+                    border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.08)",
+                    color: "white", fontSize: 16, width: 250, textAlign: "center", outline: "none",
+                  }}
+                  onFocus={(e) => (e.target.style.borderColor = "#ff6b35")}
+                  onBlur={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.2)")}
+                />
+
+                {/* PIN input */}
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder={lang === "tr" ? "4 haneli PIN" : "4-digit PIN"}
+                  value={pin}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, "").slice(0, 4);
+                    setPin(val);
+                    setNickError("");
+                  }}
+                  maxLength={4}
+                  style={{
+                    padding: "10px 20px", borderRadius: 10,
+                    border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.08)",
+                    color: "white", fontSize: 18, width: 150, textAlign: "center",
+                    outline: "none", letterSpacing: 8, fontWeight: 700,
+                  }}
+                  onFocus={(e) => (e.target.style.borderColor = "#ff6b35")}
+                  onBlur={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.2)")}
+                />
+
+                {/* Error message */}
+                {nickError && (
+                  <div style={{ fontSize: 12, color: "#ff4444", fontWeight: 600 }}>
+                    {nickError}
+                  </div>
+                )}
+
+                {/* Register / Claim buttons */}
+                {nickname.trim().length >= 2 && pin.length === 4 && (
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {nickClaimed ? (
+                      <button
+                        className="btn btn-primary"
+                        disabled={nickBusy}
+                        onClick={async () => {
+                          setNickBusy(true);
+                          const err = await claimNickname(nickname.trim(), pin);
+                          setNickBusy(false);
+                          if (err === "wrong_pin") {
+                            setNickError(lang === "tr" ? "Yanlış PIN!" : "Wrong PIN!");
+                          } else if (err === "not_found") {
+                            setNickError(lang === "tr" ? "İsim bulunamadı" : "Name not found");
+                          } else {
+                            setNickLoggedIn(true);
+                          }
+                        }}
+                        style={{ width: 250, opacity: nickBusy ? 0.5 : 1 }}
+                      >
+                        🔑 {nickBusy ? "..." : (lang === "tr" ? "Giriş Yap & Oyna" : "Login & Play")}
+                      </button>
+                    ) : (
+                      <button
+                        className="btn btn-primary"
+                        disabled={nickBusy || nickChecking}
+                        onClick={async () => {
+                          setNickBusy(true);
+                          const err = await registerNickname(nickname.trim(), pin);
+                          setNickBusy(false);
+                          if (err) {
+                            if (err === "already_claimed") {
+                              setNickClaimed(true);
+                              setNickError(lang === "tr" ? "Bu isim alınmış! PIN ile giriş yap." : "Name taken! Login with PIN.");
+                            } else {
+                              setNickError(lang === "tr" ? "Geçersiz giriş" : "Invalid input");
+                            }
+                          } else {
+                            setNickLoggedIn(true);
+                          }
+                        }}
+                        style={{ width: 250, opacity: (nickBusy || nickChecking) ? 0.5 : 1 }}
+                      >
+                        📝 {nickBusy ? "..." : (lang === "tr" ? "Kayıt Ol & Oyna" : "Register & Play")}
+                      </button>
+                    )}
+                  </div>
+                )}
+                {nickChecking && (
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>
+                    {lang === "tr" ? "Kontrol ediliyor..." : "Checking..."}
+                  </div>
+                )}
+                {!nickChecking && nickname.trim().length >= 2 && nickClaimed && !nickError && (
+                  <div style={{ fontSize: 11, color: "#ffd700" }}>
+                    {lang === "tr" ? "Bu isim kayıtlı — PIN ile giriş yap" : "Name registered — login with PIN"}
+                  </div>
+                )}
+                {!nickChecking && nickname.trim().length >= 2 && !nickClaimed && pin.length === 4 && (
+                  <div style={{ fontSize: 11, color: "rgba(100,255,100,0.6)" }}>
+                    {lang === "tr" ? "✓ İsim müsait" : "✓ Name available"}
+                  </div>
+                )}
+
+                {nickname.trim().length > 0 && nickname.trim().length < 2 && (
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>
+                    {lang === "tr" ? "En az 2 karakter" : "At least 2 characters"}
+                  </div>
+                )}
+
+                {nickname.trim().length >= 2 && pin.length < 4 && (
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>
+                    {lang === "tr" ? "4 haneli PIN gir" : "Enter 4-digit PIN"}
+                  </div>
+                )}
+              </>
             )}
           </div>
-
-          {/* Play registered */}
-          <button
-            className="btn btn-primary"
-            onClick={() => { if (nickname.trim().length >= 2) { saveNickname(nickname.trim()); startGame(); } }}
-            style={{ width: 250, opacity: nickname.trim().length >= 2 ? 1 : 0.4, cursor: nickname.trim().length >= 2 ? "pointer" : "not-allowed" }}
-          >
-            {t("menu.play_registered")}
-          </button>
 
           {/* Divider */}
           <div style={{ display: "flex", alignItems: "center", gap: 12, width: 250, margin: "4px 0" }}>
@@ -250,7 +415,7 @@ export default function PlayPage() {
           </div>
 
           {/* Play as guest */}
-          <button className="btn btn-secondary" onClick={() => { setNicknameState(""); saveNickname(""); startGame(); }} style={{ width: 250 }}>
+          <button className="btn btn-secondary" onClick={() => { logoutNickname(); setNicknameState(""); startGame(); }} style={{ width: 250 }}>
             {t("menu.play_guest")}
           </button>
           <div style={{ fontSize: 11, color: "rgba(255,215,0,0.5)", marginTop: 4, maxWidth: 280, textAlign: "center" }}>
