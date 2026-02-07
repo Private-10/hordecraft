@@ -41,6 +41,7 @@ export default function PlayPage() {
   const [selectedChar, setSelectedChar] = useState("knight");
   const [showCharSelect, setShowCharSelect] = useState(false);
   const [dps, setDps] = useState(0);
+  const [maxDps, setMaxDps] = useState(0);
 
   const submitScore = async (data: Record<string, unknown>) => {
     try {
@@ -174,7 +175,9 @@ export default function PlayPage() {
     const origStatsUpdate = engine.onStatsUpdate;
     engine.onStatsUpdate = () => {
       origStatsUpdate?.();
-      setDps(engine.dps || 0);
+      const currentDps = engine.dps || 0;
+      setDps(currentDps);
+      setMaxDps(prev => Math.max(prev, currentDps));
       // Check active boss
       const eng = engine as unknown as {
         activeBoss: { type: string; hp: number; maxHp: number; isAlive: boolean } | null;
@@ -235,6 +238,8 @@ export default function PlayPage() {
   }, []);
 
   const startGame = useCallback(() => {
+    setMaxDps(0);
+    setDps(0);
     engineRef.current?.startGame(selectedChar);
   }, [selectedChar]);
 
@@ -601,16 +606,24 @@ export default function PlayPage() {
           {/* Kill Counter */}
           <div className="kill-counter">☠️ {stats.kills.toLocaleString()} {t("hud.kills")}</div>
 
-          {/* Score */}
-          <div className="score-display">🏆 {stats.score.toLocaleString()}</div>
-
-          {/* DPS Meter */}
+          {/* Score + DPS */}
           <div style={{
             position: "absolute", bottom: 50, right: 20,
-            fontSize: 14, fontWeight: 700, textShadow: "0 0 8px rgba(0,0,0,0.8)",
-            color: dps > 100 ? "#ff4444" : dps > 50 ? "#ffaa44" : "#44ff44",
+            display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2,
+            textShadow: "0 0 4px rgba(0,0,0,0.8)",
           }}>
-            ⚔️ {dps.toLocaleString()} DPS
+            <div style={{ fontSize: 16, fontWeight: 700 }}>
+              🏆 {stats.score.toLocaleString()}
+            </div>
+            <div style={{
+              fontSize: 13, fontWeight: 700,
+              color: dps > 100 ? "#ff4444" : dps > 50 ? "#ffaa44" : "#66ff66",
+            }}>
+              ⚔️ {dps.toLocaleString()} DPS
+              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginLeft: 6 }}>
+                (max {maxDps.toLocaleString()})
+              </span>
+            </div>
           </div>
 
           {/* Controls hint */}
@@ -709,6 +722,7 @@ export default function PlayPage() {
               <span>☠️ {stats.kills.toLocaleString()} {t("gameover.kill")}</span>
               <span>📊 Lvl {stats.level}</span>
               <span>🔥 x{stats.maxCombo} {t("gameover.max_combo")}</span>
+              <span>⚔️ {maxDps} max DPS</span>
             </div>
             <div style={{ marginBottom: 16, color: "var(--gold)" }}>
               💰 +{stats.gold} {t("gameover.gold_earned")}
