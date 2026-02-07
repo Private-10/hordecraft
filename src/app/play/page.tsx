@@ -30,6 +30,8 @@ export default function PlayPage() {
   const [nickLoggedIn, setNickLoggedIn] = useState(false);
   const [nickClaimed, setNickClaimed] = useState(false);
   const [bossInfo, setBossInfo] = useState<{ name: string; hp: number; maxHp: number } | null>(null);
+  const [bossWarning, setBossWarning] = useState<string | null>(null);
+  const [nextBossTime, setNextBossTime] = useState<number | null>(null);
   const [nickChecking, setNickChecking] = useState(false);
   const [nickBusy, setNickBusy] = useState(false);
   const [scoreSubmitted, setScoreSubmitted] = useState(false);
@@ -169,7 +171,12 @@ export default function PlayPage() {
     engine.onStatsUpdate = () => {
       origStatsUpdate?.();
       // Check active boss
-      const boss = (engine as unknown as { activeBoss: { type: string; hp: number; maxHp: number; isAlive: boolean } | null }).activeBoss;
+      const eng = engine as unknown as {
+        activeBoss: { type: string; hp: number; maxHp: number; isAlive: boolean } | null;
+        bossSpawned: Set<string>;
+        gameTime: number;
+      };
+      const boss = eng.activeBoss;
       if (boss && boss.isAlive) {
         const names: Record<string, string> = {
           stoneGolem: lang === "tr" ? "⛰️ Taş Golem" : "⛰️ Stone Golem",
@@ -177,8 +184,30 @@ export default function PlayPage() {
           shadowLord: lang === "tr" ? "👿 Gölge Lordu" : "👿 Shadow Lord",
         };
         setBossInfo({ name: names[boss.type] || boss.type, hp: boss.hp, maxHp: boss.maxHp });
+        setNextBossTime(null);
+        setBossWarning(null);
       } else {
         setBossInfo(null);
+        // Calculate next boss
+        const bossSchedule = [
+          { type: "stoneGolem", minute: 5, name: lang === "tr" ? "Taş Golem" : "Stone Golem" },
+          { type: "fireWraith", minute: 10, name: lang === "tr" ? "Ateş Hayaleti" : "Fire Wraith" },
+          { type: "shadowLord", minute: 15, name: lang === "tr" ? "Gölge Lordu" : "Shadow Lord" },
+        ];
+        const currentMinute = eng.gameTime / 60;
+        const next = bossSchedule.find(b => !eng.bossSpawned.has(b.type) && currentMinute < b.minute);
+        if (next) {
+          const secsLeft = Math.max(0, next.minute * 60 - eng.gameTime);
+          setNextBossTime(secsLeft);
+          if (secsLeft <= 10 && secsLeft > 0) {
+            setBossWarning(next.name);
+          } else {
+            setBossWarning(null);
+          }
+        } else {
+          setNextBossTime(null);
+          setBossWarning(null);
+        }
       }
     };
 
@@ -517,6 +546,27 @@ export default function PlayPage() {
           <div className="controls-hint">
             {t("hud.controls_hint")}
           </div>
+
+          {/* Next Boss Timer */}
+          {!bossInfo && nextBossTime !== null && nextBossTime > 0 && (
+            <div style={{
+              position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)",
+              zIndex: 20, textAlign: "center",
+            }}>
+              <div style={{
+                fontSize: nextBossTime <= 10 ? 18 : 13,
+                fontWeight: 700,
+                color: nextBossTime <= 10 ? "#ff4444" : "rgba(255,255,255,0.4)",
+                animation: nextBossTime <= 10 ? "pulse 0.5s ease-in-out infinite alternate" : "none",
+                textShadow: nextBossTime <= 10 ? "0 0 15px rgba(255,0,0,0.6)" : "none",
+              }}>
+                {nextBossTime <= 10
+                  ? `⚠️ ${bossWarning} ${lang === "tr" ? "GELİYOR!" : "INCOMING!"} ${Math.ceil(nextBossTime)}s`
+                  : `🕐 ${lang === "tr" ? "Boss" : "Boss"}: ${Math.floor(nextBossTime / 60)}:${Math.floor(nextBossTime % 60).toString().padStart(2, "0")}`
+                }
+              </div>
+            </div>
+          )}
 
           {/* Boss HP Bar */}
           {bossInfo && (

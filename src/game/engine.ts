@@ -42,7 +42,7 @@ export class GameEngine {
   // Game state
   state: GameState = "menu";
   stats: GameStats = this.createDefaultStats();
-  private gameTime = 0;
+  gameTime = 0;
 
   // Spawning
   private spawnTimer = 0;
@@ -73,7 +73,7 @@ export class GameEngine {
   activeBoss: EnemyInstance | null = null;
   private bossHpBarMesh: THREE.Mesh | null = null;
   private bossHpBarBg: THREE.Mesh | null = null;
-  private bossSpawned: Set<string> = new Set();
+  bossSpawned: Set<string> = new Set();
   private bossSlamTimers: Map<number, number> = new Map();
   private bossSlamEffects: { mesh: THREE.Mesh; timer: number }[] = [];
 
