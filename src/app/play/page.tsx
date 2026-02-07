@@ -124,6 +124,21 @@ export default function PlayPage() {
     engine.onStateChange = (state: GameState) => {
       setGameState(state);
       if (state === "gameover") {
+        // Update stats one final time (gold is calculated in actualGameOver)
+        setStats({
+          hp: Math.round(engine.player.hp),
+          maxHp: Math.round(engine.player.maxHp),
+          xp: engine.player.xp,
+          xpToNext: engine.player.xpToNext,
+          level: engine.player.level,
+          kills: engine.stats.kills,
+          score: engine.stats.score,
+          survivalTime: engine.stats.survivalTime,
+          currentCombo: engine.stats.currentCombo,
+          comboMultiplier: engine.stats.comboMultiplier,
+          gold: engine.stats.gold,
+          maxCombo: engine.stats.maxCombo,
+        });
         setScoreSubmitted(false);
         setSubmitting(false);
         const saved = getActiveNickname();
