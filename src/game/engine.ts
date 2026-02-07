@@ -1792,6 +1792,10 @@ export class GameEngine {
         enemy.position.z += dir.z * effectiveSpeed * dt;
       }
 
+      // Clamp all enemies inside arena bounds
+      enemy.position.x = Math.max(-ARENA.halfSize + 1, Math.min(ARENA.halfSize - 1, enemy.position.x));
+      enemy.position.z = Math.max(-ARENA.halfSize + 1, Math.min(ARENA.halfSize - 1, enemy.position.z));
+
       const enemyTerrainY = this.getTerrainHeight(enemy.position.x, enemy.position.z);
       if (isBat) {
         enemy.position.y = enemyTerrainY + 1.5 + Math.sin(this.gameTime * 3 + enemy.id) * 0.3;
