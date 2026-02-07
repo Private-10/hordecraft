@@ -40,6 +40,7 @@ export default function PlayPage() {
   const [showNicknameInput, setShowNicknameInput] = useState(false);
   const [selectedChar, setSelectedChar] = useState("knight");
   const [showCharSelect, setShowCharSelect] = useState(false);
+  const [dps, setDps] = useState(0);
 
   const submitScore = async (data: Record<string, unknown>) => {
     try {
@@ -169,10 +170,11 @@ export default function PlayPage() {
       setBossInfo(null);
     };
 
-    // Override onStatsUpdate to include boss info
+    // Override onStatsUpdate to include boss info + DPS
     const origStatsUpdate = engine.onStatsUpdate;
     engine.onStatsUpdate = () => {
       origStatsUpdate?.();
+      setDps(engine.dps || 0);
       // Check active boss
       const eng = engine as unknown as {
         activeBoss: { type: string; hp: number; maxHp: number; isAlive: boolean } | null;
@@ -601,6 +603,15 @@ export default function PlayPage() {
 
           {/* Score */}
           <div className="score-display">🏆 {stats.score.toLocaleString()}</div>
+
+          {/* DPS Meter */}
+          <div style={{
+            position: "absolute", bottom: 50, right: 20,
+            fontSize: 14, fontWeight: 700, textShadow: "0 0 8px rgba(0,0,0,0.8)",
+            color: dps > 100 ? "#ff4444" : dps > 50 ? "#ffaa44" : "#44ff44",
+          }}>
+            ⚔️ {dps.toLocaleString()} DPS
+          </div>
 
           {/* Controls hint */}
           <div className="controls-hint">

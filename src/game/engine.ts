@@ -69,6 +69,10 @@ export class GameEngine {
   // Character
   private selectedCharacter: CharacterDef = getCharacter("knight");
 
+  // DPS tracking
+  private damageLog: { time: number; damage: number }[] = [];
+  dps = 0;
+
   // Upgrade tracking
   private passiveUpgrades: Record<string, number> = {};
 
@@ -987,6 +991,7 @@ export class GameEngine {
     this.updateSpawning(cappedDt);
     this.updateBoss(cappedDt);
     this.updateCombo(cappedDt);
+    this.updateDPS();
     this.updateScore();
     this.updateHPRegen(cappedDt);
 
@@ -1738,16 +1743,43 @@ export class GameEngine {
 
       if (!closest) break;
 
-      // Draw lightning line
-      const points = [
-        currentPos.clone().add(new THREE.Vector3(0, 1, 0)),
-        closest.position.clone().add(new THREE.Vector3(0, 0.5, 0)),
-      ];
+      // Draw zigzag lightning bolt
+      const start = currentPos.clone().add(new THREE.Vector3(0, 1, 0));
+      const end = closest.position.clone().add(new THREE.Vector3(0, 0.5, 0));
+      const segments = 8;
+      const points: THREE.Vector3[] = [start];
+      for (let s = 1; s < segments; s++) {
+        const t = s / segments;
+        const p = start.clone().lerp(end.clone(), t);
+        const offset = (1 - Math.abs(t - 0.5) * 2) * 0.8; // more jitter in middle
+        p.x += (Math.random() - 0.5) * offset;
+        p.y += (Math.random() - 0.5) * offset * 0.5;
+        p.z += (Math.random() - 0.5) * offset;
+        points.push(p);
+      }
+      points.push(end);
+
+      // Main bolt (bright)
       const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
-      const lineMat = new THREE.LineBasicMaterial({ color: COLORS.lightning, linewidth: 2 });
+      const lineMat = new THREE.LineBasicMaterial({ color: 0xaaddff, linewidth: 2 });
       const line = new THREE.Line(lineGeo, lineMat);
       this.scene.add(line);
-      this.lightnings.push({ line, timer: 0.15 });
+      this.lightnings.push({ line, timer: 0.2 });
+
+      // Glow bolt (wider, transparent)
+      const glowMat = new THREE.LineBasicMaterial({ color: COLORS.lightning, linewidth: 1, transparent: true, opacity: 0.4 });
+      const glow = new THREE.Line(lineGeo.clone(), glowMat);
+      this.scene.add(glow);
+      this.lightnings.push({ line: glow, timer: 0.2 });
+
+      // Impact flash at target
+      const flash = new THREE.Mesh(
+        new THREE.SphereGeometry(0.3, 6, 4),
+        new THREE.MeshBasicMaterial({ color: 0xaaddff, transparent: true, opacity: 0.7 })
+      );
+      flash.position.copy(end);
+      this.scene.add(flash);
+      setTimeout(() => this.scene.remove(flash), 150);
 
       this.damageEnemy(closest, chainDamage);
       hitSet.add(closest.id);
@@ -1869,11 +1901,11 @@ export class GameEngine {
 
       (seg.mesh.material as THREE.MeshBasicMaterial).opacity = 0.6 * (seg.timer / seg.maxTime);
 
-      // Damage enemies on fire
+      // Damage enemies on fire (silent — no hit sound for DoT)
       for (const enemy of this.enemies) {
         if (!enemy.isAlive) continue;
         if (enemy.position.distanceTo(seg.position) < WEAPONS.fireTrail.width) {
-          this.damageEnemy(enemy, seg.damagePerSecond * dt);
+          this.damageEnemy(enemy, seg.damagePerSecond * dt, true);
         }
       }
     }
@@ -1881,7 +1913,9 @@ export class GameEngine {
 
   // ========== DAMAGE ==========
 
-  private damageEnemy(enemy: EnemyInstance, damage: number) {
+  private lastHitSoundTime = 0;
+
+  private damageEnemy(enemy: EnemyInstance, damage: number, silent = false) {
     // Critical hit
     let finalDamage = damage;
     if (Math.random() < this.player.critChance) {
@@ -1889,18 +1923,31 @@ export class GameEngine {
     }
 
     enemy.hp -= finalDamage;
-    Audio.playHit();
+
+    // DPS tracking
+    this.damageLog.push({ time: this.gameTime, damage: finalDamage });
+
+    // Throttle hit sounds — max 1 per 80ms
+    if (!silent) {
+      const now = performance.now();
+      if (now - this.lastHitSoundTime > 80) {
+        Audio.playHit();
+        this.lastHitSoundTime = now;
+      }
+    }
 
     // Flash red - traverse all meshes in group
-    enemy.mesh.traverse((child) => {
-      if (child instanceof THREE.Mesh && child.material) {
-        const mat = child.material as THREE.MeshLambertMaterial;
-        if (mat.emissive) {
-          mat.emissive.setHex(0xff0000);
-          setTimeout(() => { mat.emissive?.setHex(0x000000); }, 100);
+    if (!silent) {
+      enemy.mesh.traverse((child) => {
+        if (child instanceof THREE.Mesh && child.material) {
+          const mat = child.material as THREE.MeshLambertMaterial;
+          if (mat.emissive) {
+            mat.emissive.setHex(0xff0000);
+            setTimeout(() => { mat.emissive?.setHex(0x000000); }, 100);
+          }
         }
-      }
-    });
+      });
+    }
 
     if (enemy.hp <= 0) {
       this.killEnemy(enemy);
@@ -2108,6 +2155,15 @@ export class GameEngine {
         this.stats.comboMultiplier = 1;
       }
     }
+  }
+
+  private updateDPS() {
+    // Calculate DPS over last 5 seconds
+    const window = 5;
+    const cutoff = this.gameTime - window;
+    this.damageLog = this.damageLog.filter(d => d.time > cutoff);
+    const totalDmg = this.damageLog.reduce((sum, d) => sum + d.damage, 0);
+    this.dps = Math.round(totalDmg / window);
   }
 
   private updateScore() {
