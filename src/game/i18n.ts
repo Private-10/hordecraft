@@ -150,6 +150,12 @@ const translations = {
   "settings.invertY": { tr: "Mouse Y Ekseni Ters", en: "Invert Mouse Y Axis" },
   "settings.volume": { tr: "Ses Seviyesi", en: "Volume" },
   "settings.close": { tr: "Kapat", en: "Close" },
+
+  // Chat
+  "chat.title": { tr: "💬 SOHBET", en: "💬 CHAT" },
+  "chat.placeholder": { tr: "Mesaj yaz...", en: "Type a message..." },
+  "chat.send": { tr: "Gönder", en: "Send" },
+  "chat.login_required": { tr: "Sohbet için giriş yap", en: "Login to chat" },
 } as const;
 
 type TranslationKey = keyof typeof translations;

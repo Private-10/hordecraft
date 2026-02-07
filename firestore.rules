@@ -19,5 +19,14 @@ service cloud.firestore {
                     && request.resource.data.score is number;
       allow update, delete: if false;
     }
+
+    // Chat: anyone can read, anyone can create (no edit/delete)
+    match /chat/{msgId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasAll(['nickname', 'text', 'timestamp', 'color'])
+                    && request.resource.data.text is string
+                    && request.resource.data.text.size() <= 100;
+      allow update, delete: if false;
+    }
   }
 }

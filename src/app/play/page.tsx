@@ -7,6 +7,8 @@ import { t, getLang, setLang, type Lang } from "@/game/i18n";
 import { CHARACTERS, type CharacterDef } from "@/game/characters";
 import type { MetaState } from "@/game/types";
 import { getActiveNickname, registerNickname, claimNickname, isNicknameClaimed, logoutNickname } from "@/game/nickname";
+import { collection, addDoc, query, orderBy, limit as fbLimit, onSnapshot } from "firebase/firestore";
+import { db } from "@/game/firebase";
 
 export default function PlayPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -46,6 +48,11 @@ export default function PlayPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [invertY, setInvertY] = useState(false);
   const [metaState, setMetaState] = useState<MetaState | null>(null);
+  const [showChat, setShowChat] = useState(false);
+  const [chatMessages, setChatMessages] = useState<{nickname:string;text:string;color:string}[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatCooldown, setChatCooldown] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   const submitScore = async (data: Record<string, unknown>) => {
     try {
@@ -280,6 +287,42 @@ export default function PlayPage() {
   useEffect(() => {
     if (gameState === "menu" && engineRef.current) refreshMeta();
   }, [gameState, refreshMeta]);
+
+  // Chat: Firestore listener
+  useEffect(() => {
+    const q = query(collection(db, "chat"), orderBy("timestamp", "asc"), fbLimit(50));
+    const unsub = onSnapshot(q, (snap) => {
+      const msgs = snap.docs.map(d => {
+        const data = d.data();
+        return { nickname: data.nickname, text: data.text, color: data.color };
+      });
+      setChatMessages(msgs);
+    });
+    return () => unsub();
+  }, []);
+
+  // Auto-scroll chat
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages, showChat]);
+
+  const nickColor = (name: string) => {
+    let h = 0;
+    for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
+    return `hsl(${h % 360}, 70%, 65%)`;
+  };
+
+  const sendChat = useCallback(async () => {
+    if (!chatInput.trim() || !nickLoggedIn || chatCooldown) return;
+    const text = chatInput.trim().slice(0, 100);
+    const color = nickColor(nickname);
+    setChatInput("");
+    setChatCooldown(true);
+    setTimeout(() => setChatCooldown(false), 2000);
+    try {
+      await addDoc(collection(db, "chat"), { nickname, text, timestamp: Date.now(), color });
+    } catch (e) { console.error("Chat send failed:", e); }
+  }, [chatInput, nickLoggedIn, chatCooldown, nickname]);
 
   const SHOP_UPGRADES = [
     { id: "metaHp", icon: "❤️", nameKey: "meta.hp" as const, effectKey: "shop.effect.metaHp" as const, maxLevel: 10 },
@@ -598,6 +641,48 @@ export default function PlayPage() {
                 >
                   📱 {lang === "tr" ? "Tam Ekran" : "Fullscreen"}
                 </button>
+              )}
+            </div>
+
+            {/* Chat */}
+            <div className="menu-section" style={{ alignItems: "center" }}>
+              <button className="btn-chat" onClick={() => setShowChat(!showChat)}>
+                {t("chat.title")}
+              </button>
+              {showChat && (
+                <div className="chat-panel">
+                  <div className="chat-messages">
+                    {chatMessages.length === 0 && (
+                      <div style={{ color: "rgba(255,255,255,0.3)", textAlign: "center", fontSize: 12 }}>
+                        {lang === "tr" ? "Henüz mesaj yok" : "No messages yet"}
+                      </div>
+                    )}
+                    {chatMessages.map((msg, i) => (
+                      <div key={i} className="chat-msg">
+                        <span className="chat-msg-nick" style={{ color: msg.color }}>{msg.nickname}:</span>
+                        {msg.text}
+                      </div>
+                    ))}
+                    <div ref={chatEndRef} />
+                  </div>
+                  {nickLoggedIn ? (
+                    <div className="chat-input-row">
+                      <input
+                        type="text"
+                        placeholder={t("chat.placeholder")}
+                        value={chatInput}
+                        onChange={(e) => setChatInput(e.target.value.slice(0, 100))}
+                        onKeyDown={(e) => { if (e.key === "Enter") sendChat(); }}
+                        maxLength={100}
+                      />
+                      <button onClick={sendChat} disabled={chatCooldown || !chatInput.trim()}>
+                        {t("chat.send")}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="chat-login-msg">{t("chat.login_required")}</div>
+                  )}
+                </div>
               )}
             </div>
 
