@@ -78,12 +78,15 @@ export class MobileInputManager {
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      fontSize: "24px",
+      fontSize: "28px",
+      lineHeight: "1",
+      textAlign: "center",
       zIndex: "50",
       touchAction: "none",
       userSelect: "none",
+      WebkitUserSelect: "none",
     });
-    jumpBtn.textContent = "🦘";
+    jumpBtn.textContent = "⬆";
     jumpBtn.addEventListener("touchstart", (e) => {
       e.preventDefault();
       this.jumpPressed = true;
@@ -109,12 +112,15 @@ export class MobileInputManager {
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      fontSize: "20px",
+      fontSize: "22px",
+      lineHeight: "1",
+      textAlign: "center",
       zIndex: "50",
       touchAction: "none",
       userSelect: "none",
+      WebkitUserSelect: "none",
     });
-    slideBtn.textContent = "🏃";
+    slideBtn.textContent = "💨";
     slideBtn.addEventListener("touchstart", (e) => {
       e.preventDefault();
       this.slidePressed = true;
