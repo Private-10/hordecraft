@@ -984,6 +984,158 @@ export class GameEngine {
       return g;
     };
 
+    // === Spider ===
+    this.enemyGeometries.spider = new THREE.SphereGeometry(0.25, 6, 5);
+    this.enemyMaterials.spider = new THREE.MeshLambertMaterial({ color: ENEMIES.spider.color });
+
+    this.enemyMeshFactories.spider = () => {
+      const g = new THREE.Group();
+      // Body
+      const body = new THREE.Mesh(
+        new THREE.SphereGeometry(0.2, 6, 5),
+        new THREE.MeshLambertMaterial({ color: 0x332222 })
+      );
+      body.position.y = 0.15;
+      body.scale.set(1, 0.6, 1.2);
+      g.add(body);
+      // Abdomen
+      const abd = new THREE.Mesh(
+        new THREE.SphereGeometry(0.18, 6, 5),
+        new THREE.MeshLambertMaterial({ color: 0x221111 })
+      );
+      abd.position.set(0, 0.12, -0.22);
+      g.add(abd);
+      // Red eyes
+      const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+      const eyeGeo = new THREE.SphereGeometry(0.03, 4, 4);
+      for (let ei = 0; ei < 4; ei++) {
+        const eye = new THREE.Mesh(eyeGeo, eyeMat);
+        eye.position.set(-0.06 + (ei % 2) * 0.12, 0.2 + Math.floor(ei / 2) * 0.04, 0.15);
+        g.add(eye);
+      }
+      // 4 leg pairs
+      const legGeo = new THREE.CylinderGeometry(0.012, 0.012, 0.35, 4);
+      const legMat = new THREE.MeshLambertMaterial({ color: 0x221111 });
+      for (let li = 0; li < 8; li++) {
+        const leg = new THREE.Mesh(legGeo, legMat);
+        const side = li < 4 ? -1 : 1;
+        const idx = li % 4;
+        leg.position.set(side * 0.18, 0.08, -0.1 + idx * 0.08);
+        leg.rotation.z = side * 0.8;
+        leg.rotation.x = (idx - 1.5) * 0.2;
+        g.add(leg);
+      }
+      return g;
+    };
+
+    // === Zombie ===
+    this.enemyGeometries.zombie = new THREE.CapsuleGeometry(0.35, 0.6, 4, 6);
+    this.enemyMaterials.zombie = new THREE.MeshLambertMaterial({ color: ENEMIES.zombie.color });
+
+    this.enemyMeshFactories.zombie = () => {
+      const g = new THREE.Group();
+      const skinMat = new THREE.MeshLambertMaterial({ color: 0x556644 });
+      const clothMat = new THREE.MeshLambertMaterial({ color: 0x443333 });
+      // Body
+      const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 0.5, 4, 6), clothMat);
+      body.position.y = 0.6;
+      g.add(body);
+      // Head
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 6, 5), skinMat);
+      head.position.y = 1.1;
+      g.add(head);
+      // Eyes (dead white)
+      const eyeGeo = new THREE.SphereGeometry(0.04, 4, 4);
+      const eyeMat = new THREE.MeshBasicMaterial({ color: 0xccddcc });
+      const le = new THREE.Mesh(eyeGeo, eyeMat);
+      le.position.set(-0.08, 1.13, 0.17);
+      g.add(le);
+      const re = new THREE.Mesh(eyeGeo, eyeMat);
+      re.position.set(0.08, 1.13, 0.17);
+      g.add(re);
+      // Arms forward
+      const armGeo = new THREE.CapsuleGeometry(0.08, 0.45, 4, 5);
+      const la = new THREE.Mesh(armGeo, skinMat);
+      la.position.set(-0.35, 0.75, 0.3);
+      la.rotation.x = -1.2;
+      g.add(la);
+      const ra = new THREE.Mesh(armGeo, skinMat);
+      ra.position.set(0.35, 0.75, 0.3);
+      ra.rotation.x = -1.2;
+      g.add(ra);
+      // Legs
+      const legGeo = new THREE.CapsuleGeometry(0.1, 0.3, 4, 5);
+      const ll = new THREE.Mesh(legGeo, clothMat);
+      ll.position.set(-0.15, 0.2, 0);
+      g.add(ll);
+      const rl = new THREE.Mesh(legGeo, clothMat);
+      rl.position.set(0.15, 0.2, 0);
+      g.add(rl);
+      return g;
+    };
+
+    // === Wolf ===
+    this.enemyGeometries.wolf = new THREE.CapsuleGeometry(0.3, 0.5, 4, 6);
+    this.enemyMaterials.wolf = new THREE.MeshLambertMaterial({ color: ENEMIES.wolf.color });
+
+    this.enemyMeshFactories.wolf = () => {
+      const g = new THREE.Group();
+      const furMat = new THREE.MeshLambertMaterial({ color: 0x666666 });
+      // Body (long, low)
+      const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.6, 4, 6), furMat);
+      body.position.set(0, 0.35, 0);
+      body.rotation.x = Math.PI / 2;
+      g.add(body);
+      // Head
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 6, 5), furMat);
+      head.position.set(0, 0.4, 0.45);
+      head.scale.set(1, 0.9, 1.3);
+      g.add(head);
+      // Snout
+      const snout = new THREE.Mesh(
+        new THREE.ConeGeometry(0.08, 0.2, 5),
+        furMat
+      );
+      snout.position.set(0, 0.37, 0.62);
+      snout.rotation.x = -Math.PI / 2;
+      g.add(snout);
+      // Yellow glowing eyes
+      const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffdd00 });
+      const eyeGeo = new THREE.SphereGeometry(0.035, 4, 4);
+      const le = new THREE.Mesh(eyeGeo, eyeMat);
+      le.position.set(-0.1, 0.44, 0.55);
+      g.add(le);
+      const re = new THREE.Mesh(eyeGeo, eyeMat);
+      re.position.set(0.1, 0.44, 0.55);
+      g.add(re);
+      // Pointed ears
+      const earGeo = new THREE.ConeGeometry(0.05, 0.15, 4);
+      const earMat = new THREE.MeshLambertMaterial({ color: 0x555555 });
+      const lEar = new THREE.Mesh(earGeo, earMat);
+      lEar.position.set(-0.1, 0.58, 0.38);
+      g.add(lEar);
+      const rEar = new THREE.Mesh(earGeo, earMat);
+      rEar.position.set(0.1, 0.58, 0.38);
+      g.add(rEar);
+      // 4 legs
+      const legGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.3, 5);
+      const positions = [[-0.15, 0.15, 0.2], [0.15, 0.15, 0.2], [-0.15, 0.15, -0.2], [0.15, 0.15, -0.2]];
+      positions.forEach(p => {
+        const leg = new THREE.Mesh(legGeo, furMat);
+        leg.position.set(p[0], p[1], p[2]);
+        g.add(leg);
+      });
+      // Tail
+      const tail = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.03, 0.015, 0.3, 4),
+        furMat
+      );
+      tail.position.set(0, 0.4, -0.4);
+      tail.rotation.x = -0.5;
+      g.add(tail);
+      return g;
+    };
+
     // === BOSS MESH: Stone Golem ===
     this.enemyMeshFactories.stoneGolem = () => {
       const g = new THREE.Group();
@@ -1607,11 +1759,38 @@ export class GameEngine {
       const isBat = enemy.type === "bat";
       const effectiveSpeed = enemy.speed * (1 - enemy.slowAmount);
 
-      enemy.position.x += dir.x * effectiveSpeed * dt;
-      enemy.position.z += dir.z * effectiveSpeed * dt;
+      // Spider: zigzag lateral offset
+      if (enemy.type === "spider") {
+        const lateral = new THREE.Vector3(-dir.z, 0, dir.x); // perpendicular
+        const zigzag = Math.sin(this.gameTime * 8 + enemy.id * 2.5) * 0.7;
+        enemy.position.x += (dir.x + lateral.x * zigzag) * effectiveSpeed * dt;
+        enemy.position.z += (dir.z + lateral.z * zigzag) * effectiveSpeed * dt;
+      }
+      // Wolf: flank then charge
+      else if (enemy.type === "wolf") {
+        const distToPlayer = enemy.position.distanceTo(playerPos);
+        if (distToPlayer > 4) {
+          // Circle: move toward point offset 90 degrees
+          const flankDir = new THREE.Vector3(-dir.z, 0, dir.x); // perpendicular
+          const blend = 0.6; // 60% flanking, 40% approaching
+          enemy.position.x += (dir.x * (1 - blend) + flankDir.x * blend) * effectiveSpeed * dt;
+          enemy.position.z += (dir.z * (1 - blend) + flankDir.z * blend) * effectiveSpeed * dt;
+        } else {
+          // Charge directly
+          enemy.position.x += dir.x * effectiveSpeed * 1.3 * dt;
+          enemy.position.z += dir.z * effectiveSpeed * 1.3 * dt;
+        }
+      }
+      else {
+        enemy.position.x += dir.x * effectiveSpeed * dt;
+        enemy.position.z += dir.z * effectiveSpeed * dt;
+      }
+
       const enemyTerrainY = this.getTerrainHeight(enemy.position.x, enemy.position.z);
       if (isBat) {
         enemy.position.y = enemyTerrainY + 1.5 + Math.sin(this.gameTime * 3 + enemy.id) * 0.3;
+      } else if (enemy.type === "spider") {
+        enemy.position.y = enemyTerrainY + 0.15;
       } else {
         enemy.position.y = enemyTerrainY + 0.5;
       }
@@ -1632,6 +1811,16 @@ export class GameEngine {
       if (enemy.type === "slime") {
         const bounce = 1 + Math.sin(this.gameTime * 5 + enemy.id) * 0.1;
         enemy.mesh.scale.set(1, bounce, 1);
+      }
+
+      // Zombie arms bobbing
+      if (enemy.type === "zombie" && enemy.mesh instanceof THREE.Group) {
+        const bob = Math.sin(this.gameTime * 3 + enemy.id) * 0.15;
+        // Arms are children 4 and 5 in zombie factory
+        const la = enemy.mesh.children[4];
+        const ra = enemy.mesh.children[5];
+        if (la) la.rotation.x = -1.2 + bob;
+        if (ra) ra.rotation.x = -1.2 - bob;
       }
 
       // Hit timer
@@ -1711,24 +1900,24 @@ export class GameEngine {
 
     if (minute < 2) {
       spawnInterval = 2.5;
-      types = ["goblin"];
-      groupSize = 3;
+      types = ["goblin", "spider", "wolf"];
+      groupSize = Math.floor(3 + Math.random() * 2); // 3-4
     } else if (minute < 5) {
       spawnInterval = 2;
-      types = ["goblin", "goblin", "slime"];
-      groupSize = 4;
+      types = ["goblin", "spider", "wolf", "slime", "zombie"];
+      groupSize = Math.floor(4 + Math.random() * 2); // 4-5
     } else if (minute < 10) {
       spawnInterval = 1.5;
-      types = ["goblin", "slime", "skeleton", "bat"];
-      groupSize = 5;
+      types = ["goblin", "slime", "skeleton", "bat", "spider", "wolf", "zombie"];
+      groupSize = Math.floor(5 + Math.random() * 2); // 5-6
     } else if (minute < 15) {
       spawnInterval = 1;
-      types = ["skeleton", "bat", "bat", "ogre"];
-      groupSize = 6;
+      types = ["skeleton", "bat", "ogre", "zombie", "wolf"];
+      groupSize = Math.floor(6 + Math.random() * 2); // 6-7
     } else if (minute < 20) {
       spawnInterval = 0.7;
-      types = ["skeleton", "bat", "ogre", "ogre"];
-      groupSize = 7;
+      types = ["skeleton", "bat", "ogre", "ogre", "zombie"];
+      groupSize = Math.floor(7 + Math.random() * 2); // 7-8
     } else {
       spawnInterval = 0.5;
       types = ["skeleton", "bat", "ogre"];
@@ -2043,9 +2232,19 @@ export class GameEngine {
         dir.normalize();
       }
 
-      const projGeo = new THREE.SphereGeometry(0.15, 4, 4);
-      const projMat = new THREE.MeshBasicMaterial({ color: COLORS.projectile });
-      const mesh = new THREE.Mesh(projGeo, projMat);
+      // Bone shape: two spheres connected by cylinder
+      const boneGroup = new THREE.Group();
+      const boneMat = new THREE.MeshBasicMaterial({ color: COLORS.projectile });
+      const end1 = new THREE.Mesh(new THREE.SphereGeometry(0.08, 5, 4), boneMat);
+      end1.position.x = -0.12;
+      boneGroup.add(end1);
+      const end2 = new THREE.Mesh(new THREE.SphereGeometry(0.08, 5, 4), boneMat);
+      end2.position.x = 0.12;
+      boneGroup.add(end2);
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.2, 5), boneMat);
+      shaft.rotation.z = Math.PI / 2;
+      boneGroup.add(shaft);
+      const mesh = boneGroup as unknown as THREE.Mesh;
       const pos = this.player.position.clone().add(new THREE.Vector3(0, 1, 0));
       mesh.position.copy(pos);
       this.scene.add(mesh);
@@ -2069,34 +2268,79 @@ export class GameEngine {
     Audio.playShockWave();
     const range = WEAPONS.shockWave.range + weapon.level * 0.8;
     const damage = WEAPONS.shockWave.baseDamage * (1 + (weapon.level - 1) * 0.3) * this.player.damageMultiplier;
+    const pos = this.player.position.clone();
 
-    // Visual ring
-    const ringGeo = new THREE.RingGeometry(0.1, 0.3, 32);
-    const ringMat = new THREE.MeshBasicMaterial({
-      color: COLORS.shockwave,
-      transparent: true,
-      opacity: 0.7,
-      side: THREE.DoubleSide,
-    });
-    const ring = new THREE.Mesh(ringGeo, ringMat);
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.copy(this.player.position).add(new THREE.Vector3(0, 0.1, 0));
-    this.scene.add(ring);
+    // Vertical pulse column
+    const col = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.3, 0.3, 3, 8),
+      new THREE.MeshBasicMaterial({ color: COLORS.shockwave, transparent: true, opacity: 0.5 })
+    );
+    col.position.copy(pos).add(new THREE.Vector3(0, 1.5, 0));
+    this.scene.add(col);
+    const colStart = performance.now();
+    const animCol = () => {
+      const elapsed = (performance.now() - colStart) / 1000;
+      if (elapsed > 0.4) { this.scene.remove(col); return; }
+      col.scale.set(1 + elapsed * 4, 1 - elapsed * 1.5, 1 + elapsed * 4);
+      (col.material as THREE.MeshBasicMaterial).opacity = 0.5 * (1 - elapsed / 0.4);
+      requestAnimationFrame(animCol);
+    };
+    requestAnimationFrame(animCol);
 
-    this.shockWaves.push({
-      position: this.player.position.clone(),
-      mesh: ring,
-      timer: 0,
-      maxTime: 0.4,
-      maxRadius: range,
-      damage,
-    });
+    // 3 concentric rings with slight delay
+    for (let r = 0; r < 3; r++) {
+      setTimeout(() => {
+        const ringGeo = new THREE.RingGeometry(0.1, 0.3, 32);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: COLORS.shockwave,
+          transparent: true,
+          opacity: 0.7 - r * 0.15,
+          side: THREE.DoubleSide,
+        });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.copy(pos).add(new THREE.Vector3(0, 0.1, 0));
+        this.scene.add(ring);
+        this.shockWaves.push({ position: pos.clone(), mesh: ring, timer: 0, maxTime: 0.4 + r * 0.1, maxRadius: range * (1 - r * 0.15), damage: r === 0 ? damage : 0 });
+      }, r * 80);
+    }
+
+    // Ground darkening circle
+    const ground = new THREE.Mesh(
+      new THREE.CircleGeometry(range, 24),
+      new THREE.MeshBasicMaterial({ color: 0x111122, transparent: true, opacity: 0.3, side: THREE.DoubleSide })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.copy(pos).add(new THREE.Vector3(0, 0.05, 0));
+    this.scene.add(ground);
+    setTimeout(() => this.scene.remove(ground), 500);
+
+    // Debris particles
+    for (let i = 0; i < 8; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const debris = new THREE.Mesh(
+        new THREE.BoxGeometry(0.1, 0.1, 0.1),
+        new THREE.MeshBasicMaterial({ color: 0x445566, transparent: true })
+      );
+      debris.position.copy(pos).add(new THREE.Vector3(0, 0.3, 0));
+      this.scene.add(debris);
+      this.particles.push({ mesh: debris, velocity: new THREE.Vector3(Math.cos(a) * 5, 3 + Math.random() * 2, Math.sin(a) * 5), life: 0, maxLife: 0.6 });
+    }
   }
 
   private fireLightningArc(weapon: WeaponState) {
     Audio.playLightning();
     const chains = WEAPONS.lightningArc.chainCount + weapon.level - 1;
     const damage = WEAPONS.lightningArc.baseDamage * (1 + (weapon.level - 1) * 0.25) * this.player.damageMultiplier;
+
+    // Bright flash at player
+    const playerFlash = new THREE.Mesh(
+      new THREE.SphereGeometry(0.5, 6, 4),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 })
+    );
+    playerFlash.position.copy(this.player.position).add(new THREE.Vector3(0, 1, 0));
+    this.scene.add(playerFlash);
+    setTimeout(() => this.scene.remove(playerFlash), 100);
 
     let currentPos = this.player.position.clone();
     const hitSet = new Set<number>();
@@ -2125,7 +2369,7 @@ export class GameEngine {
       for (let s = 1; s < segments; s++) {
         const t = s / segments;
         const p = start.clone().lerp(end.clone(), t);
-        const offset = (1 - Math.abs(t - 0.5) * 2) * 0.8; // more jitter in middle
+        const offset = (1 - Math.abs(t - 0.5) * 2) * 0.8;
         p.x += (Math.random() - 0.5) * offset;
         p.y += (Math.random() - 0.5) * offset * 0.5;
         p.z += (Math.random() - 0.5) * offset;
@@ -2133,32 +2377,58 @@ export class GameEngine {
       }
       points.push(end);
 
-      // Main bolt (bright)
       const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
-      const lineMat = new THREE.LineBasicMaterial({ color: 0xaaddff, linewidth: 2 });
-      const line = new THREE.Line(lineGeo, lineMat);
-      this.scene.add(line);
-      this.lightnings.push({ line, timer: 0.2 });
 
-      // Glow bolt (wider, transparent)
-      const glowMat = new THREE.LineBasicMaterial({ color: COLORS.lightning, linewidth: 1, transparent: true, opacity: 0.4 });
-      const glow = new THREE.Line(lineGeo.clone(), glowMat);
-      this.scene.add(glow);
-      this.lightnings.push({ line: glow, timer: 0.2 });
+      // 3-layer bolt: bright core, medium glow, wide faint glow
+      const layers: [number, number, number][] = [
+        [0xffffff, 1.0, 0.25],   // bright core
+        [0xaaddff, 0.6, 0.22],   // medium glow
+        [COLORS.lightning, 0.25, 0.2], // wide faint
+      ];
+      for (const [color, opacity, timer] of layers) {
+        const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity });
+        const line = new THREE.Line(lineGeo.clone(), mat);
+        this.scene.add(line);
+        this.lightnings.push({ line, timer });
+      }
+
+      // Crackling particles along bolt path
+      for (let pi = 0; pi < 3; pi++) {
+        const t = Math.random();
+        const pp = start.clone().lerp(end, t);
+        const spark = new THREE.Mesh(
+          new THREE.OctahedronGeometry(0.05),
+          new THREE.MeshBasicMaterial({ color: 0xaaddff, transparent: true })
+        );
+        spark.position.copy(pp);
+        this.scene.add(spark);
+        this.particles.push({ mesh: spark, velocity: new THREE.Vector3((Math.random() - 0.5) * 3, Math.random() * 2, (Math.random() - 0.5) * 3), life: 0, maxLife: 0.25 });
+      }
+
+      // Impact electric sparks at target
+      for (let si = 0; si < 4; si++) {
+        const spark = new THREE.Mesh(
+          new THREE.OctahedronGeometry(0.04),
+          new THREE.MeshBasicMaterial({ color: 0xffff88, transparent: true })
+        );
+        spark.position.copy(end);
+        this.scene.add(spark);
+        this.particles.push({ mesh: spark, velocity: new THREE.Vector3((Math.random() - 0.5) * 4, Math.random() * 3 + 1, (Math.random() - 0.5) * 4), life: 0, maxLife: 0.3 });
+      }
 
       // Impact flash at target
       const flash = new THREE.Mesh(
-        new THREE.SphereGeometry(0.3, 6, 4),
-        new THREE.MeshBasicMaterial({ color: 0xaaddff, transparent: true, opacity: 0.7 })
+        new THREE.SphereGeometry(0.4, 6, 4),
+        new THREE.MeshBasicMaterial({ color: 0xaaddff, transparent: true, opacity: 0.8 })
       );
       flash.position.copy(end);
       this.scene.add(flash);
-      setTimeout(() => this.scene.remove(flash), 150);
+      setTimeout(() => this.scene.remove(flash), 120);
 
       this.damageEnemy(closest, chainDamage, false, "lightning");
       hitSet.add(closest.id);
       currentPos = closest.position.clone();
-      chainDamage *= 0.8; // damage falloff
+      chainDamage *= 0.8;
     }
   }
 
@@ -2170,27 +2440,63 @@ export class GameEngine {
       const duration = WEAPONS.fireTrail.duration + weapon.level * 500;
       const trailWidth = WEAPONS.fireTrail.width * (evolved ? 3 : 1);
 
-      const fireGeo = new THREE.PlaneGeometry(trailWidth, 1);
-      const fireMat = new THREE.MeshBasicMaterial({
-        color: COLORS.fire,
-        transparent: true,
-        opacity: 0.6,
-        side: THREE.DoubleSide,
-      });
-      const fireMesh = new THREE.Mesh(fireGeo, fireMat);
-      fireMesh.rotation.x = -Math.PI / 2;
-      fireMesh.position.copy(this.player.position).add(new THREE.Vector3(0, 0.05, 0));
-      this.scene.add(fireMesh);
+      // Create flame group with multiple small cone/triangle flames
+      const flameGroup = new THREE.Group();
+      const flameCount = 4 + Math.floor(Math.random() * 3);
+      for (let fi = 0; fi < flameCount; fi++) {
+        const isInner = fi < flameCount / 2;
+        const h = 0.3 + Math.random() * 0.4;
+        const flame = new THREE.Mesh(
+          new THREE.ConeGeometry(0.12 + Math.random() * 0.08, h, 5),
+          new THREE.MeshBasicMaterial({
+            color: isInner ? 0xffaa22 : 0xff4400,
+            transparent: true,
+            opacity: 0.7,
+          })
+        );
+        flame.position.set(
+          (Math.random() - 0.5) * trailWidth * 0.6,
+          h * 0.5,
+          (Math.random() - 0.5) * 0.4
+        );
+        flame.rotation.z = (Math.random() - 0.5) * 0.3;
+        flameGroup.add(flame);
+      }
+      flameGroup.position.copy(this.player.position).add(new THREE.Vector3(0, 0.05, 0));
+      this.scene.add(flameGroup);
 
       this.fireSegments.push({
         position: this.player.position.clone(),
-        mesh: fireMesh,
+        mesh: flameGroup as unknown as THREE.Mesh,
         timer: duration / 1000,
         maxTime: duration / 1000,
         damagePerSecond: dps,
       });
 
       this.lastFirePos.copy(this.player.position);
+    }
+
+    // Animate existing fire segments: scale oscillation + ember particles
+    for (const seg of this.fireSegments) {
+      if (seg.timer <= 0) continue;
+      // Flame animation
+      if (seg.mesh instanceof THREE.Group) {
+        seg.mesh.children.forEach((child, ci) => {
+          child.scale.y = 1 + Math.sin(this.gameTime * 8 + ci * 2) * 0.2;
+          child.scale.x = 1 + Math.sin(this.gameTime * 6 + ci) * 0.15;
+          child.rotation.y += dt * 2;
+        });
+      }
+      // Occasional ember particle floating up
+      if (Math.random() < dt * 2) {
+        const ember = new THREE.Mesh(
+          new THREE.SphereGeometry(0.03, 4, 3),
+          new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true })
+        );
+        ember.position.copy(seg.position).add(new THREE.Vector3((Math.random() - 0.5) * 0.5, 0.3, (Math.random() - 0.5) * 0.5));
+        this.scene.add(ember);
+        this.particles.push({ mesh: ember, velocity: new THREE.Vector3((Math.random() - 0.5) * 0.5, 1.5 + Math.random(), (Math.random() - 0.5) * 0.5), life: 0, maxLife: 0.5 });
+      }
     }
   }
 
@@ -2205,33 +2511,63 @@ export class GameEngine {
     const effectiveRange = evolved ? 30 : range;
     const effectiveSlow = evolved ? 1.0 : slowAmount;
     const effectiveSlowDur = evolved ? 3000 : slowDuration;
+    const pos = this.player.position.clone();
 
-    // Visual: expanding icy blue ring
+    // White flash at center
+    const flash = new THREE.Mesh(
+      new THREE.SphereGeometry(0.6, 6, 4),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 })
+    );
+    flash.position.copy(pos).add(new THREE.Vector3(0, 0.5, 0));
+    this.scene.add(flash);
+    setTimeout(() => this.scene.remove(flash), 120);
+
+    // Expanding icy blue ring
     const ringGeo = new THREE.RingGeometry(0.1, 0.3, 32);
-    const ringMat = new THREE.MeshBasicMaterial({
-      color: 0x88ddff,
-      transparent: true,
-      opacity: 0.7,
-      side: THREE.DoubleSide,
-    });
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0x88ddff, transparent: true, opacity: 0.7, side: THREE.DoubleSide });
     const ring = new THREE.Mesh(ringGeo, ringMat);
     ring.rotation.x = -Math.PI / 2;
-    ring.position.copy(this.player.position).add(new THREE.Vector3(0, 0.1, 0));
+    ring.position.copy(pos).add(new THREE.Vector3(0, 0.1, 0));
     this.scene.add(ring);
+    this.shockWaves.push({ position: pos.clone(), mesh: ring, timer: 0, maxTime: 0.5, maxRadius: effectiveRange, damage: 0 });
 
-    this.shockWaves.push({
-      position: this.player.position.clone(),
-      mesh: ring,
-      timer: 0,
-      maxTime: 0.5,
-      maxRadius: effectiveRange,
-      damage: 0, // damage applied separately below
-    });
+    // Frozen ground disc (lingers 1s)
+    const groundDisc = new THREE.Mesh(
+      new THREE.CircleGeometry(effectiveRange, 24),
+      new THREE.MeshBasicMaterial({ color: 0x88ccff, transparent: true, opacity: 0.25, side: THREE.DoubleSide })
+    );
+    groundDisc.rotation.x = -Math.PI / 2;
+    groundDisc.position.copy(pos).add(new THREE.Vector3(0, 0.06, 0));
+    this.scene.add(groundDisc);
+    setTimeout(() => this.scene.remove(groundDisc), 1000);
+
+    // Ice crystal shards flying outward
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + Math.random() * 0.3;
+      const crystal = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.12 + Math.random() * 0.08),
+        new THREE.MeshBasicMaterial({ color: 0xaaeeff, transparent: true })
+      );
+      crystal.position.copy(pos).add(new THREE.Vector3(0, 0.5, 0));
+      this.scene.add(crystal);
+      this.particles.push({ mesh: crystal, velocity: new THREE.Vector3(Math.cos(a) * 6, 2 + Math.random() * 2, Math.sin(a) * 6), life: 0, maxLife: 0.6 });
+    }
+
+    // Snowflake particles floating up
+    for (let i = 0; i < 6; i++) {
+      const snow = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.04),
+        new THREE.MeshBasicMaterial({ color: 0xeeffff, transparent: true })
+      );
+      snow.position.copy(pos).add(new THREE.Vector3((Math.random() - 0.5) * effectiveRange, 0.3, (Math.random() - 0.5) * effectiveRange));
+      this.scene.add(snow);
+      this.particles.push({ mesh: snow, velocity: new THREE.Vector3((Math.random() - 0.5) * 0.5, 1 + Math.random(), (Math.random() - 0.5) * 0.5), life: 0, maxLife: 1.0 });
+    }
 
     // Damage + slow enemies in range
     for (const enemy of this.enemies) {
       if (!enemy.isAlive) continue;
-      if (enemy.position.distanceTo(this.player.position) < effectiveRange) {
+      if (enemy.position.distanceTo(pos) < effectiveRange) {
         this.damageEnemy(enemy, damage, false, "ice");
         enemy.slowAmount = Math.max(enemy.slowAmount, effectiveSlow);
         enemy.slowTimer = effectiveSlowDur;
@@ -2254,22 +2590,32 @@ export class GameEngine {
 
     // Visual: dark purple vortex group
     const group = new THREE.Group();
+    // Core torus
     const coreMat = new THREE.MeshBasicMaterial({ color: 0x440088, transparent: true, opacity: 0.6 });
     const core = new THREE.Mesh(new THREE.TorusGeometry(radius * 0.3, 0.2, 8, 16), coreMat);
     core.rotation.x = -Math.PI / 2;
     group.add(core);
-    const outerMat = new THREE.MeshBasicMaterial({ color: 0x660099, transparent: true, opacity: 0.3 });
-    const outer = new THREE.Mesh(new THREE.RingGeometry(radius * 0.2, radius * 0.6, 16), outerMat);
-    outer.rotation.x = -Math.PI / 2;
-    group.add(outer);
-    // Purple particles
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2;
+    // Distortion ring (expanding/contracting torus)
+    const distortMat = new THREE.MeshBasicMaterial({ color: 0x6600aa, transparent: true, opacity: 0.25 });
+    const distortRing = new THREE.Mesh(new THREE.TorusGeometry(radius * 0.5, 0.1, 8, 16), distortMat);
+    distortRing.rotation.x = -Math.PI / 2;
+    group.add(distortRing);
+    // Dark purple ground circle
+    const groundCircle = new THREE.Mesh(
+      new THREE.CircleGeometry(radius * 0.6, 16),
+      new THREE.MeshBasicMaterial({ color: 0x220044, transparent: true, opacity: 0.35, side: THREE.DoubleSide })
+    );
+    groundCircle.rotation.x = -Math.PI / 2;
+    groundCircle.position.y = -0.4;
+    group.add(groundCircle);
+    // Orbiting dark energy particles
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
       const p = new THREE.Mesh(
-        new THREE.OctahedronGeometry(0.15),
-        new THREE.MeshBasicMaterial({ color: 0xaa44ff })
+        new THREE.OctahedronGeometry(0.12),
+        new THREE.MeshBasicMaterial({ color: 0xaa44ff, transparent: true, opacity: 0.8 })
       );
-      p.position.set(Math.cos(a) * radius * 0.4, 0.2, Math.sin(a) * radius * 0.4);
+      p.position.set(Math.cos(a) * radius * 0.4, 0.2 + Math.sin(a * 2) * 0.3, Math.sin(a) * radius * 0.4);
       group.add(p);
     }
     group.position.copy(pos);
@@ -2300,6 +2646,17 @@ export class GameEngine {
 
       // Spin animation
       v.mesh.rotation.y += dt * 5;
+      // Distortion ring pulsing (child 1)
+      const distort = v.mesh.children[1];
+      if (distort) {
+        const pulse = 1 + Math.sin(this.gameTime * 6) * 0.2;
+        distort.scale.set(pulse, pulse, 1);
+      }
+      // Orbiting particles (children 3+)
+      for (let ci = 3; ci < v.mesh.children.length; ci++) {
+        const child = v.mesh.children[ci];
+        child.position.y = 0.2 + Math.sin(this.gameTime * 4 + ci) * 0.4;
+      }
       // Fade out in last 20%
       const fade = v.timer < v.maxTime * 0.2 ? v.timer / (v.maxTime * 0.2) : 1;
       v.mesh.children.forEach(child => {
@@ -2332,7 +2689,20 @@ export class GameEngine {
 
       proj.position.add(proj.velocity.clone().multiplyScalar(dt));
       proj.mesh.position.copy(proj.position);
+      proj.mesh.rotation.x += dt * 10; // spin
+      proj.mesh.rotation.z += dt * 8;
       proj.lifetime -= dt;
+
+      // Trail particles for bone projectiles
+      if (Math.random() < 0.3) {
+        const trail = new THREE.Mesh(
+          new THREE.SphereGeometry(0.03, 4, 3),
+          new THREE.MeshBasicMaterial({ color: COLORS.projectile, transparent: true })
+        );
+        trail.position.copy(proj.position);
+        this.scene.add(trail);
+        this.particles.push({ mesh: trail, velocity: new THREE.Vector3((Math.random() - 0.5) * 0.5, 0.3, (Math.random() - 0.5) * 0.5), life: 0, maxLife: 0.3 });
+      }
 
       if (proj.lifetime <= 0) {
         proj.isAlive = false;
@@ -2407,7 +2777,12 @@ export class GameEngine {
         continue;
       }
 
-      (seg.mesh.material as THREE.MeshBasicMaterial).opacity = 0.6 * (seg.timer / seg.maxTime);
+      const fadeOpacity = 0.6 * (seg.timer / seg.maxTime);
+      if (seg.mesh instanceof THREE.Group) {
+        seg.mesh.children.forEach(c => { if (c instanceof THREE.Mesh) (c.material as THREE.MeshBasicMaterial).opacity = fadeOpacity; });
+      } else {
+        (seg.mesh.material as THREE.MeshBasicMaterial).opacity = fadeOpacity;
+      }
 
       // Damage enemies on fire (silent — no hit sound for DoT)
       for (const enemy of this.enemies) {
@@ -3176,23 +3551,32 @@ export class GameEngine {
 
   // ========== RENDER HELPERS (orbit blade visuals) ==========
   private orbitBladeMeshes: THREE.Mesh[] = [];
+  private orbitTrailRing: THREE.Line | null = null;
+  private orbitSparkleTimer = 0;
 
   updateOrbitBladeVisuals() {
     const weapon = this.weapons.find(w => w.id === "orbitBlade");
     if (!weapon) {
       this.orbitBladeMeshes.forEach(m => this.scene.remove(m));
       this.orbitBladeMeshes = [];
+      if (this.orbitTrailRing) { this.scene.remove(this.orbitTrailRing); this.orbitTrailRing = null; }
       return;
     }
 
     const count = WEAPONS.orbitBlade.baseCount + weapon.level - 1;
     const range = WEAPONS.orbitBlade.range + weapon.level * 0.3;
+    const isEvolved = weapon.level >= 6;
 
     // Ensure correct number of meshes
-    const isEvolved = weapon.level >= 6;
     while (this.orbitBladeMeshes.length < count) {
-      const bladeGeo = new THREE.BoxGeometry(0.6, 0.1, 0.15);
-      const bladeMat = new THREE.MeshBasicMaterial({ color: isEvolved ? 0x44aaff : COLORS.orbBlade });
+      const bladeGeo = new THREE.BoxGeometry(0.8, 0.12, 0.04);
+      const bladeMat = new THREE.MeshStandardMaterial({
+        color: isEvolved ? 0x44aaff : COLORS.orbBlade,
+        emissive: isEvolved ? 0x2266cc : 0x446688,
+        emissiveIntensity: 0.6,
+        metalness: 0.8,
+        roughness: 0.2,
+      });
       const blade = new THREE.Mesh(bladeGeo, bladeMat);
       this.scene.add(blade);
       this.orbitBladeMeshes.push(blade);
@@ -3202,17 +3586,48 @@ export class GameEngine {
       this.scene.remove(m);
     }
 
-    // Position blades
+    // Faint circular trail ring
+    if (this.orbitTrailRing) { this.scene.remove(this.orbitTrailRing); }
+    const ringPts: THREE.Vector3[] = [];
+    const py = this.player.position.y + 0.8;
+    for (let i = 0; i <= 64; i++) {
+      const a = (i / 64) * Math.PI * 2;
+      ringPts.push(new THREE.Vector3(
+        this.player.position.x + Math.cos(a) * range,
+        py,
+        this.player.position.z + Math.sin(a) * range
+      ));
+    }
+    const ringGeo = new THREE.BufferGeometry().setFromPoints(ringPts);
+    const ringMat = new THREE.LineBasicMaterial({ color: isEvolved ? 0x44aaff : COLORS.orbBlade, transparent: true, opacity: 0.15 });
+    this.orbitTrailRing = new THREE.Line(ringGeo, ringMat);
+    this.scene.add(this.orbitTrailRing);
+
+    // Position blades with tilt
     for (let i = 0; i < count; i++) {
       const angle = this.orbitAngle + (Math.PI * 2 / count) * i;
       const bx = this.player.position.x + Math.cos(angle) * range;
       const bz = this.player.position.z + Math.sin(angle) * range;
-      this.orbitBladeMeshes[i].position.set(
-        bx,
-        this.getTerrainHeight(bx, bz) + 0.8,
-        bz
-      );
+      this.orbitBladeMeshes[i].position.set(bx, this.getTerrainHeight(bx, bz) + 0.8, bz);
       this.orbitBladeMeshes[i].rotation.y = angle;
+      this.orbitBladeMeshes[i].rotation.z = 0.2; // slight tilt
+    }
+
+    // Occasional sparkle at blade tips
+    this.orbitSparkleTimer -= 0.016; // approx dt
+    if (this.orbitSparkleTimer <= 0) {
+      this.orbitSparkleTimer = 0.15;
+      const idx = Math.floor(Math.random() * count);
+      if (this.orbitBladeMeshes[idx]) {
+        const bp = this.orbitBladeMeshes[idx].position;
+        const spark = new THREE.Mesh(
+          new THREE.OctahedronGeometry(0.06),
+          new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true })
+        );
+        spark.position.copy(bp).add(new THREE.Vector3((Math.random() - 0.5) * 0.3, 0.1, (Math.random() - 0.5) * 0.3));
+        this.scene.add(spark);
+        this.particles.push({ mesh: spark, velocity: new THREE.Vector3(0, 1.5, 0), life: 0, maxLife: 0.3 });
+      }
     }
   }
 

@@ -35,6 +35,9 @@ export const ENEMIES = {
   skeleton: { hp: 30, speed: 3, damage: 10, xp: 8, radius: 0.4, color: 0xccccaa },
   bat: { hp: 10, speed: 6, damage: 4, xp: 4, radius: 0.3, color: 0x8844aa },
   ogre: { hp: 120, speed: 1.8, damage: 25, xp: 20, radius: 0.9, color: 0x886644 },
+  spider: { hp: 12, speed: 5, damage: 4, xp: 3, radius: 0.3, color: 0x332222 },
+  zombie: { hp: 40, speed: 1.5, damage: 8, xp: 5, radius: 0.5, color: 0x556644 },
+  wolf: { hp: 18, speed: 5.5, damage: 7, xp: 4, radius: 0.4, color: 0x666666 },
   // Bosses
   stoneGolem: { hp: 800, speed: 1.2, damage: 40, xp: 200, radius: 1.8, color: 0x888888 },
   fireWraith: { hp: 1200, speed: 1.5, damage: 50, xp: 350, radius: 1.5, color: 0xff4400 },
