@@ -13,10 +13,16 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  cursor: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='), none !important;
   -webkit-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Hide cursor only on non-touch devices */
+@media (hover: hover) and (pointer: fine) {
+  * {
+    cursor: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='), none !important;
+  }
 }
 
 body {
@@ -460,6 +466,9 @@ html, body {
   align-items: center;
   justify-content: center;
   z-index: 300;
+  overflow-y: auto;
+  padding: 20px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .main-menu h1 {

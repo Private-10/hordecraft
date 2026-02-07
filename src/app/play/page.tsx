@@ -41,6 +41,7 @@ export default function PlayPage() {
   const [selectedChar, setSelectedChar] = useState("knight");
   const [showCharSelect, setShowCharSelect] = useState(false);
   const [dps, setDps] = useState(0);
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
   const [maxDps, setMaxDps] = useState(0);
 
   const submitScore = async (data: Record<string, unknown>) => {
@@ -67,6 +68,8 @@ export default function PlayPage() {
   useEffect(() => {
     setMounted(true);
     setLangState(getLang());
+    const isTouchDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+    setIsMobileDevice(isTouchDevice);
     const savedNick = getActiveNickname();
     if (savedNick && savedNick.trim().length >= 2) {
       setNicknameState(savedNick);
@@ -79,9 +82,12 @@ export default function PlayPage() {
     const onPointerLockChange = () => {
       setIsPointerLocked(!!document.pointerLockElement);
     };
-    // Force hide cursor on entire document
-    document.documentElement.style.cursor = "none";
-    document.body.style.cursor = "none";
+    // Force hide cursor on desktop only
+    const isTouch = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+    if (!isTouch) {
+      document.documentElement.style.cursor = "none";
+      document.body.style.cursor = "none";
+    }
     
     window.addEventListener("mousemove", onMouseMove);
     document.addEventListener("pointerlockchange", onPointerLockChange);
@@ -266,8 +272,8 @@ export default function PlayPage() {
 
       {/* No crosshair */}
 
-      {/* Custom cursor - show when pointer is NOT locked */}
-      {!isPointerLocked && mounted && (
+      {/* Custom cursor - desktop only */}
+      {!isPointerLocked && mounted && !isMobileDevice && (
         <div
           className="custom-cursor"
           style={{ left: cursorPos.x, top: cursorPos.y }}
@@ -551,8 +557,34 @@ export default function PlayPage() {
           </button>
 
           <p style={{ marginTop: 20, fontSize: 12, color: "rgba(255,255,255,0.3)" }}>
-            {t("menu.controls")}
+            {isMobileDevice
+              ? (lang === "tr" ? "Joystick: Hareket · Sağ Kaydır: Kamera" : "Joystick: Move · Swipe Right: Camera")
+              : t("menu.controls")
+            }
           </p>
+
+          {/* Fullscreen button (mobile) */}
+          {isMobileDevice && (
+            <button
+              onClick={() => {
+                const el = document.documentElement;
+                if (!document.fullscreenElement) {
+                  el.requestFullscreen?.().catch(() => {});
+                  // iOS Safari
+                  (el as unknown as { webkitRequestFullscreen?: () => void }).webkitRequestFullscreen?.();
+                }
+                // Lock to landscape if possible
+                try { (screen.orientation as unknown as { lock?: (o: string) => Promise<void> })?.lock?.("landscape")?.catch?.(() => {}); } catch {}
+              }}
+              style={{
+                marginTop: 8, padding: "10px 24px", borderRadius: 10,
+                border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.08)",
+                color: "white", fontSize: 14, cursor: "pointer",
+              }}
+            >
+              📱 {lang === "tr" ? "Tam Ekran" : "Fullscreen"}
+            </button>
+          )}
         </div>
       )}
 
