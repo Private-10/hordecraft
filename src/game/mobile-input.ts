@@ -68,10 +68,10 @@ export class MobileInputManager {
     jumpBtn.setAttribute("data-mobile-ui", "jump");
     Object.assign(jumpBtn.style, {
       position: "fixed",
-      bottom: "80px",
-      right: "40px",
-      width: "70px",
-      height: "70px",
+      bottom: "100px",
+      right: "20px",
+      width: "60px",
+      height: "60px",
       borderRadius: "50%",
       background: "rgba(0,212,255,0.2)",
       border: "2px solid rgba(0,212,255,0.4)",
@@ -99,10 +99,10 @@ export class MobileInputManager {
     slideBtn.setAttribute("data-mobile-ui", "slide");
     Object.assign(slideBtn.style, {
       position: "fixed",
-      bottom: "160px",
-      right: "45px",
-      width: "60px",
-      height: "60px",
+      bottom: "170px",
+      right: "20px",
+      width: "50px",
+      height: "50px",
       borderRadius: "50%",
       background: "rgba(255,107,53,0.2)",
       border: "2px solid rgba(255,107,53,0.4)",

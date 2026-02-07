@@ -511,6 +511,10 @@ button, .btn, a, [role="button"] {
 .kill-counter {
   position: absolute; bottom: 50px; left: 20px; font-size: 16px;
   text-shadow: 0 0 4px rgba(0,0,0,0.8);
+  pointer-events: none;
+}
+@media (max-width: 900px) and (orientation: landscape) {
+  .kill-counter { bottom: auto; top: 50px; left: 20px; font-size: 13px; }
 }
 .level-display {
   position: absolute; bottom: 58px; left: 50%; transform: translateX(-50%);

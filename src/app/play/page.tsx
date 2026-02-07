@@ -550,18 +550,23 @@ export default function PlayPage() {
 
           <div className="kill-counter">☠️ {stats.kills.toLocaleString()} {t("hud.kills")}</div>
 
+          {/* Score & DPS - top right on mobile, bottom right on desktop */}
           <div style={{
-            position: "absolute", bottom: 50, right: 20,
+            position: "absolute",
+            ...(isMobileDevice
+              ? { top: 20, right: 20 }
+              : { bottom: 50, right: 20 }),
             display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2,
             textShadow: "0 0 4px rgba(0,0,0,0.8)",
+            pointerEvents: "none",
           }}>
-            <div style={{ fontSize: 16, fontWeight: 700 }}>🏆 {stats.score.toLocaleString()}</div>
+            <div style={{ fontSize: isMobileDevice ? 14 : 16, fontWeight: 700 }}>🏆 {stats.score.toLocaleString()}</div>
             <div style={{
-              fontSize: 13, fontWeight: 700,
+              fontSize: isMobileDevice ? 11 : 13, fontWeight: 700,
               color: dps > 100 ? "#ff4444" : dps > 50 ? "#ffaa44" : "#66ff66",
             }}>
               ⚔️ {dps.toLocaleString()} DPS
-              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginLeft: 6 }}>(max {maxDps.toLocaleString()})</span>
+              {!isMobileDevice && <span style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginLeft: 6 }}>(max {maxDps.toLocaleString()})</span>}
             </div>
           </div>
 
