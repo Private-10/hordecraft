@@ -2237,21 +2237,27 @@ export class GameEngine {
       }
     }
 
-    // Shaman aura pass: reset all enemies to base stats then apply buff
-    // First reset
-    for (const enemy of this.enemies) {
-      if (!enemy.isAlive) continue;
-      enemy.speed = enemy.baseSpeed;
-      enemy.damage = enemy.baseDamage;
-    }
-    // Then apply shaman buffs
-    for (const shaman of this.enemies) {
-      if (!shaman.isAlive || shaman.type !== "shaman") continue;
+    // Shaman aura pass: only run every 0.5s to save CPU
+    this.shamanAuraTimer = (this.shamanAuraTimer || 0) - dt;
+    if (this.shamanAuraTimer <= 0) {
+      this.shamanAuraTimer = 0.5;
+      // Reset all
       for (const enemy of this.enemies) {
-        if (!enemy.isAlive || enemy.id === shaman.id) continue;
-        if (enemy.position.distanceTo(shaman.position) < 12) {
-          enemy.speed = enemy.baseSpeed * 1.3;
-          enemy.damage = enemy.baseDamage * 1.2;
+        if (!enemy.isAlive) continue;
+        enemy.speed = enemy.baseSpeed;
+        enemy.damage = enemy.baseDamage;
+      }
+      // Apply shaman buffs
+      for (const shaman of this.enemies) {
+        if (!shaman.isAlive || shaman.type !== "shaman") continue;
+        for (const enemy of this.enemies) {
+          if (!enemy.isAlive || enemy.id === shaman.id) continue;
+          const dx = enemy.position.x - shaman.position.x;
+          const dz = enemy.position.z - shaman.position.z;
+          if (dx * dx + dz * dz < 144) { // 12^2
+            enemy.speed = enemy.baseSpeed * 1.3;
+            enemy.damage = enemy.baseDamage * 1.2;
+          }
         }
       }
     }
@@ -2485,11 +2491,11 @@ export class GameEngine {
     }
 
     // Level scaling: more enemies per group based on player level
-    const levelBonus = Math.floor(this.player.level / 3); // +1 per 3 levels
-    const finalGroupSize = groupSize + levelBonus;
+    const levelBonus = Math.floor(this.player.level / 5); // +1 per 5 levels (was 3)
+    const finalGroupSize = Math.min(groupSize + levelBonus, 10); // cap at 10
 
     // Level also speeds up spawn rate slightly
-    const levelSpeedFactor = Math.max(0.3, 1 - this.player.level * 0.02); // up to 70% faster
+    const levelSpeedFactor = Math.max(0.5, 1 - this.player.level * 0.01); // up to 50% faster (was 70%)
 
     for (let i = 0; i < finalGroupSize; i++) {
       const type = types[Math.floor(Math.random() * types.length)];
@@ -2499,8 +2505,8 @@ export class GameEngine {
     this.spawnTimer = spawnInterval * levelSpeedFactor;
 
     // Cap enemies (scales with level)
-    const maxEnemies = Math.min(350, 200 + this.player.level * 5);
-    const trimTarget = Math.min(300, 150 + this.player.level * 5);
+    const maxEnemies = Math.min(150, 80 + this.player.level * 3);
+    const trimTarget = Math.min(120, 60 + this.player.level * 3);
     this.cleanupDead();
     if (this.enemies.length > maxEnemies) {
       // Remove farthest non-boss enemies that are far from player
@@ -2567,26 +2573,27 @@ export class GameEngine {
     }
   }
 
+  private shamanAuraTimer = 0;
   private lastCleanupTime = 0;
   private performanceCleanup() {
-    // Run every 5 seconds
-    if (this.gameTime - this.lastCleanupTime < 5) return;
+    // Run every 2 seconds
+    if (this.gameTime - this.lastCleanupTime < 2) return;
     this.lastCleanupTime = this.gameTime;
 
-    // Cap particles at 100
-    while (this.particles.length > 100) {
+    // Cap particles at 50
+    while (this.particles.length > 50) {
       const p = this.particles.shift()!;
       this.disposeMesh(p.mesh);
     }
 
-    // Cap fire segments at 50
-    while (this.fireSegments.length > 50) {
+    // Cap fire segments at 30
+    while (this.fireSegments.length > 30) {
       const f = this.fireSegments.shift()!;
       this.disposeMesh(f.mesh as unknown as THREE.Object3D);
     }
 
-    // Cap XP gems at 200 (remove oldest)
-    while (this.xpGems.length > 200) {
+    // Cap XP gems at 100 (remove oldest)
+    while (this.xpGems.length > 100) {
       const g = this.xpGems.shift()!;
       this.disposeMesh(g.mesh);
     }
@@ -2610,7 +2617,7 @@ export class GameEngine {
     }
 
     // Reduce max enemies more aggressively at late game
-    const maxEnemyHard = Math.min(250, 150 + this.player.level * 3);
+    const maxEnemyHard = Math.min(120, 70 + this.player.level * 2);
     const bossTypes = new Set(Object.keys(BOSSES));
     if (this.enemies.length > maxEnemyHard) {
       const removable = this.enemies
@@ -2911,9 +2918,12 @@ export class GameEngine {
         const angle = this.orbitAngle + (Math.PI * 2 / count) * i;
         const bladeX = this.player.position.x + Math.cos(angle) * range;
         const bladeZ = this.player.position.z + Math.sin(angle) * range;
-        const bladePos = new THREE.Vector3(bladeX, this.getTerrainHeight(bladeX, bladeZ) + 0.5, bladeZ);
-
-        if (bladePos.distanceTo(enemy.position) < enemy.radius + 0.5) {
+        // Use squared distance to avoid sqrt + Vector3 alloc
+        const dx = bladeX - enemy.position.x;
+        const dz = bladeZ - enemy.position.z;
+        const distSq = dx * dx + dz * dz;
+        const hitRadius = enemy.radius + 0.5;
+        if (distSq < hitRadius * hitRadius) {
           this.damageEnemy(enemy, damage);
           enemy.hitTimer = 0.2;
         }
@@ -3263,8 +3273,8 @@ export class GameEngine {
     setTimeout(() => this.scene.remove(groundDisc), 1000);
 
     // Ice crystal shards flying outward
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2 + Math.random() * 0.3;
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + Math.random() * 0.3;
       const crystal = new THREE.Mesh(
         new THREE.OctahedronGeometry(0.12 + Math.random() * 0.08),
         new THREE.MeshBasicMaterial({ color: 0xaaeeff, transparent: true })
@@ -3275,7 +3285,7 @@ export class GameEngine {
     }
 
     // Snowflake particles floating up
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 3; i++) {
       const snow = new THREE.Mesh(
         new THREE.OctahedronGeometry(0.04),
         new THREE.MeshBasicMaterial({ color: 0xeeffff, transparent: true })
@@ -3333,8 +3343,8 @@ export class GameEngine {
     groundCircle.position.y = 0.2;
     group.add(groundCircle);
     // Orbiting dark energy particles
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2;
       const p = new THREE.Mesh(
         new THREE.OctahedronGeometry(0.12),
         new THREE.MeshBasicMaterial({ color: 0xaa44ff, transparent: true, opacity: 0.8 })
@@ -3709,8 +3719,8 @@ export class GameEngine {
 
   private createDeathParticles(position: THREE.Vector3, color: number) {
     // Reduce particles when many are active to prevent lag
-    if (this.particles.length > 80) return; // skip if too many particles already
-    const particleCount = this.particles.length > 50 ? 2 : 3 + Math.floor(Math.random() * 3); // 3-5 normally, 2 when busy
+    if (this.particles.length > 30) return; // skip if too many particles already
+    const particleCount = this.particles.length > 20 ? 2 : 3; // 3 normally, 2 when busy
 
     // Death flash
     const flash = new THREE.Mesh(
@@ -4679,3 +4689,4 @@ export class GameEngine {
     } catch {}
   }
 }
+
