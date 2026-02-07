@@ -1352,22 +1352,31 @@ export class GameEngine {
       groupSize = 8;
     }
 
-    for (let i = 0; i < groupSize; i++) {
+    // Level scaling: more enemies per group based on player level
+    const levelBonus = Math.floor(this.player.level / 3); // +1 per 3 levels
+    const finalGroupSize = groupSize + levelBonus;
+
+    // Level also speeds up spawn rate slightly
+    const levelSpeedFactor = Math.max(0.3, 1 - this.player.level * 0.02); // up to 70% faster
+
+    for (let i = 0; i < finalGroupSize; i++) {
       const type = types[Math.floor(Math.random() * types.length)];
       this.spawnEnemy(type);
     }
 
-    this.spawnTimer = spawnInterval;
+    this.spawnTimer = spawnInterval * levelSpeedFactor;
 
-    // Cap enemies
+    // Cap enemies (scales with level)
+    const maxEnemies = Math.min(350, 200 + this.player.level * 5);
+    const trimTarget = Math.min(300, 150 + this.player.level * 5);
     this.cleanupDead();
-    if (this.enemies.length > 200) {
+    if (this.enemies.length > maxEnemies) {
       // Remove farthest
       this.enemies.sort((a, b) =>
         b.position.distanceToSquared(this.player.position) -
         a.position.distanceToSquared(this.player.position)
       );
-      while (this.enemies.length > 150) {
+      while (this.enemies.length > trimTarget) {
         const e = this.enemies.pop()!;
         this.scene.remove(e.mesh);
       }
