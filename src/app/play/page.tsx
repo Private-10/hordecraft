@@ -565,7 +565,7 @@ export default function PlayPage() {
             </div>
           </div>
 
-          <div className="controls-hint">{t("hud.controls_hint")}</div>
+          {!isMobileDevice && <div className="controls-hint">{t("hud.controls_hint")}</div>}
 
           {/* Next Boss Timer */}
           {!bossInfo && nextBossTime !== null && nextBossTime > 0 && (
