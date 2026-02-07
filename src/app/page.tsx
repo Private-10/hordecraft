@@ -1,212 +1,144 @@
 "use client";
 import Link from "next/link";
-import { getLang, t } from "../game/i18n";
+import { useState, useEffect } from "react";
+import { getLang, setLang, t, type Lang } from "../game/i18n";
 
 export default function Home() {
-  const lang = getLang();
-  
+  const [lang, setLangState] = useState<Lang>("tr");
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    setLangState(getLang());
+  }, []);
+
+  const toggleLang = () => {
+    const newLang = lang === "tr" ? "en" : "tr";
+    setLang(newLang);
+    setLangState(newLang);
+  };
+
+  if (!mounted) return null;
+
   return (
-    <div
-      className="landing-container"
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "linear-gradient(135deg, #0a0a0f 0%, #1a0f2e 50%, #0f1a2e 100%)",
-        color: "white",
-        padding: "20px",
-        position: "relative",
-        overflow: "hidden"
-      }}
-    >
-      {/* Background pattern */}
+    <div style={{
+      minHeight: "100vh",
+      display: "flex",
+      flexDirection: "column",
+      background: "linear-gradient(170deg, #0a0a0f 0%, #1a0f2e 40%, #0f1a2e 100%)",
+      color: "white",
+      overflow: "auto",
+      position: "relative",
+    }}>
+      {/* Background glow */}
       <div style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundImage: "radial-gradient(circle at 25% 25%, rgba(255, 107, 53, 0.1) 0%, transparent 50%), radial-gradient(circle at 75% 75%, rgba(255, 215, 0, 0.1) 0%, transparent 50%)",
-        zIndex: -1
-      }}></div>
+        position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0,
+        backgroundImage: "radial-gradient(ellipse at 30% 20%, rgba(255, 107, 53, 0.08) 0%, transparent 60%), radial-gradient(ellipse at 70% 80%, rgba(255, 215, 0, 0.06) 0%, transparent 50%)",
+      }} />
 
-      {/* Main title */}
-      <h1
-        style={{
-          fontSize: "clamp(3rem, 8vw, 6rem)",
-          fontWeight: 900,
-          background: "linear-gradient(135deg, #ff6b35, #ffd700, #ff6b35)",
-          backgroundSize: "200% 100%",
-          WebkitBackgroundClip: "text",
-          WebkitTextFillColor: "transparent",
-          marginBottom: 10,
-          textAlign: "center",
-          animation: "gradientShift 3s ease-in-out infinite",
-          textShadow: "0 0 20px rgba(255, 107, 53, 0.3)"
-        }}
-      >
-        HORDECRAFT
-      </h1>
-
-      {/* Subtitle */}
-      <p style={{ 
-        fontSize: "clamp(1rem, 3vw, 1.4rem)", 
-        color: "rgba(255,255,255,0.8)", 
-        marginBottom: 30,
-        textAlign: "center",
-        maxWidth: "600px",
-        lineHeight: 1.6
+      {/* Top bar */}
+      <div style={{
+        display: "flex", justifyContent: "flex-end", padding: "16px 20px",
+        position: "relative", zIndex: 2,
       }}>
-        {t(lang, "survival_description")}
-      </p>
-
-      {/* Action buttons */}
-      <div style={{ display: "flex", gap: "20px", marginBottom: 40, flexWrap: "wrap", justifyContent: "center" }}>
-        <Link
-          href="/play"
-          style={{
-            padding: "18px 40px",
-            fontSize: "1.2rem",
-            fontWeight: "bold",
-            background: "linear-gradient(135deg, #ff6b35, #ff8c42)",
-            color: "white",
-            borderRadius: 16,
-            textDecoration: "none",
-            transition: "all 0.3s ease",
-            boxShadow: "0 4px 15px rgba(255, 107, 53, 0.4)",
-            border: "none",
-            cursor: "pointer",
-            minWidth: "160px",
-            textAlign: "center"
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = "translateY(-2px)";
-            e.currentTarget.style.boxShadow = "0 6px 20px rgba(255, 107, 53, 0.6)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = "translateY(0)";
-            e.currentTarget.style.boxShadow = "0 4px 15px rgba(255, 107, 53, 0.4)";
-          }}
-        >
-          🎮 {t(lang, "play")}
-        </Link>
-
-        <Link
-          href="/leaderboard"
-          style={{
-            padding: "18px 40px",
-            fontSize: "1.2rem",
-            fontWeight: "bold",
-            background: "linear-gradient(135deg, #ffd700, #ffed4e)",
-            color: "#1a1a1a",
-            borderRadius: 16,
-            textDecoration: "none",
-            transition: "all 0.3s ease",
-            boxShadow: "0 4px 15px rgba(255, 215, 0, 0.4)",
-            border: "none",
-            cursor: "pointer",
-            minWidth: "160px",
-            textAlign: "center"
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = "translateY(-2px)";
-            e.currentTarget.style.boxShadow = "0 6px 20px rgba(255, 215, 0, 0.6)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = "translateY(0)";
-            e.currentTarget.style.boxShadow = "0 4px 15px rgba(255, 215, 0, 0.4)";
-          }}
-        >
-          🏆 {t(lang, "leaderboard")}
-        </Link>
+        <button onClick={toggleLang} style={{
+          padding: "6px 14px", background: "rgba(255,255,255,0.06)",
+          border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.7)",
+          borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer",
+        }}>
+          {lang === "tr" ? "🇬🇧 EN" : "🇹🇷 TR"}
+        </button>
       </div>
 
-      {/* Features grid */}
+      {/* Hero section */}
+      <div style={{
+        flex: "0 0 auto", display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        padding: "40px 20px 30px", position: "relative", zIndex: 1,
+      }}>
+        <h1 style={{
+          fontSize: "clamp(3rem, 12vw, 5.5rem)", fontWeight: 900,
+          background: "linear-gradient(135deg, #ff6b35 0%, #ffd700 50%, #ff6b35 100%)",
+          backgroundSize: "200% 200%",
+          WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+          backgroundClip: "text",
+          animation: "titleShimmer 4s ease-in-out infinite",
+          lineHeight: 1.1, letterSpacing: -1, textAlign: "center",
+        }}>HORDECRAFT</h1>
+
+        <p style={{
+          fontSize: "clamp(0.9rem, 2.5vw, 1.15rem)",
+          color: "rgba(255,255,255,0.55)", marginTop: 8,
+          textAlign: "center", maxWidth: 500, lineHeight: 1.6,
+        }}>
+          {t(lang, "survival_description")}
+        </p>
+
+        {/* CTA Buttons */}
+        <div style={{
+          display: "flex", gap: 14, marginTop: 32, flexWrap: "wrap", justifyContent: "center",
+        }}>
+          <Link href="/play" style={{
+            padding: "16px 40px", fontSize: "1.1rem", fontWeight: 800,
+            background: "linear-gradient(135deg, #ff6b35, #ff8855)",
+            color: "white", borderRadius: 14, textDecoration: "none",
+            boxShadow: "0 4px 24px rgba(255, 107, 53, 0.35)",
+            minWidth: 160, textAlign: "center", letterSpacing: 1,
+          }}>
+            ⚔️ {t(lang, "play")}
+          </Link>
+          <Link href="/leaderboard" style={{
+            padding: "16px 40px", fontSize: "1.1rem", fontWeight: 700,
+            background: "linear-gradient(135deg, #2a1a00, #3a2800)",
+            border: "1.5px solid rgba(255, 215, 0, 0.25)",
+            color: "#ffd700", borderRadius: 14, textDecoration: "none",
+            minWidth: 160, textAlign: "center",
+          }}>
+            🏆 {t(lang, "leaderboard")}
+          </Link>
+        </div>
+      </div>
+
+      {/* Features */}
       <div style={{
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-        gap: "20px",
-        maxWidth: "800px",
-        width: "100%",
-        marginBottom: 40
+        gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+        gap: 14, maxWidth: 700, width: "100%",
+        margin: "0 auto", padding: "20px 20px 40px",
+        position: "relative", zIndex: 1,
       }}>
-        <div style={{
-          background: "rgba(255, 255, 255, 0.05)",
-          backdropFilter: "blur(10px)",
-          borderRadius: "16px",
-          padding: "20px",
-          textAlign: "center",
-          border: "1px solid rgba(255, 107, 53, 0.2)"
-        }}>
-          <div style={{ fontSize: "2rem", marginBottom: "10px" }}>👥</div>
-          <h3 style={{ margin: "0 0 8px", color: "#ff6b35" }}>{t(lang, "characters")}</h3>
-          <p style={{ margin: 0, fontSize: "0.9rem", color: "rgba(255,255,255,0.7)" }}>6 {t(lang, "unique_characters")}</p>
-        </div>
-
-        <div style={{
-          background: "rgba(255, 255, 255, 0.05)",
-          backdropFilter: "blur(10px)",
-          borderRadius: "16px",
-          padding: "20px",
-          textAlign: "center",
-          border: "1px solid rgba(255, 215, 0, 0.2)"
-        }}>
-          <div style={{ fontSize: "2rem", marginBottom: "10px" }}>⚔️</div>
-          <h3 style={{ margin: "0 0 8px", color: "#ffd700" }}>{t(lang, "weapons")}</h3>
-          <p style={{ margin: 0, fontSize: "0.9rem", color: "rgba(255,255,255,0.7)" }}>5 {t(lang, "powerful_weapons")}</p>
-        </div>
-
-        <div style={{
-          background: "rgba(255, 255, 255, 0.05)",
-          backdropFilter: "blur(10px)",
-          borderRadius: "16px",
-          padding: "20px",
-          textAlign: "center",
-          border: "1px solid rgba(170, 0, 255, 0.2)"
-        }}>
-          <div style={{ fontSize: "2rem", marginBottom: "10px" }}>👑</div>
-          <h3 style={{ margin: "0 0 8px", color: "#aa00ff" }}>{t(lang, "bosses")}</h3>
-          <p style={{ margin: 0, fontSize: "0.9rem", color: "rgba(255,255,255,0.7)" }}>3 {t(lang, "epic_bosses")}</p>
-        </div>
-      </div>
-
-      {/* Game info */}
-      <div style={{ 
-        marginBottom: 30, 
-        fontSize: "1rem", 
-        color: "rgba(255,255,255,0.6)", 
-        textAlign: "center",
-        lineHeight: 1.8,
-        maxWidth: "600px"
-      }}>
-        <p>{t(lang, "game_description")}</p>
-        <p style={{ marginTop: 8, fontSize: "0.9rem" }}>{t(lang, "controls_info")}</p>
+        {[
+          { icon: "👥", title: t(lang, "characters"), sub: `6 ${t(lang, "unique_characters")}`, color: "#ff6b35" },
+          { icon: "⚔️", title: t(lang, "weapons"), sub: `7 ${t(lang, "powerful_weapons")}`, color: "#ffd700" },
+          { icon: "👑", title: t(lang, "bosses"), sub: `3 ${t(lang, "epic_bosses")}`, color: "#aa44ff" },
+        ].map((f, i) => (
+          <div key={i} style={{
+            background: "rgba(255,255,255,0.04)", borderRadius: 14,
+            padding: "20px 16px", textAlign: "center",
+            border: `1px solid ${f.color}22`,
+          }}>
+            <div style={{ fontSize: 28, marginBottom: 8 }}>{f.icon}</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: f.color, marginBottom: 4 }}>{f.title}</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)" }}>{f.sub}</div>
+          </div>
+        ))}
       </div>
 
       {/* Footer */}
-      <footer style={{
-        marginTop: "auto",
-        paddingTop: 20,
-        borderTop: "1px solid rgba(255, 255, 255, 0.1)",
-        textAlign: "center",
-        color: "rgba(255, 255, 255, 0.4)",
-        fontSize: "0.9rem"
+      <div style={{
+        textAlign: "center", padding: "20px",
+        color: "rgba(255,255,255,0.2)", fontSize: 13,
+        borderTop: "1px solid rgba(255,255,255,0.05)",
+        position: "relative", zIndex: 1,
       }}>
-        HordeCraft © 2026
-      </footer>
+        <div>{t(lang, "controls_info")}</div>
+        <div style={{ marginTop: 6 }}>HordeCraft © 2026</div>
+      </div>
 
       <style jsx>{`
-        @keyframes gradientShift {
+        @keyframes titleShimmer {
           0%, 100% { background-position: 0% 50%; }
           50% { background-position: 100% 50%; }
-        }
-        
-        @media (max-width: 768px) {
-          .landing-container {
-            padding: 15px !important;
-          }
         }
       `}</style>
     </div>
