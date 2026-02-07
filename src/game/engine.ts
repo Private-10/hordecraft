@@ -168,6 +168,7 @@ export class GameEngine {
     if (this.isMobile) {
       this.mobileInput.init(document.body);
       this.mobileInput.setVisible(false); // Hidden until game starts
+      this.mobileInput.setActive(false); // Don't capture touches in menu
     }
 
     // Resize
@@ -1403,6 +1404,7 @@ export class GameEngine {
     }
     if (this.isMobile) {
       this.mobileInput.setVisible(true);
+      this.mobileInput.setActive(true);
     }
   }
 
@@ -3522,6 +3524,7 @@ export class GameEngine {
     }
     if (this.isMobile) {
       this.mobileInput.setVisible(false);
+      this.mobileInput.setActive(false);
     }
     this.stats.gold = Math.floor(
       this.stats.survivalTime * 2 +

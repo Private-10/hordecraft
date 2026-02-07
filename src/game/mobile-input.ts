@@ -134,7 +134,16 @@ export class MobileInputManager {
     document.addEventListener("touchcancel", this.onTouchEnd, { passive: false });
   }
 
+  // When false, all touch events pass through (menu mode)
+  private _active = false;
+
+  setActive(active: boolean) {
+    this._active = active;
+  }
+
   private onTouchStart = (e: TouchEvent) => {
+    if (!this._active) return; // Don't capture touches when inactive (menu)
+
     for (let i = 0; i < e.changedTouches.length; i++) {
       const touch = e.changedTouches[i];
       const x = touch.clientX;
@@ -158,6 +167,7 @@ export class MobileInputManager {
   };
 
   private onTouchMove = (e: TouchEvent) => {
+    if (!this._active) return;
     for (let i = 0; i < e.changedTouches.length; i++) {
       const touch = e.changedTouches[i];
 
