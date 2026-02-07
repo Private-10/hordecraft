@@ -244,9 +244,14 @@ export default function PlayPage() {
   }, []);
 
   const startGame = useCallback(() => {
-    setMaxDps(0);
-    setDps(0);
-    engineRef.current?.startGame(selectedChar);
+    try {
+      setMaxDps(0);
+      setDps(0);
+      engineRef.current?.startGame(selectedChar);
+    } catch (e) {
+      console.error("startGame failed:", e);
+      alert("Game start error: " + (e as Error).message);
+    }
   }, [selectedChar]);
 
   const selectUpgrade = useCallback((option: UpgradeOption) => {
@@ -280,8 +285,8 @@ export default function PlayPage() {
         />
       )}
 
-      {/* Click to resume - show when playing but pointer not locked */}
-      {gameState === "playing" && !isPointerLocked && (
+      {/* Click to resume - desktop only, when playing but pointer not locked */}
+      {gameState === "playing" && !isPointerLocked && !isMobileDevice && (
         <div style={{
           position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
           background: "rgba(0,0,0,0.3)", zIndex: 15, pointerEvents: "none",

@@ -7,7 +7,8 @@ let sfxGain: GainNode | null = null;
 let musicPlaying = false;
 let musicOscillators: OscillatorNode[] = [];
 
-function getCtx(): AudioContext {
+function getCtx(): AudioContext | null {
+  try {
   if (!ctx) {
     ctx = new AudioContext();
     masterGain = ctx.createGain();
@@ -24,12 +25,16 @@ function getCtx(): AudioContext {
   }
   if (ctx.state === "suspended") ctx.resume();
   return ctx;
+  } catch (e) {
+    console.warn("Audio init failed:", e);
+    return null;
+  }
 }
 
 // ========== SFX ==========
 
 export function playHit() {
-  const c = getCtx();
+  const c = getCtx(); if (!c) return;
   const osc = c.createOscillator();
   const gain = c.createGain();
   osc.type = "square";
@@ -44,7 +49,7 @@ export function playHit() {
 }
 
 export function playKill() {
-  const c = getCtx();
+  const c = getCtx(); if (!c) return;
   const osc = c.createOscillator();
   const gain = c.createGain();
   osc.type = "sine";
@@ -60,7 +65,7 @@ export function playKill() {
 }
 
 export function playXP() {
-  const c = getCtx();
+  const c = getCtx(); if (!c) return;
   const osc = c.createOscillator();
   const gain = c.createGain();
   osc.type = "sine";
@@ -75,7 +80,7 @@ export function playXP() {
 }
 
 export function playLevelUp() {
-  const c = getCtx();
+  const c = getCtx(); if (!c) return;
   const notes = [523, 659, 784, 1047]; // C5 E5 G5 C6
   notes.forEach((freq, i) => {
     const osc = c.createOscillator();
@@ -94,7 +99,7 @@ export function playLevelUp() {
 }
 
 export function playDamage() {
-  const c = getCtx();
+  const c = getCtx(); if (!c) return;
   // Noise burst
   const bufferSize = c.sampleRate * 0.1;
   const buffer = c.createBuffer(1, bufferSize, c.sampleRate);
@@ -118,7 +123,7 @@ export function playDamage() {
 }
 
 export function playShockWave() {
-  const c = getCtx();
+  const c = getCtx(); if (!c) return;
   const osc = c.createOscillator();
   const gain = c.createGain();
   osc.type = "sine";
@@ -133,7 +138,7 @@ export function playShockWave() {
 }
 
 export function playLightning() {
-  const c = getCtx();
+  const c = getCtx(); if (!c) return;
   const bufferSize = c.sampleRate * 0.15;
   const buffer = c.createBuffer(1, bufferSize, c.sampleRate);
   const data = buffer.getChannelData(0);
@@ -155,7 +160,7 @@ export function playLightning() {
 }
 
 export function playBossSlam() {
-  const c = getCtx();
+  const c = getCtx(); if (!c) return;
   // Deep boom
   const osc = c.createOscillator();
   const gain = c.createGain();
@@ -186,7 +191,7 @@ export function playBossSlam() {
 }
 
 export function playBossSpawn() {
-  const c = getCtx();
+  const c = getCtx(); if (!c) return;
   // Dramatic horn
   const notes = [130, 164, 196, 262]; // C3 E3 G3 C4
   notes.forEach((freq, i) => {
@@ -211,7 +216,7 @@ export function playBossSpawn() {
 }
 
 export function playPortal() {
-  const c = getCtx();
+  const c = getCtx(); if (!c) return;
   const osc = c.createOscillator();
   const gain = c.createGain();
   osc.type = "sine";
@@ -242,7 +247,7 @@ export function playPortal() {
 }
 
 export function playSelect() {
-  const c = getCtx();
+  const c = getCtx(); if (!c) return;
   const osc = c.createOscillator();
   const gain = c.createGain();
   osc.type = "sine";
@@ -257,7 +262,7 @@ export function playSelect() {
 }
 
 export function playGameOver() {
-  const c = getCtx();
+  const c = getCtx(); if (!c) return;
   const notes = [392, 330, 262, 196]; // G4 E4 C4 G3 - descending
   notes.forEach((freq, i) => {
     const osc = c.createOscillator();
@@ -279,7 +284,7 @@ export function playGameOver() {
 
 export function startMusic() {
   if (musicPlaying) return;
-  const c = getCtx();
+  const c = getCtx(); if (!c) return;
   musicPlaying = true;
 
   // Simple ambient loop with layered oscillators
@@ -287,7 +292,7 @@ export function startMusic() {
   const padNotes = [262, 294, 330, 262]; // C4 D4 E4 C4
 
   function playMeasure(index: number) {
-    if (!musicPlaying) return;
+    if (!musicPlaying || !c) return;
     const noteIdx = index % bassNotes.length;
     const t = c.currentTime;
 
@@ -357,3 +362,4 @@ export function setSFXVolume(v: number) {
 export function setMusicVolume(v: number) {
   if (musicGain) musicGain.gain.value = Math.max(0, Math.min(1, v));
 }
+
