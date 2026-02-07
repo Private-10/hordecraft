@@ -21,8 +21,9 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="theme-color" content="#0a0a1a" />
+        <link rel="manifest" href="/manifest.json" />
       </head>
-      <body style={{ touchAction: "none", overscrollBehavior: "none" }}>{children}</body>
+      <body style={{ overscrollBehavior: "none" }}>{children}</body>
     </html>
   );
 }

@@ -471,6 +471,27 @@ html, body {
   -webkit-overflow-scrolling: touch;
 }
 
+/* Mobile landscape: compact menu */
+@media (max-height: 500px) {
+  .main-menu {
+    justify-content: flex-start;
+    padding-top: 10px;
+  }
+  .main-menu h1 {
+    font-size: 32px !important;
+    margin-bottom: 4px !important;
+  }
+  .main-menu .subtitle {
+    margin-bottom: 10px !important;
+    font-size: 12px !important;
+  }
+  .main-menu .btn {
+    padding: 10px !important;
+    font-size: 14px !important;
+    margin-bottom: 6px !important;
+  }
+}
+
 .main-menu h1 {
   font-size: 64px;
   font-weight: 900;

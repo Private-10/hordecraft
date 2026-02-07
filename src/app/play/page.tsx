@@ -265,7 +265,7 @@ export default function PlayPage() {
     <>
       <canvas
         ref={canvasRef}
-        style={{ width: "100vw", height: "100vh" }}
+        style={{ width: "100vw", height: "100vh", touchAction: "none" }}
         onContextMenu={(e) => e.preventDefault()}
         onMouseDown={(e) => e.preventDefault()}
       />
@@ -565,25 +565,32 @@ export default function PlayPage() {
 
           {/* Fullscreen button (mobile) */}
           {isMobileDevice && (
-            <button
-              onClick={() => {
-                const el = document.documentElement;
-                if (!document.fullscreenElement) {
-                  el.requestFullscreen?.().catch(() => {});
-                  // iOS Safari
-                  (el as unknown as { webkitRequestFullscreen?: () => void }).webkitRequestFullscreen?.();
-                }
-                // Lock to landscape if possible
-                try { (screen.orientation as unknown as { lock?: (o: string) => Promise<void> })?.lock?.("landscape")?.catch?.(() => {}); } catch {}
-              }}
-              style={{
-                marginTop: 8, padding: "10px 24px", borderRadius: 10,
-                border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.08)",
-                color: "white", fontSize: 14, cursor: "pointer",
-              }}
-            >
-              📱 {lang === "tr" ? "Tam Ekran" : "Fullscreen"}
-            </button>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, marginTop: 8 }}>
+              <button
+                onClick={() => {
+                  const el = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => void };
+                  if (document.fullscreenElement) return;
+                  if (el.requestFullscreen) {
+                    el.requestFullscreen().catch(() => {});
+                  } else if (el.webkitRequestFullscreen) {
+                    el.webkitRequestFullscreen();
+                  }
+                  try { (screen.orientation as unknown as { lock?: (o: string) => Promise<void> })?.lock?.("landscape")?.catch?.(() => {}); } catch {}
+                }}
+                style={{
+                  padding: "10px 24px", borderRadius: 10,
+                  border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.08)",
+                  color: "white", fontSize: 14, cursor: "pointer",
+                }}
+              >
+                📱 {lang === "tr" ? "Tam Ekran" : "Fullscreen"}
+              </button>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", textAlign: "center", maxWidth: 250 }}>
+                {lang === "tr"
+                  ? "iOS: Paylaş → Ana Ekrana Ekle ile tam ekran deneyimi"
+                  : "iOS: Share → Add to Home Screen for fullscreen"}
+              </div>
+            </div>
           )}
         </div>
       )}
