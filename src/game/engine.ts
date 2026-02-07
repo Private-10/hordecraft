@@ -2329,7 +2329,9 @@ export class GameEngine {
         });
         const ring = new THREE.Mesh(ringGeo, ringMat);
         ring.rotation.x = -Math.PI / 2;
-        ring.position.copy(pos).add(new THREE.Vector3(0, 0.1, 0));
+        ringMat.depthWrite = false;
+        ring.renderOrder = 1;
+        ring.position.copy(pos).add(new THREE.Vector3(0, 4.5, 0));
         this.scene.add(ring);
         this.shockWaves.push({ position: pos.clone(), mesh: ring, timer: 0, maxTime: 0.4 + r * 0.1, maxRadius: range * (1 - r * 0.15), damage: r === 0 ? damage : 0 });
       }, r * 80);
@@ -2338,10 +2340,11 @@ export class GameEngine {
     // Ground darkening circle
     const ground = new THREE.Mesh(
       new THREE.CircleGeometry(range, 24),
-      new THREE.MeshBasicMaterial({ color: 0x111122, transparent: true, opacity: 0.3, side: THREE.DoubleSide })
+      new THREE.MeshBasicMaterial({ color: 0x111122, transparent: true, opacity: 0.3, side: THREE.DoubleSide, depthWrite: false })
     );
     ground.rotation.x = -Math.PI / 2;
-    ground.position.copy(pos).add(new THREE.Vector3(0, 0.05, 0));
+    ground.renderOrder = 1;
+    ground.position.copy(pos).add(new THREE.Vector3(0, 4.5, 0));
     this.scene.add(ground);
     setTimeout(() => this.scene.remove(ground), 500);
 
@@ -2559,17 +2562,20 @@ export class GameEngine {
     const ringMat = new THREE.MeshBasicMaterial({ color: 0x88ddff, transparent: true, opacity: 0.7, side: THREE.DoubleSide });
     const ring = new THREE.Mesh(ringGeo, ringMat);
     ring.rotation.x = -Math.PI / 2;
-    ring.position.copy(pos).add(new THREE.Vector3(0, 0.1, 0));
+    ring.position.copy(pos).add(new THREE.Vector3(0, 4.5, 0));
+    ring.renderOrder = 1;
+    (ring.material as THREE.MeshBasicMaterial).depthWrite = false;
     this.scene.add(ring);
     this.shockWaves.push({ position: pos.clone(), mesh: ring, timer: 0, maxTime: 0.5, maxRadius: effectiveRange, damage: 0 });
 
     // Frozen ground disc (lingers 1s)
     const groundDisc = new THREE.Mesh(
       new THREE.CircleGeometry(effectiveRange, 24),
-      new THREE.MeshBasicMaterial({ color: 0x88ccff, transparent: true, opacity: 0.25, side: THREE.DoubleSide })
+      new THREE.MeshBasicMaterial({ color: 0x88ccff, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false })
     );
     groundDisc.rotation.x = -Math.PI / 2;
-    groundDisc.position.copy(pos).add(new THREE.Vector3(0, 0.06, 0));
+    groundDisc.renderOrder = 1;
+    groundDisc.position.copy(pos).add(new THREE.Vector3(0, 4.5, 0));
     this.scene.add(groundDisc);
     setTimeout(() => this.scene.remove(groundDisc), 1000);
 
@@ -2637,10 +2643,11 @@ export class GameEngine {
     // Dark purple ground circle
     const groundCircle = new THREE.Mesh(
       new THREE.CircleGeometry(radius * 0.6, 16),
-      new THREE.MeshBasicMaterial({ color: 0x220044, transparent: true, opacity: 0.35, side: THREE.DoubleSide })
+      new THREE.MeshBasicMaterial({ color: 0x220044, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false })
     );
     groundCircle.rotation.x = -Math.PI / 2;
-    groundCircle.position.y = -0.4;
+    groundCircle.renderOrder = 1;
+    groundCircle.position.y = 4.0;
     group.add(groundCircle);
     // Orbiting dark energy particles
     for (let i = 0; i < 8; i++) {
