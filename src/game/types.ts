@@ -113,8 +113,17 @@ export interface MetaState {
   gold: number;
   permanentUpgrades: Record<string, number>;
   unlockedCharacters: string[];
+  unlockedMaps: string[];
   totalRuns: number;
   achievements: MetaAchievements;
+}
+
+export interface ChestInstance {
+  id: number;
+  position: THREE.Vector3;
+  mesh: THREE.Group;
+  isAlive: boolean;
+  type: "xp" | "gold" | "hp";
 }
 
 export interface GameStats {

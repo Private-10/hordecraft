@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { InputManager } from "./input";
 import { MobileInputManager } from "./mobile-input";
-import { PLAYER, CAMERA, ARENA, ENEMIES, WEAPONS, XP_TABLE, SCORE, COLORS, BOSSES, EVOLUTIONS } from "./constants";
+import { PLAYER, CAMERA, ARENA, ENEMIES, WEAPONS, XP_TABLE, SCORE, COLORS, BOSSES, EVOLUTIONS, MAPS } from "./constants";
 import * as Audio from "./audio";
 import { getCharacter, type CharacterDef } from "./characters";
 export { Audio };
@@ -9,7 +9,7 @@ import { t } from "./i18n";
 import type {
   GameState, PlayerState, EnemyInstance, XPGem, Projectile,
   WeaponState, UpgradeOption, GameStats, ShockWaveEffect, LightningEffect, FireSegment,
-  VortexEffect, MetaState,
+  VortexEffect, MetaState, ChestInstance,
 } from "./types";
 
 export class GameEngine {
@@ -130,6 +130,32 @@ export class GameEngine {
   private portalTimer = 0;
   private portalParticles: { mesh: THREE.Mesh; vel: THREE.Vector3; life: number }[] = [];
 
+  // Map system
+  selectedMap = "forest";
+  private groundMesh: THREE.Mesh | null = null;
+  private gridHelper: THREE.GridHelper | null = null;
+  private environmentObjects: THREE.Object3D[] = [];
+  private ambientLight: THREE.AmbientLight | null = null;
+  private sunLight: THREE.DirectionalLight | null = null;
+  private hemiLight: THREE.HemisphereLight | null = null;
+
+  // Sandstorm
+  private sandstormTimer = 0;
+  private sandstormActive = false;
+  private sandstormWarning = false;
+  private sandstormDuration = 5;
+  private sandstormInterval = 120; // 2 minutes
+  private sandstormParticles: THREE.Points | null = null;
+  private originalFogNear = 40;
+  private originalFogFar = 80;
+  onSandstorm?: (warning: boolean, active: boolean) => void;
+
+  // Chest system
+  private chests: ChestInstance[] = [];
+  private chestSpawnTimer = 45;
+  private nextChestId = 0;
+  onChestCollect?: (type: string, amount: number) => void;
+
   init(canvas: HTMLCanvasElement) {
     // Renderer
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -151,25 +177,25 @@ export class GameEngine {
     this.camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 100);
 
     // Lights
-    const ambient = new THREE.AmbientLight(0x334455, 0.8);
-    this.scene.add(ambient);
+    this.ambientLight = new THREE.AmbientLight(0x334455, 0.8);
+    this.scene.add(this.ambientLight);
 
-    const sun = new THREE.DirectionalLight(0xffeedd, 1.2);
-    sun.position.set(20, 30, 10);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
-    sun.shadow.camera.far = 120;
-    sun.shadow.camera.left = -60;
-    sun.shadow.camera.right = 60;
-    sun.shadow.camera.top = 60;
-    sun.shadow.camera.bottom = -60;
-    this.scene.add(sun);
+    this.sunLight = new THREE.DirectionalLight(0xffeedd, 1.2);
+    this.sunLight.position.set(20, 30, 10);
+    this.sunLight.castShadow = true;
+    this.sunLight.shadow.mapSize.set(1024, 1024);
+    this.sunLight.shadow.camera.far = 120;
+    this.sunLight.shadow.camera.left = -60;
+    this.sunLight.shadow.camera.right = 60;
+    this.sunLight.shadow.camera.top = 60;
+    this.sunLight.shadow.camera.bottom = -60;
+    this.scene.add(this.sunLight);
 
-    const hemi = new THREE.HemisphereLight(0x4488aa, 0x224422, 0.4);
-    this.scene.add(hemi);
+    this.hemiLight = new THREE.HemisphereLight(0x4488aa, 0x224422, 0.4);
+    this.scene.add(this.hemiLight);
 
-    // Ground
-    this.createGround();
+    // Ground - setup arena for current map
+    this.setupArena(this.selectedMap);
 
     // Player mesh
     this.createPlayerMesh();
@@ -194,35 +220,64 @@ export class GameEngine {
     });
   }
 
-  private createGround() {
-    // Main ground
+  private clearArena() {
+    // Remove environment objects
+    this.environmentObjects.forEach(obj => this.scene.remove(obj));
+    this.environmentObjects = [];
+    this.rockColliders = [];
+    if (this.groundMesh) { this.scene.remove(this.groundMesh); this.groundMesh = null; }
+    if (this.gridHelper) { this.scene.remove(this.gridHelper); this.gridHelper = null; }
+    if (this.sandstormParticles) { this.scene.remove(this.sandstormParticles); this.sandstormParticles = null; }
+  }
+
+  private setupArena(mapId: string) {
+    this.clearArena();
+    const mapDef = MAPS[mapId as keyof typeof MAPS] || MAPS.forest;
+
+    // Update scene colors
+    this.scene.background = new THREE.Color(mapDef.skyColor);
+    this.scene.fog = new THREE.Fog(mapDef.fogColor, 40, 80);
+    this.originalFogNear = 40;
+    this.originalFogFar = 80;
+
+    // Update lights based on map
+    if (mapId === "desert") {
+      if (this.ambientLight) { this.ambientLight.color.set(0x554433); this.ambientLight.intensity = 0.9; }
+      if (this.sunLight) { this.sunLight.color.set(0xffcc88); this.sunLight.intensity = 1.4; }
+      if (this.hemiLight) { this.hemiLight.color.set(0xaa8866); (this.hemiLight as THREE.HemisphereLight).groundColor.set(0x443322); }
+    } else {
+      if (this.ambientLight) { this.ambientLight.color.set(0x334455); this.ambientLight.intensity = 0.8; }
+      if (this.sunLight) { this.sunLight.color.set(0xffeedd); this.sunLight.intensity = 1.2; }
+      if (this.hemiLight) { this.hemiLight.color.set(0x4488aa); (this.hemiLight as THREE.HemisphereLight).groundColor.set(0x224422); }
+    }
+
+    // Ground
     const groundGeo = new THREE.PlaneGeometry(ARENA.size, ARENA.size, 40, 40);
-    // Add some height variation
     const posAttr = groundGeo.getAttribute("position");
     for (let i = 0; i < posAttr.count; i++) {
       const x = posAttr.getX(i);
       const y = posAttr.getY(i);
-      const height = Math.sin(x * 0.1) * Math.cos(y * 0.1) * 1.5
-        + Math.sin(x * 0.05 + 1) * Math.cos(y * 0.07) * 2;
+      const height = mapId === "desert"
+        ? Math.sin(x * 0.08) * Math.cos(y * 0.06) * 3 + Math.sin(x * 0.15) * 1.5 + Math.cos(y * 0.12) * 2
+        : Math.sin(x * 0.1) * Math.cos(y * 0.1) * 1.5 + Math.sin(x * 0.05 + 1) * Math.cos(y * 0.07) * 2;
       posAttr.setZ(i, height);
     }
     groundGeo.computeVertexNormals();
+    const groundMat = new THREE.MeshLambertMaterial({ color: mapDef.groundColor });
+    this.groundMesh = new THREE.Mesh(groundGeo, groundMat);
+    this.groundMesh.rotation.x = -Math.PI / 2;
+    this.groundMesh.receiveShadow = true;
+    this.scene.add(this.groundMesh);
 
-    const groundMat = new THREE.MeshLambertMaterial({ color: COLORS.ground });
-    const ground = new THREE.Mesh(groundGeo, groundMat);
-    ground.rotation.x = -Math.PI / 2;
-    ground.receiveShadow = true;
-    this.scene.add(ground);
+    // Grid
+    this.gridHelper = new THREE.GridHelper(ARENA.size, 40, mapDef.groundLineColor, mapDef.groundLineColor);
+    (this.gridHelper.material as THREE.Material).opacity = 0.15;
+    (this.gridHelper.material as THREE.Material).transparent = true;
+    this.scene.add(this.gridHelper);
 
-    // Grid overlay
-    const gridHelper = new THREE.GridHelper(ARENA.size, 40, COLORS.groundLine, COLORS.groundLine);
-    (gridHelper.material as THREE.Material).opacity = 0.15;
-    (gridHelper.material as THREE.Material).transparent = true;
-    this.scene.add(gridHelper);
-
-    // Arena boundary markers
+    // Borders
     const borderGeo = new THREE.BoxGeometry(ARENA.size, 3, 0.5);
-    const borderMat = new THREE.MeshLambertMaterial({ color: 0x332244, transparent: true, opacity: 0.3 });
+    const borderMat = new THREE.MeshLambertMaterial({ color: mapId === "desert" ? 0x443322 : 0x332244, transparent: true, opacity: 0.3 });
     const borders = [
       { pos: [0, 1.5, -ARENA.halfSize], rot: 0 },
       { pos: [0, 1.5, ARENA.halfSize], rot: 0 },
@@ -234,10 +289,20 @@ export class GameEngine {
       m.position.set(b.pos[0] as number, b.pos[1] as number, b.pos[2] as number);
       m.rotation.y = b.rot;
       this.scene.add(m);
+      this.environmentObjects.push(m);
     });
 
-    // Rocks (with collision)
+    if (mapId === "desert") {
+      this.setupDesertObjects();
+    } else {
+      this.setupForestObjects();
+    }
+  }
+
+  private setupForestObjects() {
     this.rockColliders = [];
+
+    // Rocks
     for (let i = 0; i < 35; i++) {
       const rockRadius = Math.random() * 2.5 + 0.5;
       const rockGeo = new THREE.DodecahedronGeometry(rockRadius, 0);
@@ -245,7 +310,6 @@ export class GameEngine {
       const rock = new THREE.Mesh(rockGeo, rockMat);
       const rx = (Math.random() - 0.5) * ARENA.size * 0.85;
       const rz = (Math.random() - 0.5) * ARENA.size * 0.85;
-      // Skip rocks too close to spawn
       if (Math.abs(rx) < 5 && Math.abs(rz) < 5) continue;
       const ry = this.getTerrainHeight(rx, rz) + Math.random() * 0.3;
       rock.position.set(rx, ry, rz);
@@ -253,6 +317,7 @@ export class GameEngine {
       rock.castShadow = true;
       rock.receiveShadow = true;
       this.scene.add(rock);
+      this.environmentObjects.push(rock);
       this.rockColliders.push({ position: new THREE.Vector3(rx, ry, rz), radius: rockRadius * 0.8 });
     }
 
@@ -268,19 +333,14 @@ export class GameEngine {
       const tx = (Math.random() - 0.5) * ARENA.size * 0.85;
       const tz = (Math.random() - 0.5) * ARENA.size * 0.85;
       const ty = this.getTerrainHeight(tx, tz);
-
-      // Skip trees too close to center (spawn area)
       if (Math.abs(tx) < 8 && Math.abs(tz) < 8) continue;
 
       const tree = new THREE.Group();
-
-      // Trunk
       const trunk = new THREE.Mesh(trunkGeo, trunkMat);
       trunk.position.y = 1;
       trunk.castShadow = true;
       tree.add(trunk);
 
-      // Leaves - two stacked cones
       const scale = 0.7 + Math.random() * 0.6;
       const leaves1 = new THREE.Mesh(leafGeo1, Math.random() > 0.5 ? leafMat : leafMatDark);
       leaves1.position.y = 2.8 * scale;
@@ -297,10 +357,11 @@ export class GameEngine {
       tree.position.set(tx, ty, tz);
       tree.rotation.y = Math.random() * Math.PI * 2;
       this.scene.add(tree);
+      this.environmentObjects.push(tree);
       this.rockColliders.push({ position: new THREE.Vector3(tx, ty, tz), radius: 0.4 });
     }
 
-    // Grass patches (small green planes scattered)
+    // Grass
     const grassGeo = new THREE.PlaneGeometry(0.4, 0.6);
     const grassMat = new THREE.MeshLambertMaterial({ color: 0x33aa44, side: THREE.DoubleSide });
     for (let i = 0; i < 200; i++) {
@@ -312,9 +373,10 @@ export class GameEngine {
       grass.rotation.y = Math.random() * Math.PI;
       grass.rotation.x = -0.2;
       this.scene.add(grass);
+      this.environmentObjects.push(grass);
     }
 
-    // Mushrooms (small decorative)
+    // Mushrooms
     const mushroomCapGeo = new THREE.SphereGeometry(0.2, 6, 4, 0, Math.PI * 2, 0, Math.PI / 2);
     const mushroomStemGeo = new THREE.CylinderGeometry(0.06, 0.08, 0.2, 5);
     const mushroomMats = [
@@ -328,7 +390,6 @@ export class GameEngine {
       const mx = (Math.random() - 0.5) * ARENA.size * 0.8;
       const mz = (Math.random() - 0.5) * ARENA.size * 0.8;
       const my = this.getTerrainHeight(mx, mz);
-
       const mushroom = new THREE.Group();
       const stem = new THREE.Mesh(mushroomStemGeo, stemMat);
       stem.position.y = 0.1;
@@ -336,11 +397,113 @@ export class GameEngine {
       const cap = new THREE.Mesh(mushroomCapGeo, mushroomMats[i % 3]);
       cap.position.y = 0.2;
       mushroom.add(cap);
-
       const s = 0.5 + Math.random() * 1;
       mushroom.scale.setScalar(s);
       mushroom.position.set(mx, my, mz);
       this.scene.add(mushroom);
+      this.environmentObjects.push(mushroom);
+    }
+  }
+
+  private setupDesertObjects() {
+    this.rockColliders = [];
+
+    // Rock pillars (instead of trees)
+    const pillarMat = new THREE.MeshLambertMaterial({ color: 0x997744 });
+    for (let i = 0; i < 40; i++) {
+      const px = (Math.random() - 0.5) * ARENA.size * 0.85;
+      const pz = (Math.random() - 0.5) * ARENA.size * 0.85;
+      if (Math.abs(px) < 8 && Math.abs(pz) < 8) continue;
+      const py = this.getTerrainHeight(px, pz);
+      const h = 2 + Math.random() * 4;
+      const r = 0.3 + Math.random() * 0.4;
+
+      const pillar = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.7, r, h, 6), pillarMat);
+      body.position.y = h / 2;
+      body.castShadow = true;
+      pillar.add(body);
+      // Rough top
+      const top = new THREE.Mesh(new THREE.DodecahedronGeometry(r * 1.2, 0), pillarMat);
+      top.position.y = h;
+      top.castShadow = true;
+      pillar.add(top);
+
+      pillar.position.set(px, py, pz);
+      this.scene.add(pillar);
+      this.environmentObjects.push(pillar);
+      this.rockColliders.push({ position: new THREE.Vector3(px, py, pz), radius: r });
+    }
+
+    // Sand boulders (instead of rocks)
+    const boulderMat = new THREE.MeshLambertMaterial({ color: 0xaa8855 });
+    for (let i = 0; i < 30; i++) {
+      const bx = (Math.random() - 0.5) * ARENA.size * 0.85;
+      const bz = (Math.random() - 0.5) * ARENA.size * 0.85;
+      if (Math.abs(bx) < 5 && Math.abs(bz) < 5) continue;
+      const br = Math.random() * 2 + 0.5;
+      const by = this.getTerrainHeight(bx, bz) + br * 0.3;
+      const boulder = new THREE.Mesh(new THREE.SphereGeometry(br, 6, 5), boulderMat);
+      boulder.position.set(bx, by, bz);
+      boulder.scale.y = 0.6 + Math.random() * 0.4;
+      boulder.castShadow = true;
+      boulder.receiveShadow = true;
+      this.scene.add(boulder);
+      this.environmentObjects.push(boulder);
+      this.rockColliders.push({ position: new THREE.Vector3(bx, by, bz), radius: br * 0.8 });
+    }
+
+    // Dead bushes (instead of grass)
+    const bushMat = new THREE.MeshLambertMaterial({ color: 0x665533 });
+    for (let i = 0; i < 100; i++) {
+      const dx = (Math.random() - 0.5) * ARENA.size * 0.9;
+      const dz = (Math.random() - 0.5) * ARENA.size * 0.9;
+      const dy = this.getTerrainHeight(dx, dz);
+      const bush = new THREE.Group();
+      // Small branching sticks
+      for (let j = 0; j < 3 + Math.floor(Math.random() * 3); j++) {
+        const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.03, 0.3 + Math.random() * 0.3, 3), bushMat);
+        stick.position.y = 0.15;
+        stick.rotation.x = (Math.random() - 0.5) * 1.2;
+        stick.rotation.z = (Math.random() - 0.5) * 1.2;
+        bush.add(stick);
+      }
+      bush.position.set(dx, dy, dz);
+      this.scene.add(bush);
+      this.environmentObjects.push(bush);
+    }
+
+    // Cacti (instead of mushrooms)
+    const cactusMat = new THREE.MeshLambertMaterial({ color: 0x336633 });
+    for (let i = 0; i < 20; i++) {
+      const cx = (Math.random() - 0.5) * ARENA.size * 0.8;
+      const cz = (Math.random() - 0.5) * ARENA.size * 0.8;
+      if (Math.abs(cx) < 5 && Math.abs(cz) < 5) continue;
+      const cy = this.getTerrainHeight(cx, cz);
+      const cactus = new THREE.Group();
+      const h = 1 + Math.random() * 1.5;
+      // Main body
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, h, 6), cactusMat);
+      body.position.y = h / 2;
+      body.castShadow = true;
+      cactus.add(body);
+      // Arms
+      if (Math.random() > 0.3) {
+        const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.5, 5), cactusMat);
+        arm.position.set(0.2, h * 0.6, 0);
+        arm.rotation.z = -Math.PI / 3;
+        cactus.add(arm);
+      }
+      if (Math.random() > 0.5) {
+        const arm2 = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.4, 5), cactusMat);
+        arm2.position.set(-0.18, h * 0.45, 0);
+        arm2.rotation.z = Math.PI / 3;
+        cactus.add(arm2);
+      }
+      cactus.position.set(cx, cy, cz);
+      this.scene.add(cactus);
+      this.environmentObjects.push(cactus);
+      this.rockColliders.push({ position: new THREE.Vector3(cx, cy, cz), radius: 0.3 });
     }
   }
 
@@ -1410,7 +1573,9 @@ export class GameEngine {
     };
   }
 
-  startGame(characterId?: string) {
+  startGame(characterId?: string, mapId?: string) {
+    this.selectedMap = mapId || "forest";
+    this.setupArena(this.selectedMap);
     this.selectedCharacter = getCharacter(characterId || "knight");
     const ch = this.selectedCharacter;
 
@@ -1493,6 +1658,18 @@ export class GameEngine {
     this.vortexes.forEach(v => { if (v.mesh.parent) this.scene.remove(v.mesh); });
     this.vortexes = [];
 
+    // Clear chests
+    this.chests.forEach(c => { if (c.mesh.parent) this.scene.remove(c.mesh); });
+    this.chests = [];
+    this.chestSpawnTimer = 45;
+    this.nextChestId = 0;
+
+    // Reset sandstorm
+    this.sandstormTimer = 0;
+    this.sandstormActive = false;
+    this.sandstormWarning = false;
+    if (this.sandstormParticles) { this.scene.remove(this.sandstormParticles); this.sandstormParticles = null; }
+
     const startY = this.getTerrainHeight(0, 0);
     this.playerMesh.position.set(0, startY - 2, 0);
     this.player.position.set(0, startY, 0);
@@ -1574,6 +1751,8 @@ export class GameEngine {
     this.updateDPS();
     this.updateScore();
     this.updateHPRegen(cappedDt);
+    this.updateChests(cappedDt);
+    this.updateSandstorm(cappedDt);
     this.performanceCleanup();
 
     this.onStatsUpdate?.();
@@ -3439,6 +3618,28 @@ export class GameEngine {
 
   // ========== DAMAGE NUMBERS ==========
 
+  private createChestText(position: THREE.Vector3, text: string, color: string) {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d')!;
+    canvas.width = 256;
+    canvas.height = 64;
+    ctx.font = 'bold 28px Arial';
+    ctx.fillStyle = color;
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 3;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.strokeText(text, 128, 32);
+    ctx.fillText(text, 128, 32);
+    const texture = new THREE.CanvasTexture(canvas);
+    const mat = new THREE.SpriteMaterial({ map: texture, transparent: true });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(1.5, 0.4, 1);
+    sprite.position.copy(position);
+    this.scene.add(sprite);
+    this.damageNumbers.push({ position: sprite.position.clone(), text, timer: 0, mesh: sprite });
+  }
+
   private createDamageNumber(position: THREE.Vector3, damage: number, isCrit: boolean) {
     // Create canvas texture for damage number
     const canvas = document.createElement('canvas');
@@ -3893,9 +4094,198 @@ export class GameEngine {
     }
   }
 
+  // ========== CHESTS ==========
+
+  private updateChests(dt: number) {
+    // Spawn timer
+    this.chestSpawnTimer -= dt;
+    if (this.chestSpawnTimer <= 0 && this.chests.filter(c => c.isAlive).length < 3) {
+      this.spawnChest();
+      this.chestSpawnTimer = 45;
+    }
+
+    // Animate and check collisions
+    for (const chest of this.chests) {
+      if (!chest.isAlive) continue;
+      // Rotate and bob
+      chest.mesh.rotation.y += dt * 1.5;
+      chest.mesh.position.y = chest.position.y + 0.5 + Math.sin(this.gameTime * 2 + chest.id) * 0.2;
+
+      // Check player collision
+      const dist = this.player.position.distanceTo(chest.position);
+      if (dist < 1.5) {
+        this.collectChest(chest);
+      }
+    }
+
+    // Cleanup dead chests
+    this.chests = this.chests.filter(c => {
+      if (!c.isAlive) { if (c.mesh.parent) this.scene.remove(c.mesh); return false; }
+      return true;
+    });
+  }
+
+  private spawnChest() {
+    const x = (Math.random() - 0.5) * ARENA.size * 0.8;
+    const z = (Math.random() - 0.5) * ARENA.size * 0.8;
+    const y = this.getTerrainHeight(x, z);
+
+    // Determine type
+    const roll = Math.random();
+    const type: "xp" | "gold" | "hp" = roll < 0.5 ? "xp" : roll < 0.8 ? "gold" : "hp";
+
+    const mesh = new THREE.Group();
+    // Golden box
+    const box = new THREE.Mesh(
+      new THREE.BoxGeometry(0.6, 0.5, 0.5),
+      new THREE.MeshStandardMaterial({ color: 0xffcc00, emissive: 0x664400, emissiveIntensity: 0.5, metalness: 0.8, roughness: 0.3 })
+    );
+    mesh.add(box);
+    // Lid
+    const lid = new THREE.Mesh(
+      new THREE.BoxGeometry(0.65, 0.15, 0.55),
+      new THREE.MeshStandardMaterial({ color: 0xddaa00, emissive: 0x553300, emissiveIntensity: 0.4, metalness: 0.8, roughness: 0.3 })
+    );
+    lid.position.y = 0.32;
+    mesh.add(lid);
+    // Sparkle light
+    const light = new THREE.PointLight(0xffcc00, 0.5, 3);
+    light.position.y = 0.5;
+    mesh.add(light);
+
+    mesh.position.set(x, y + 0.5, z);
+    this.scene.add(mesh);
+
+    this.chests.push({
+      id: this.nextChestId++,
+      position: new THREE.Vector3(x, y, z),
+      mesh,
+      isAlive: true,
+      type,
+    });
+  }
+
+  private collectChest(chest: ChestInstance) {
+    chest.isAlive = false;
+    Audio.playLevelUp();
+
+    let amount = 0;
+    if (chest.type === "xp") {
+      amount = Math.floor(50 + Math.random() * 100 * (1 + this.gameTime / 120));
+      this.player.xp += Math.floor(amount * this.player.xpMultiplier);
+    } else if (chest.type === "gold") {
+      amount = Math.floor(10 + Math.random() * 20);
+      this.stats.gold += amount;
+    } else {
+      amount = Math.floor(15 + Math.random() * 10);
+      this.player.hp = Math.min(this.player.maxHp, this.player.hp + amount);
+    }
+
+    // Floating text using existing damage number system
+    this.createChestText(
+      chest.position.clone().add(new THREE.Vector3(0, 1.5, 0)),
+      chest.type === "xp" ? `+${amount} XP` : chest.type === "gold" ? `+${amount} G` : `+${amount} HP`,
+      chest.type === "xp" ? "#00d4ff" : chest.type === "gold" ? "#ffcc00" : "#ff3366"
+    );
+
+    // Burst particles
+    for (let i = 0; i < 8; i++) {
+      const color = chest.type === "gold" ? 0xffcc00 : chest.type === "xp" ? 0x00d4ff : 0xff3366;
+      const spark = new THREE.Mesh(new THREE.OctahedronGeometry(0.08), new THREE.MeshBasicMaterial({ color, transparent: true }));
+      spark.position.copy(chest.position).add(new THREE.Vector3(0, 0.5, 0));
+      this.scene.add(spark);
+      this.particles.push({
+        mesh: spark,
+        velocity: new THREE.Vector3((Math.random() - 0.5) * 4, 2 + Math.random() * 3, (Math.random() - 0.5) * 4),
+        life: 0,
+        maxLife: 0.6,
+      });
+    }
+    this.onChestCollect?.(chest.type, amount);
+  }
+
+  // ========== SANDSTORM ==========
+
+  private updateSandstorm(dt: number) {
+    if (this.selectedMap !== "desert") return;
+
+    this.sandstormTimer += dt;
+    const cycle = this.sandstormTimer % this.sandstormInterval;
+    const warningStart = this.sandstormInterval - 2; // 2s before
+    const stormStart = this.sandstormInterval;
+
+    if (cycle >= warningStart && !this.sandstormActive && !this.sandstormWarning) {
+      this.sandstormWarning = true;
+      this.onSandstorm?.(true, false);
+    }
+
+    if (this.sandstormTimer >= this.sandstormInterval && !this.sandstormActive) {
+      this.sandstormActive = true;
+      this.sandstormWarning = false;
+      this.sandstormTimer = 0;
+      this.onSandstorm?.(false, true);
+      // Create dust particles
+      this.createSandstormParticles();
+      // Increase fog
+      if (this.scene.fog instanceof THREE.Fog) {
+        this.scene.fog.near = 5;
+        this.scene.fog.far = 25;
+      }
+    }
+
+    if (this.sandstormActive) {
+      this.sandstormDuration -= dt;
+      // Animate particles
+      if (this.sandstormParticles) {
+        this.sandstormParticles.rotation.y += dt * 0.5;
+        const positions = (this.sandstormParticles.geometry.getAttribute("position") as THREE.BufferAttribute);
+        for (let i = 0; i < positions.count; i++) {
+          positions.setX(i, positions.getX(i) + (Math.random() - 0.5) * dt * 10);
+          positions.setZ(i, positions.getZ(i) + dt * 8);
+          if (positions.getZ(i) > ARENA.halfSize) positions.setZ(i, -ARENA.halfSize);
+        }
+        positions.needsUpdate = true;
+      }
+      if (this.sandstormDuration <= 0) {
+        this.sandstormActive = false;
+        this.sandstormDuration = 5;
+        this.onSandstorm?.(false, false);
+        // Restore fog
+        if (this.scene.fog instanceof THREE.Fog) {
+          this.scene.fog.near = this.originalFogNear;
+          this.scene.fog.far = this.originalFogFar;
+        }
+        // Remove particles
+        if (this.sandstormParticles) {
+          this.scene.remove(this.sandstormParticles);
+          this.sandstormParticles = null;
+        }
+      }
+    }
+  }
+
+  private createSandstormParticles() {
+    if (this.sandstormParticles) { this.scene.remove(this.sandstormParticles); }
+    const count = 500;
+    const geo = new THREE.BufferGeometry();
+    const positions = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      positions[i * 3] = (Math.random() - 0.5) * ARENA.size;
+      positions[i * 3 + 1] = Math.random() * 10 + 1;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * ARENA.size;
+    }
+    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    const mat = new THREE.PointsMaterial({ color: 0xaa8855, size: 0.3, transparent: true, opacity: 0.6 });
+    this.sandstormParticles = new THREE.Points(geo, mat);
+    this.scene.add(this.sandstormParticles);
+  }
+
   // ========== HELPERS ==========
 
   private getTerrainHeight(x: number, z: number): number {
+    if (this.selectedMap === "desert") {
+      return Math.sin(x * 0.08) * Math.cos(z * 0.06) * 3 + Math.sin(x * 0.15) * 1.5 + Math.cos(z * 0.12) * 2;
+    }
     return Math.sin(x * 0.1) * Math.cos(z * 0.1) * 1.5
       + Math.sin(x * 0.05 + 1) * Math.cos(z * 0.07) * 2;
   }
@@ -4095,6 +4485,10 @@ export class GameEngine {
     if (this.stats.kills > a.maxKills) a.maxKills = this.stats.kills;
     if (this.stats.survivalTime > a.maxSurvivalTime) a.maxSurvivalTime = this.stats.survivalTime;
     if (this.player.level > a.maxLevel) a.maxLevel = this.player.level;
+    // Auto-unlock desert if survived 10min in forest
+    if (this.selectedMap === "forest" && this.stats.survivalTime >= 600 && !this.metaState.unlockedMaps.includes("desert")) {
+      // Condition met - player can now buy desert unlock from map select
+    }
     this.saveMetaState();
     this.onStateChange?.(this.state);
   }
@@ -4213,10 +4607,11 @@ export class GameEngine {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (!parsed.achievements) parsed.achievements = { maxKills: 0, maxSurvivalTime: 0, maxLevel: 0, totalRuns: parsed.totalRuns || 0 };
+        if (!parsed.unlockedMaps) parsed.unlockedMaps = ["forest"];
         return parsed;
       }
     } catch {}
-    return { gold: 0, permanentUpgrades: {}, unlockedCharacters: ["knight"], totalRuns: 0, achievements: { maxKills: 0, maxSurvivalTime: 0, maxLevel: 0, totalRuns: 0 } };
+    return { gold: 0, permanentUpgrades: {}, unlockedCharacters: ["knight"], unlockedMaps: ["forest"], totalRuns: 0, achievements: { maxKills: 0, maxSurvivalTime: 0, maxLevel: 0, totalRuns: 0 } };
   }
 
   private saveMetaState() {
@@ -4252,6 +4647,21 @@ export class GameEngine {
     this.metaState.unlockedCharacters.push(id);
     this.saveMetaState();
     return true;
+  }
+
+  unlockMap(id: string): boolean {
+    if (this.metaState.unlockedMaps.includes(id)) return false;
+    const mapDef = MAPS[id as keyof typeof MAPS];
+    if (!mapDef) return false;
+    if (this.metaState.gold < mapDef.unlockCost) return false;
+    this.metaState.gold -= mapDef.unlockCost;
+    this.metaState.unlockedMaps.push(id);
+    this.saveMetaState();
+    return true;
+  }
+
+  isDesertUnlockConditionMet(): boolean {
+    return this.metaState.achievements.maxSurvivalTime >= 600; // 10 minutes
   }
 
   // Settings

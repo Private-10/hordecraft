@@ -157,6 +157,18 @@ const translations = {
   "enemy.shaman": { tr: "Şaman", en: "Shaman" },
   "enemy.elite": { tr: "Elit", en: "Elite" },
 
+  // Maps
+  "map.forest": { tr: "Büyülü Orman", en: "Enchanted Forest" },
+  "map.forest_desc": { tr: "Huzurlu orman arenası", en: "Peaceful forest arena" },
+  "map.desert": { tr: "Kavurucu Çöl", en: "Scorched Desert" },
+  "map.desert_desc": { tr: "Kum tepeleri ve fırtınalar", en: "Sand dunes and storms" },
+  "map.select": { tr: "Harita değiştir", en: "Change map" },
+  "map.locked": { tr: "🔒 Kilitli", en: "🔒 Locked" },
+  "hud.sandstorm": { tr: "⚠️ KUM FIRTINASI!", en: "⚠️ SANDSTORM!" },
+  "chest.xp": { tr: "+{0} XP!", en: "+{0} XP!" },
+  "chest.gold": { tr: "+{0} Gold!", en: "+{0} Gold!" },
+  "chest.hp": { tr: "+{0} HP!", en: "+{0} HP!" },
+
   // Chat
   "chat.title": { tr: "💬 SOHBET", en: "💬 CHAT" },
   "chat.placeholder": { tr: "Mesaj yaz...", en: "Type a message..." },

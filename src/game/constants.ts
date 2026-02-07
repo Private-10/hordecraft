@@ -137,6 +137,35 @@ export const SCORE = {
   bossPoints: 500,
 };
 
+export const MAPS = {
+  forest: {
+    name: "Enchanted Forest",
+    nametr: "Büyülü Orman",
+    icon: "🌲",
+    unlockCondition: null as string | null,
+    unlockConditiontr: null as string | null,
+    unlockCost: 0,
+    arenaSize: 120,
+    groundColor: 0x1a2a1a,
+    groundLineColor: 0x2a3a2a,
+    skyColor: 0x0a0a1a,
+    fogColor: 0x0a0a1a,
+  },
+  desert: {
+    name: "Scorched Desert",
+    nametr: "Kavurucu Çöl",
+    icon: "🏜️",
+    unlockCondition: "Survive 10 min in Forest",
+    unlockConditiontr: "Orman'da 10 dk hayatta kal",
+    unlockCost: 300,
+    arenaSize: 120,
+    groundColor: 0x3a2a1a,
+    groundLineColor: 0x4a3a2a,
+    skyColor: 0x1a0a00,
+    fogColor: 0x2a1500,
+  },
+};
+
 export const COLORS = {
   ground: 0x1a2a1a,
   groundLine: 0x2a3a2a,

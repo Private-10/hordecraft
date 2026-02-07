@@ -5,6 +5,7 @@ import { GameEngine, Audio } from "@/game/engine";
 import type { GameState, UpgradeOption } from "@/game/types";
 import { t, getLang, setLang, type Lang } from "@/game/i18n";
 import { CHARACTERS, type CharacterDef } from "@/game/characters";
+import { MAPS } from "@/game/constants";
 import type { MetaState } from "@/game/types";
 import { getActiveNickname, registerNickname, claimNickname, isNicknameClaimed, logoutNickname } from "@/game/nickname";
 import { collection, addDoc, query, orderBy, limit as fbLimit, onSnapshot } from "firebase/firestore";
@@ -48,6 +49,10 @@ export default function PlayPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [invertY, setInvertY] = useState(false);
   const [metaState, setMetaState] = useState<MetaState | null>(null);
+  const [selectedMap, setSelectedMap] = useState("forest");
+  const [showMapSelect, setShowMapSelect] = useState(false);
+  const [sandstormWarning, setSandstormWarning] = useState(false);
+  const [sandstormActive, setSandstormActive] = useState(false);
   const [showChat, setShowChat] = useState(true);
   const [chatMessages, setChatMessages] = useState<{nickname:string;text:string;color:string}[]>([]);
   const [chatInput, setChatInput] = useState("");
@@ -161,7 +166,7 @@ export default function PlayPage() {
               level: engine.player.level,
               maxCombo: engine.stats.maxCombo,
               character: selectedChar,
-              map: "forest",
+              map: selectedMap,
             });
             setScoreSubmitted(true);
           } catch (err) {
@@ -202,6 +207,10 @@ export default function PlayPage() {
 
     engine.onBossSpawn = () => {};
     engine.onBossDeath = () => { setBossInfo(null); };
+    engine.onSandstorm = (warning: boolean, active: boolean) => {
+      setSandstormWarning(warning);
+      setSandstormActive(active);
+    };
 
     const origStatsUpdate = engine.onStatsUpdate;
     engine.onStatsUpdate = () => {
@@ -261,11 +270,13 @@ export default function PlayPage() {
     try {
       setMaxDps(0);
       setDps(0);
-      engineRef.current?.startGame(selectedChar);
+      setSandstormWarning(false);
+      setSandstormActive(false);
+      engineRef.current?.startGame(selectedChar, selectedMap);
     } catch (e) {
       console.error("startGame failed:", e);
     }
-  }, [selectedChar]);
+  }, [selectedChar, selectedMap]);
 
   const selectUpgrade = useCallback((option: UpgradeOption) => {
     Audio.playSelect();
@@ -345,6 +356,13 @@ export default function PlayPage() {
     if (!engineRef.current) return;
     Audio.playSelect();
     engineRef.current.unlockCharacter(id);
+    refreshMeta();
+  }, [refreshMeta]);
+
+  const handleUnlockMap = useCallback((id: string) => {
+    if (!engineRef.current) return;
+    Audio.playSelect();
+    engineRef.current.unlockMap(id);
     refreshMeta();
   }, [refreshMeta]);
 
@@ -462,6 +480,60 @@ export default function PlayPage() {
                                 onClick={(e) => { e.stopPropagation(); handleUnlockCharacter(ch.id); }}
                               >
                                 {t("unlock.btn")} ({ch.unlock.unlockCost}G)
+                              </button>
+                            ) : (
+                              <span className="char-card-lock" style={{ color: "rgba(255,100,100,0.5)", fontSize: 9 }}>
+                                {t("unlock.condition_not_met")}
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Map Selection */}
+            <div className="menu-section">
+              <button onClick={() => setShowMapSelect(!showMapSelect)} className="char-toggle-btn">
+                <span className="char-toggle-icon">{MAPS[selectedMap as keyof typeof MAPS]?.icon || "🌲"}</span>
+                <div className="char-toggle-info">
+                  <span className="char-toggle-name">{lang === "tr" ? (MAPS[selectedMap as keyof typeof MAPS]?.nametr || "Büyülü Orman") : (MAPS[selectedMap as keyof typeof MAPS]?.name || "Enchanted Forest")}</span>
+                  <span className="char-toggle-hint">{t("map.select")}</span>
+                </div>
+                <span className="char-toggle-arrow">{showMapSelect ? "▲" : "▼"}</span>
+              </button>
+
+              {showMapSelect && (
+                <div className="char-grid">
+                  {(Object.entries(MAPS) as [string, typeof MAPS.forest][]).map(([mapId, mapDef]) => {
+                    const unlocked = metaState?.unlockedMaps?.includes(mapId) ?? mapId === "forest";
+                    const condMet = mapId === "desert" ? engineRef.current?.isDesertUnlockConditionMet() ?? false : true;
+                    const canAfford = (metaState?.gold ?? 0) >= mapDef.unlockCost;
+                    const descKey = `map.${mapId}_desc` as "map.forest_desc" | "map.desert_desc";
+                    return (
+                      <button
+                        key={mapId}
+                        onClick={() => { if (unlocked) { setSelectedMap(mapId); Audio.playSelect(); } }}
+                        className={`char-card ${selectedMap === mapId && unlocked ? "selected" : ""} ${!unlocked ? "locked" : ""}`}
+                        style={{ cursor: unlocked ? "pointer" : "default" }}
+                      >
+                        <span className="char-card-icon">{unlocked ? mapDef.icon : "🔒"}</span>
+                        <span className="char-card-name">{lang === "tr" ? mapDef.nametr : mapDef.name}</span>
+                        {unlocked ? (
+                          <span className="char-card-desc">{t(descKey)}</span>
+                        ) : (
+                          <>
+                            <span className="char-card-lock">{lang === "tr" ? mapDef.unlockConditiontr : mapDef.unlockCondition}</span>
+                            {condMet ? (
+                              <button
+                                className="char-unlock-btn"
+                                disabled={!canAfford}
+                                onClick={(e) => { e.stopPropagation(); handleUnlockMap(mapId); }}
+                              >
+                                🔓 {mapDef.unlockCost}G
                               </button>
                             ) : (
                               <span className="char-card-lock" style={{ color: "rgba(255,100,100,0.5)", fontSize: 9 }}>
@@ -797,6 +869,22 @@ export default function PlayPage() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Sandstorm Warning */}
+      {(sandstormWarning || sandstormActive) && gameState === "playing" && (
+        <div style={{
+          position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
+          zIndex: 25, textAlign: "center", pointerEvents: "none",
+        }}>
+          <div style={{
+            fontSize: 32, fontWeight: 900, color: sandstormActive ? "#ff8844" : "#ffaa44",
+            textShadow: "0 0 20px rgba(255,136,0,0.8), 0 0 40px rgba(255,100,0,0.4)",
+            animation: "pulse 0.5s ease-in-out infinite alternate",
+          }}>
+            {t("hud.sandstorm")}
+          </div>
         </div>
       )}
 
