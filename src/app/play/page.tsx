@@ -246,10 +246,12 @@ export default function PlayPage() {
     <>
       <canvas
         ref={canvasRef}
-        style={{ width: "100vw", height: "100vh", touchAction: "none" }}
+        style={{
+          width: "100vw", height: "100vh", touchAction: "none",
+          pointerEvents: gameState === "menu" ? "none" : "auto",
+        }}
         onContextMenu={(e) => e.preventDefault()}
         onMouseDown={(e) => {
-          // Only prevent default on desktop to avoid blocking mobile touch
           if (!isMobileDevice) e.preventDefault();
         }}
       />
