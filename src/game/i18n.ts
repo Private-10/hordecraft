@@ -59,6 +59,17 @@ const translations = {
   "upgrade.regen_desc": { tr: "+1 HP/sn", en: "+1 HP/sec" },
 
   // Landing
+  "play": { tr: "OYNA", en: "PLAY" },
+  "leaderboard": { tr: "SIRALAMA", en: "LEADERBOARD" },
+  "survival_description": { tr: "3D Roguelike Hayatta Kalma Oyunu - Düşman hordalarına karşı hayatta kal ve güçlen!", en: "3D Roguelike Survival Game - Survive against enemy hordes and grow stronger!" },
+  "characters": { tr: "Karakterler", en: "Characters" },
+  "unique_characters": { tr: "benzersiz karakter", en: "unique characters" },
+  "weapons": { tr: "Silahlar", en: "Weapons" },
+  "powerful_weapons": { tr: "güçlü silah", en: "powerful weapons" },
+  "bosses": { tr: "Boss'lar", en: "Bosses" },
+  "epic_bosses": { tr: "epik boss", en: "epic bosses" },
+  "game_description": { tr: "Düşman dalgalarına karşı hayatta kal · Güçlen · Sıralamada yarış", en: "Survive enemy hordes · Power up · Compete on leaderboard" },
+  "controls_info": { tr: "WASD + Mouse · Tarayıcı tabanlı · Ücretsiz", en: "WASD + Mouse · Browser based · Free" },
   "landing.play": { tr: "🎮 OYNA", en: "🎮 PLAY" },
   "landing.desc1": { tr: "Düşman dalgalarına karşı hayatta kal · Güçlen · Sıralamada yarış", en: "Survive enemy hordes · Power up · Compete on leaderboard" },
   "landing.desc2": { tr: "WASD + Mouse · Tarayıcı tabanlı · Ücretsiz", en: "WASD + Mouse · Browser based · Free" },
@@ -111,8 +122,21 @@ export function getLang(): Lang {
   return currentLang;
 }
 
-export function t(key: TranslationKey): string {
+export function t(key: TranslationKey): string;
+export function t(lang: Lang, key: TranslationKey): string;
+export function t(keyOrLang: TranslationKey | Lang, maybeKey?: TranslationKey): string {
+  let key: TranslationKey;
+  let lang: Lang;
+  
+  if (maybeKey) {
+    lang = keyOrLang as Lang;
+    key = maybeKey;
+  } else {
+    lang = currentLang;
+    key = keyOrLang as TranslationKey;
+  }
+  
   const entry = translations[key];
   if (!entry) return key;
-  return entry[currentLang] || entry.en || key;
+  return entry[lang] || entry.en || key;
 }

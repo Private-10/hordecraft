@@ -30,6 +30,16 @@ export class GameEngine {
   private cameraYaw = 0;
   private cameraPitch = 0.6;
 
+  // Screen shake
+  private shakeIntensity = 0;
+  private shakeTimer = 0;
+
+  // Damage numbers
+  private damageNumbers: { position: THREE.Vector3; text: string; timer: number; mesh: THREE.Sprite }[] = [];
+
+  // Particles
+  private particles: { mesh: THREE.Mesh; velocity: THREE.Vector3; life: number; maxLife: number }[] = [];
+
   // Entities
   private enemies: EnemyInstance[] = [];
   private xpGems: XPGem[] = [];
@@ -1228,7 +1238,18 @@ export class GameEngine {
     this.gameTime += cappedDt;
     this.stats.survivalTime = this.gameTime;
 
+    // Update screen shake
+    if (this.shakeTimer > 0) {
+      this.shakeTimer -= cappedDt;
+      if (this.shakeTimer <= 0) {
+        this.shakeTimer = 0;
+        this.shakeIntensity = 0;
+      }
+    }
+
     this.updatePlayer(cappedDt);
+    this.updateDamageNumbers(cappedDt);
+    this.updateParticles(cappedDt);
     this.updateCamera();
     this.updateEnemies(cappedDt);
     this.updateWeapons(cappedDt);
@@ -1495,13 +1516,28 @@ export class GameEngine {
     }
   }
 
+  // ========== SCREEN SHAKE ==========
+
+  private triggerShake(intensity: number, duration: number) {
+    this.shakeIntensity = intensity;
+    this.shakeTimer = duration;
+  }
+
   private updateCamera() {
     const p = this.player.position;
     const dist = CAMERA.distance;
 
-    const camX = p.x + Math.sin(this.cameraYaw) * Math.cos(this.cameraPitch) * dist;
-    const camY = p.y + Math.sin(this.cameraPitch) * dist;
-    const camZ = p.z + Math.cos(this.cameraYaw) * Math.cos(this.cameraPitch) * dist;
+    let camX = p.x + Math.sin(this.cameraYaw) * Math.cos(this.cameraPitch) * dist;
+    let camY = p.y + Math.sin(this.cameraPitch) * dist;
+    let camZ = p.z + Math.cos(this.cameraYaw) * Math.cos(this.cameraPitch) * dist;
+
+    // Apply screen shake
+    if (this.shakeTimer > 0) {
+      const shakeAmount = this.shakeIntensity * (this.shakeTimer / 0.3); // Normalized by max duration
+      camX += (Math.random() - 0.5) * shakeAmount * 2;
+      camY += (Math.random() - 0.5) * shakeAmount * 2;
+      camZ += (Math.random() - 0.5) * shakeAmount * 2;
+    }
 
     this.camera.position.lerp(new THREE.Vector3(camX, camY, camZ), CAMERA.smoothing);
     this.camera.lookAt(p.x, p.y + 1, p.z);
@@ -1604,6 +1640,7 @@ export class GameEngine {
       isAlive: true,
       hitTimer: 0,
       xpValue: stats.xp,
+      color: stats.color,
     });
   }
 
@@ -1697,6 +1734,12 @@ export class GameEngine {
   private killEnemy(enemy: EnemyInstance) {
     enemy.isAlive = false;
     this.stats.kills++;
+
+    // Screen shake on enemy death
+    this.triggerShake(0.05, 0.05);
+
+    // Create death particles
+    this.createDeathParticles(enemy.position, enemy.color);
 
     // Boss death
     if (this.activeBoss && this.activeBoss.id === enemy.id) {
@@ -1806,6 +1849,7 @@ export class GameEngine {
       isAlive: true,
       hitTimer: 0,
       xpValue: stats.xp,
+      color: stats.color,
     };
 
     this.enemies.push(boss);
@@ -1816,6 +1860,9 @@ export class GameEngine {
   }
 
   private bossSlam(boss: EnemyInstance, radius: number, damage: number) {
+    // Strong screen shake for boss slam
+    this.triggerShake(0.8, 0.3);
+
     // AoE damage around boss
     const dist = boss.position.distanceTo(this.player.position);
     if (dist < radius && this.player.iFrameTimer <= 0) {
@@ -2167,14 +2214,26 @@ export class GameEngine {
   private damageEnemy(enemy: EnemyInstance, damage: number, silent = false) {
     // Critical hit
     let finalDamage = damage;
+    let isCrit = false;
     if (Math.random() < this.player.critChance) {
       finalDamage *= this.player.critMultiplier;
+      isCrit = true;
     }
 
     enemy.hp -= finalDamage;
 
     // DPS tracking
     this.damageLog.push({ time: this.gameTime, damage: finalDamage });
+
+    // Screen shake on damage
+    if (!silent) {
+      this.triggerShake(0.3, 0.15);
+    }
+
+    // Create damage number popup
+    if (!silent) {
+      this.createDamageNumber(enemy.position, finalDamage, isCrit);
+    }
 
     // Throttle hit sounds — max 1 per 80ms
     if (!silent) {
@@ -2214,6 +2273,188 @@ export class GameEngine {
     if (this.player.hp <= 0) {
       this.player.hp = 0;
       this.gameOver();
+    }
+  }
+
+  // ========== DAMAGE NUMBERS ==========
+
+  private createDamageNumber(position: THREE.Vector3, damage: number, isCrit: boolean) {
+    // Create canvas texture for damage number
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d')!;
+    canvas.width = 128;
+    canvas.height = 64;
+    
+    const fontSize = isCrit ? 32 : 24;
+    const color = isCrit ? '#FFD700' : '#FFFFFF';
+    
+    context.font = `bold ${fontSize}px Arial`;
+    context.fillStyle = color;
+    context.strokeStyle = '#000000';
+    context.lineWidth = 2;
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    
+    const text = Math.round(damage).toString();
+    context.strokeText(text, 64, 32);
+    context.fillText(text, 64, 32);
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+    const sprite = new THREE.Sprite(material);
+    
+    const scale = isCrit ? 0.8 : 0.6;
+    sprite.scale.set(scale, scale * 0.5, 1);
+    sprite.position.copy(position).add(new THREE.Vector3(0, 1, 0));
+    
+    this.scene.add(sprite);
+    
+    this.damageNumbers.push({
+      position: sprite.position.clone(),
+      text,
+      timer: 0,
+      mesh: sprite
+    });
+  }
+
+  private updateDamageNumbers(dt: number) {
+    for (let i = this.damageNumbers.length - 1; i >= 0; i--) {
+      const dmg = this.damageNumbers[i];
+      dmg.timer += dt;
+      
+      // Float upward
+      dmg.mesh.position.y += dt * 2;
+      
+      // Fade out
+      const material = dmg.mesh.material as THREE.SpriteMaterial;
+      material.opacity = 1 - (dmg.timer / 0.8);
+      
+      // Remove after 0.8 seconds
+      if (dmg.timer >= 0.8) {
+        this.scene.remove(dmg.mesh);
+        this.damageNumbers.splice(i, 1);
+      }
+    }
+  }
+
+  // ========== PARTICLES ==========
+
+  private createDeathParticles(position: THREE.Vector3, color: number) {
+    const particleCount = 5 + Math.floor(Math.random() * 4); // 5-8 particles
+    
+    for (let i = 0; i < particleCount; i++) {
+      const geometry = Math.random() > 0.5 
+        ? new THREE.BoxGeometry(0.15, 0.15, 0.15)
+        : new THREE.OctahedronGeometry(0.1, 0);
+      
+      const material = new THREE.MeshBasicMaterial({ color });
+      const mesh = new THREE.Mesh(geometry, material);
+      
+      mesh.position.copy(position).add(new THREE.Vector3(
+        (Math.random() - 0.5) * 0.5,
+        Math.random() * 0.3,
+        (Math.random() - 0.5) * 0.5
+      ));
+      
+      const velocity = new THREE.Vector3(
+        (Math.random() - 0.5) * 4,
+        Math.random() * 3 + 1,
+        (Math.random() - 0.5) * 4
+      );
+      
+      this.scene.add(mesh);
+      this.particles.push({
+        mesh,
+        velocity,
+        life: 0,
+        maxLife: 1.0 + Math.random() * 0.5
+      });
+    }
+  }
+
+  private createXPParticles(position: THREE.Vector3) {
+    for (let i = 0; i < 3; i++) {
+      const geometry = new THREE.SphereGeometry(0.08, 8, 6);
+      const material = new THREE.MeshBasicMaterial({ 
+        color: 0x00FF00,
+        transparent: true 
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      
+      mesh.position.copy(position).add(new THREE.Vector3(
+        (Math.random() - 0.5) * 0.3,
+        0.2,
+        (Math.random() - 0.5) * 0.3
+      ));
+      
+      const velocity = new THREE.Vector3(
+        (Math.random() - 0.5) * 2,
+        Math.random() * 2 + 1,
+        (Math.random() - 0.5) * 2
+      );
+      
+      this.scene.add(mesh);
+      this.particles.push({
+        mesh,
+        velocity,
+        life: 0,
+        maxLife: 0.8
+      });
+    }
+  }
+
+  private createLevelUpParticles(position: THREE.Vector3) {
+    for (let i = 0; i < 15; i++) {
+      const geometry = new THREE.SphereGeometry(0.1, 8, 6);
+      const material = new THREE.MeshBasicMaterial({ 
+        color: 0xFFD700,
+        transparent: true 
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      
+      const angle = (i / 15) * Math.PI * 2;
+      const radius = 1.5 + Math.random() * 0.5;
+      
+      mesh.position.copy(position).add(new THREE.Vector3(
+        Math.cos(angle) * radius,
+        Math.random() * 0.5,
+        Math.sin(angle) * radius
+      ));
+      
+      const velocity = new THREE.Vector3(
+        Math.cos(angle) * (3 + Math.random() * 2),
+        Math.random() * 3 + 2,
+        Math.sin(angle) * (3 + Math.random() * 2)
+      );
+      
+      this.scene.add(mesh);
+      this.particles.push({
+        mesh,
+        velocity,
+        life: 0,
+        maxLife: 1.2 + Math.random() * 0.3
+      });
+    }
+  }
+
+  private updateParticles(dt: number) {
+    for (let i = this.particles.length - 1; i >= 0; i--) {
+      const particle = this.particles[i];
+      particle.life += dt;
+      
+      // Apply gravity and update position
+      particle.velocity.y -= 9.8 * dt;
+      particle.mesh.position.add(particle.velocity.clone().multiplyScalar(dt));
+      
+      // Fade out
+      const material = particle.mesh.material as THREE.MeshBasicMaterial;
+      material.opacity = 1 - (particle.life / particle.maxLife);
+      
+      // Remove when life exceeded
+      if (particle.life >= particle.maxLife) {
+        this.scene.remove(particle.mesh);
+        this.particles.splice(i, 1);
+      }
     }
   }
 
@@ -2262,6 +2503,7 @@ export class GameEngine {
       if (dist < 0.8) {
         gem.isAlive = false;
         this.player.xp += gem.value;
+        this.createXPParticles(gem.position);
         Audio.playXP();
         this.checkLevelUp();
       }
@@ -2279,6 +2521,7 @@ export class GameEngine {
       if (document.pointerLockElement) {
         document.exitPointerLock();
       }
+      this.createLevelUpParticles(this.player.position);
       this.onStateChange?.(this.state);
       this.onLevelUp?.(this.generateUpgradeOptions());
       Audio.playLevelUp();

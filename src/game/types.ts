@@ -40,6 +40,7 @@ export interface EnemyInstance {
   isAlive: boolean;
   hitTimer: number;
   xpValue: number;
+  color: number;
 }
 
 export interface XPGem {
