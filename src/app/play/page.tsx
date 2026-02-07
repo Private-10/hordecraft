@@ -29,6 +29,7 @@ export default function PlayPage() {
   const [nickMode, setNickMode] = useState<"idle" | "register" | "claim">("idle");
   const [nickLoggedIn, setNickLoggedIn] = useState(false);
   const [nickClaimed, setNickClaimed] = useState(false);
+  const [bossInfo, setBossInfo] = useState<{ name: string; hp: number; maxHp: number } | null>(null);
   const [nickChecking, setNickChecking] = useState(false);
   const [nickBusy, setNickBusy] = useState(false);
   const [scoreSubmitted, setScoreSubmitted] = useState(false);
@@ -153,6 +154,32 @@ export default function PlayPage() {
     engine.onDamage = () => {
       setDamageFlash(true);
       setTimeout(() => setDamageFlash(false), 150);
+    };
+
+    engine.onBossSpawn = () => {
+      // Boss HP updated via onStatsUpdate
+    };
+
+    engine.onBossDeath = () => {
+      setBossInfo(null);
+    };
+
+    // Override onStatsUpdate to include boss info
+    const origStatsUpdate = engine.onStatsUpdate;
+    engine.onStatsUpdate = () => {
+      origStatsUpdate?.();
+      // Check active boss
+      const boss = (engine as unknown as { activeBoss: { type: string; hp: number; maxHp: number; isAlive: boolean } | null }).activeBoss;
+      if (boss && boss.isAlive) {
+        const names: Record<string, string> = {
+          stoneGolem: lang === "tr" ? "⛰️ Taş Golem" : "⛰️ Stone Golem",
+          fireWraith: lang === "tr" ? "🔥 Ateş Hayaleti" : "🔥 Fire Wraith",
+          shadowLord: lang === "tr" ? "👿 Gölge Lordu" : "👿 Shadow Lord",
+        };
+        setBossInfo({ name: names[boss.type] || boss.type, hp: boss.hp, maxHp: boss.maxHp });
+      } else {
+        setBossInfo(null);
+      }
     };
 
     let lastTime = performance.now();
@@ -490,6 +517,39 @@ export default function PlayPage() {
           <div className="controls-hint">
             {t("hud.controls_hint")}
           </div>
+
+          {/* Boss HP Bar */}
+          {bossInfo && (
+            <div style={{
+              position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)",
+              width: 400, maxWidth: "90vw", zIndex: 20,
+            }}>
+              <div style={{
+                textAlign: "center", fontSize: 16, fontWeight: 900, color: "#ff4444",
+                textShadow: "0 0 10px rgba(255,0,0,0.5)", marginBottom: 4,
+              }}>
+                {bossInfo.name}
+              </div>
+              <div style={{
+                width: "100%", height: 14, background: "rgba(0,0,0,0.7)",
+                borderRadius: 7, border: "1px solid rgba(255,0,0,0.4)", overflow: "hidden",
+              }}>
+                <div style={{
+                  width: `${(bossInfo.hp / bossInfo.maxHp) * 100}%`,
+                  height: "100%",
+                  background: "linear-gradient(90deg, #ff0000, #ff4444)",
+                  borderRadius: 7,
+                  transition: "width 0.2s",
+                  boxShadow: "0 0 8px rgba(255,0,0,0.5)",
+                }} />
+              </div>
+              <div style={{
+                textAlign: "center", fontSize: 11, color: "rgba(255,255,255,0.5)", marginTop: 2,
+              }}>
+                {Math.round(bossInfo.hp)} / {Math.round(bossInfo.maxHp)}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { InputManager } from "./input";
 import { MobileInputManager } from "./mobile-input";
-import { PLAYER, CAMERA, ARENA, ENEMIES, WEAPONS, XP_TABLE, SCORE, COLORS } from "./constants";
+import { PLAYER, CAMERA, ARENA, ENEMIES, WEAPONS, XP_TABLE, SCORE, COLORS, BOSSES } from "./constants";
 import { t } from "./i18n";
 import type {
   GameState, PlayerState, EnemyInstance, XPGem, Projectile,
@@ -68,6 +68,18 @@ export class GameEngine {
 
   // Fire trail tracking
   private lastFirePos = new THREE.Vector3();
+
+  // Boss system
+  activeBoss: EnemyInstance | null = null;
+  private bossHpBarMesh: THREE.Mesh | null = null;
+  private bossHpBarBg: THREE.Mesh | null = null;
+  private bossSpawned: Set<string> = new Set();
+  private bossSlamTimers: Map<number, number> = new Map();
+  private bossSlamEffects: { mesh: THREE.Mesh; timer: number }[] = [];
+
+  // Boss callbacks
+  onBossSpawn?: (name: string) => void;
+  onBossDeath?: (name: string) => void;
 
   init(canvas: HTMLCanvasElement) {
     // Renderer
@@ -680,6 +692,126 @@ export class GameEngine {
       g.add(clubHead);
       return g;
     };
+
+    // === BOSS MESH: Stone Golem ===
+    this.enemyMeshFactories.stoneGolem = () => {
+      const g = new THREE.Group();
+      const stoneMat = new THREE.MeshLambertMaterial({ color: 0x888888 });
+      const darkStoneMat = new THREE.MeshLambertMaterial({ color: 0x666666 });
+      const crystalMat = new THREE.MeshBasicMaterial({ color: 0x44ffaa });
+
+      // Legs (thick)
+      const legGeo = new THREE.CapsuleGeometry(0.4, 0.8, 4, 6);
+      const ll = new THREE.Mesh(legGeo, darkStoneMat); ll.position.set(-0.5, 0.6, 0); g.add(ll);
+      const rl = new THREE.Mesh(legGeo, darkStoneMat); rl.position.set(0.5, 0.6, 0); g.add(rl);
+
+      // Massive body
+      const body = new THREE.Mesh(new THREE.CapsuleGeometry(1.0, 1.2, 6, 8), stoneMat);
+      body.position.y = 1.8; body.castShadow = true; g.add(body);
+
+      // Shoulder boulders
+      const shoulderGeo = new THREE.DodecahedronGeometry(0.5, 0);
+      const ls = new THREE.Mesh(shoulderGeo, darkStoneMat); ls.position.set(-1.2, 2.2, 0); g.add(ls);
+      const rs = new THREE.Mesh(shoulderGeo, darkStoneMat); rs.position.set(1.2, 2.2, 0); g.add(rs);
+
+      // Head (angular)
+      const head = new THREE.Mesh(new THREE.DodecahedronGeometry(0.55, 0), stoneMat);
+      head.position.y = 3.0; g.add(head);
+
+      // Glowing eyes
+      const eyeGeo = new THREE.SphereGeometry(0.1, 4, 4);
+      const le = new THREE.Mesh(eyeGeo, crystalMat); le.position.set(-0.2, 3.05, 0.4); g.add(le);
+      const re = new THREE.Mesh(eyeGeo, crystalMat); re.position.set(0.2, 3.05, 0.4); g.add(re);
+
+      // Arms (big stone fists)
+      const armGeo = new THREE.CapsuleGeometry(0.3, 1.0, 4, 5);
+      const la = new THREE.Mesh(armGeo, stoneMat); la.position.set(-1.3, 1.4, 0); la.rotation.z = 0.3; g.add(la);
+      const ra = new THREE.Mesh(armGeo, stoneMat); ra.position.set(1.3, 1.4, 0); ra.rotation.z = -0.3; g.add(ra);
+      const fistGeo = new THREE.DodecahedronGeometry(0.35, 0);
+      const lf = new THREE.Mesh(fistGeo, darkStoneMat); lf.position.set(-1.5, 0.7, 0); g.add(lf);
+      const rf = new THREE.Mesh(fistGeo, darkStoneMat); rf.position.set(1.5, 0.7, 0); g.add(rf);
+
+      // Glowing crystals on body
+      const c1 = new THREE.Mesh(new THREE.OctahedronGeometry(0.15), crystalMat);
+      c1.position.set(-0.4, 2.5, 0.7); g.add(c1);
+      const c2 = new THREE.Mesh(new THREE.OctahedronGeometry(0.12), crystalMat);
+      c2.position.set(0.3, 2.8, 0.5); g.add(c2);
+      const c3 = new THREE.Mesh(new THREE.OctahedronGeometry(0.1), crystalMat);
+      c3.position.set(0.6, 1.6, 0.6); g.add(c3);
+
+      g.scale.set(1.5, 1.5, 1.5);
+      return g;
+    };
+
+    // === BOSS MESH: Fire Wraith ===
+    this.enemyMeshFactories.fireWraith = () => {
+      const g = new THREE.Group();
+      const fireMat = new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.8 });
+      const coreMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+      const darkMat = new THREE.MeshLambertMaterial({ color: 0x220000 });
+
+      // Floating body (no legs)
+      const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.7, 1.5, 6, 8), darkMat);
+      body.position.y = 2.0; g.add(body);
+      // Fire aura
+      const aura = new THREE.Mesh(new THREE.SphereGeometry(1.2, 8, 6), fireMat);
+      aura.position.y = 2.0; g.add(aura);
+      // Head
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.45, 6, 5), darkMat);
+      head.position.y = 3.2; g.add(head);
+      // Eyes
+      const eyeGeo = new THREE.SphereGeometry(0.08, 4, 4);
+      const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+      const le = new THREE.Mesh(eyeGeo, eyeMat); le.position.set(-0.15, 3.25, 0.35); g.add(le);
+      const re = new THREE.Mesh(eyeGeo, eyeMat); re.position.set(0.15, 3.25, 0.35); g.add(re);
+      // Fire core
+      const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.3), coreMat);
+      core.position.y = 2.0; g.add(core);
+      // Floating arms
+      const armGeo = new THREE.ConeGeometry(0.2, 1.2, 5);
+      const la = new THREE.Mesh(armGeo, fireMat); la.position.set(-1.0, 2.0, 0); la.rotation.z = 0.8; g.add(la);
+      const ra = new THREE.Mesh(armGeo, fireMat); ra.position.set(1.0, 2.0, 0); ra.rotation.z = -0.8; g.add(ra);
+
+      g.scale.set(1.3, 1.3, 1.3);
+      return g;
+    };
+
+    // === BOSS MESH: Shadow Lord ===
+    this.enemyMeshFactories.shadowLord = () => {
+      const g = new THREE.Group();
+      const shadowMat = new THREE.MeshLambertMaterial({ color: 0x220033 });
+      const purpleMat = new THREE.MeshBasicMaterial({ color: 0xaa00ff, transparent: true, opacity: 0.6 });
+      const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff00ff });
+
+      // Robe body
+      const body = new THREE.Mesh(new THREE.ConeGeometry(1.0, 3.0, 8), shadowMat);
+      body.position.y = 1.5; g.add(body);
+      // Aura
+      const aura = new THREE.Mesh(new THREE.SphereGeometry(1.3, 8, 6), purpleMat);
+      aura.position.y = 2.0; g.add(aura);
+      // Head
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.4, 6, 5), shadowMat);
+      head.position.y = 3.3; g.add(head);
+      // Crown
+      for (let i = 0; i < 5; i++) {
+        const spike = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.3, 4), eyeMat);
+        const a = (i / 5) * Math.PI * 2;
+        spike.position.set(Math.cos(a) * 0.3, 3.65, Math.sin(a) * 0.3);
+        g.add(spike);
+      }
+      // Eyes
+      const eyeGeo = new THREE.SphereGeometry(0.1, 4, 4);
+      const le = new THREE.Mesh(eyeGeo, eyeMat); le.position.set(-0.15, 3.35, 0.3); g.add(le);
+      const re = new THREE.Mesh(eyeGeo, eyeMat); re.position.set(0.15, 3.35, 0.3); g.add(re);
+      // Staff
+      const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 3, 5), shadowMat);
+      staff.position.set(0.8, 1.5, 0); g.add(staff);
+      const orb = new THREE.Mesh(new THREE.SphereGeometry(0.2, 6, 6), eyeMat);
+      orb.position.set(0.8, 3.0, 0); g.add(orb);
+
+      g.scale.set(1.4, 1.4, 1.4);
+      return g;
+    };
   }
 
   private createDefaultPlayer(): PlayerState {
@@ -737,6 +869,11 @@ export class GameEngine {
     this.passiveUpgrades = {};
     this.orbitAngle = 0;
     this.lastFirePos.set(0, 0, 0);
+    this.activeBoss = null;
+    this.bossSpawned.clear();
+    this.bossSlamTimers.clear();
+    this.bossSlamEffects.forEach(e => { if (e.mesh.parent) this.scene.remove(e.mesh); });
+    this.bossSlamEffects = [];
 
     // Clear all entities
     this.enemies.forEach(e => { if (e.mesh.parent) this.scene.remove(e.mesh); });
@@ -786,6 +923,7 @@ export class GameEngine {
     this.updateFireSegments(cappedDt);
     this.updateXPGems(cappedDt);
     this.updateSpawning(cappedDt);
+    this.updateBoss(cappedDt);
     this.updateCombo(cappedDt);
     this.updateScore();
     this.updateHPRegen(cappedDt);
@@ -1234,6 +1372,14 @@ export class GameEngine {
     enemy.isAlive = false;
     this.stats.kills++;
 
+    // Boss death
+    if (this.activeBoss && this.activeBoss.id === enemy.id) {
+      this.stats.bossKills++;
+      this.onBossDeath?.(enemy.type);
+      this.activeBoss = null;
+      this.bossSlamTimers.delete(enemy.id);
+    }
+
     // Combo
     this.stats.currentCombo++;
     this.stats.comboTimer = 3;
@@ -1246,6 +1392,121 @@ export class GameEngine {
 
     // Spawn XP gem
     this.spawnXPGem(enemy.position.clone(), enemy.xpValue);
+  }
+
+  // ========== BOSS SYSTEM ==========
+
+  private updateBoss(dt: number) {
+    const minute = this.gameTime / 60;
+
+    // Check boss spawns
+    for (const [type, cfg] of Object.entries(BOSSES)) {
+      if (!this.bossSpawned.has(type) && minute >= cfg.spawnMinute && !this.activeBoss) {
+        this.spawnBoss(type);
+        break;
+      }
+    }
+
+    // Boss slam attacks
+    if (this.activeBoss && this.activeBoss.isAlive) {
+      const bossType = this.activeBoss.type as keyof typeof BOSSES;
+      const cfg = BOSSES[bossType];
+      if (cfg) {
+        let timer = this.bossSlamTimers.get(this.activeBoss.id) || cfg.slamInterval;
+        timer -= dt;
+        if (timer <= 0) {
+          this.bossSlam(this.activeBoss, cfg.slamRadius, cfg.slamDamage);
+          timer = cfg.slamInterval;
+        }
+        this.bossSlamTimers.set(this.activeBoss.id, timer);
+      }
+    }
+
+    // Update slam visual effects
+    for (let i = this.bossSlamEffects.length - 1; i >= 0; i--) {
+      const e = this.bossSlamEffects[i];
+      e.timer -= dt;
+      if (e.timer <= 0) {
+        this.scene.remove(e.mesh);
+        this.bossSlamEffects.splice(i, 1);
+      } else {
+        // Expand and fade
+        const progress = 1 - e.timer / 0.6;
+        e.mesh.scale.set(1 + progress * 2, 1, 1 + progress * 2);
+        (e.mesh.material as THREE.MeshBasicMaterial).opacity = (1 - progress) * 0.5;
+      }
+    }
+  }
+
+  private spawnBoss(type: string) {
+    this.bossSpawned.add(type);
+
+    // Spawn in front of player
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 20;
+    const pos = new THREE.Vector3(
+      this.player.position.x + Math.cos(angle) * dist,
+      0.5,
+      this.player.position.z + Math.sin(angle) * dist,
+    );
+    pos.x = Math.max(-ARENA.halfSize + 5, Math.min(ARENA.halfSize - 5, pos.x));
+    pos.z = Math.max(-ARENA.halfSize + 5, Math.min(ARENA.halfSize - 5, pos.z));
+    pos.y = this.getTerrainHeight(pos.x, pos.z);
+
+    const stats = ENEMIES[type as keyof typeof ENEMIES];
+    if (!stats) return;
+
+    const factory = this.enemyMeshFactories[type];
+    if (!factory) return;
+    const mesh = factory();
+    mesh.position.copy(pos);
+    mesh.castShadow = true;
+    this.scene.add(mesh);
+
+    const minuteScale = 1 + this.gameTime / 60 * 0.15;
+
+    const boss: EnemyInstance = {
+      id: this.nextEnemyId++,
+      type,
+      position: pos,
+      velocity: new THREE.Vector3(),
+      hp: stats.hp * minuteScale,
+      maxHp: stats.hp * minuteScale,
+      damage: stats.damage * (1 + this.gameTime / 120 * 0.1),
+      speed: stats.speed,
+      radius: stats.radius,
+      mesh,
+      isAlive: true,
+      hitTimer: 0,
+      xpValue: stats.xp,
+    };
+
+    this.enemies.push(boss);
+    this.activeBoss = boss;
+    this.bossSlamTimers.set(boss.id, BOSSES[type as keyof typeof BOSSES]?.slamInterval || 4);
+    this.onBossSpawn?.(type);
+  }
+
+  private bossSlam(boss: EnemyInstance, radius: number, damage: number) {
+    // AoE damage around boss
+    const dist = boss.position.distanceTo(this.player.position);
+    if (dist < radius && this.player.iFrameTimer <= 0) {
+      this.damagePlayer(damage);
+    }
+
+    // Visual: expanding ring
+    const ringGeo = new THREE.RingGeometry(0.5, radius, 24);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: boss.type === "fireWraith" ? 0xff4400 : boss.type === "shadowLord" ? 0xaa00ff : 0x44ffaa,
+      transparent: true,
+      opacity: 0.5,
+      side: THREE.DoubleSide,
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(boss.position.x, boss.position.y + 0.1, boss.position.z);
+    this.scene.add(ring);
+    this.bossSlamEffects.push({ mesh: ring, timer: 0.6 });
   }
 
   // ========== WEAPON SYSTEM ==========
