@@ -51,7 +51,16 @@ export default function LeaderboardPage() {
             date: d.date || "",
           });
         });
-        setScores(entries);
+        // Keep only best score per nickname
+        const bestMap = new Map<string, ScoreEntry>();
+        for (const e of entries) {
+          const key = (e.nickname || "Anonymous").toLowerCase();
+          const existing = bestMap.get(key);
+          if (!existing || e.score > existing.score) {
+            bestMap.set(key, e);
+          }
+        }
+        setScores(Array.from(bestMap.values()).sort((a, b) => b.score - a.score));
       } catch (e) {
         console.error("Leaderboard fetch failed:", e);
       }
