@@ -1574,6 +1574,7 @@ export class GameEngine {
     this.updateDPS();
     this.updateScore();
     this.updateHPRegen(cappedDt);
+    this.performanceCleanup();
 
     this.onStatsUpdate?.();
     this.renderer.render(this.scene, this.camera);
@@ -2349,23 +2350,102 @@ export class GameEngine {
     }
   }
 
+  private disposeMesh(obj: THREE.Object3D) {
+    this.scene.remove(obj);
+    obj.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.geometry?.dispose();
+        if (Array.isArray(child.material)) {
+          child.material.forEach(m => m.dispose());
+        } else if (child.material) {
+          child.material.dispose();
+        }
+      } else if (child instanceof THREE.Line) {
+        child.geometry?.dispose();
+        if (child.material instanceof THREE.Material) child.material.dispose();
+      }
+    });
+  }
+
   private cleanupDead() {
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       if (!this.enemies[i].isAlive) {
-        this.scene.remove(this.enemies[i].mesh);
+        this.disposeMesh(this.enemies[i].mesh);
         this.enemies.splice(i, 1);
       }
     }
     for (let i = this.xpGems.length - 1; i >= 0; i--) {
       if (!this.xpGems[i].isAlive) {
-        this.scene.remove(this.xpGems[i].mesh);
+        this.disposeMesh(this.xpGems[i].mesh);
         this.xpGems.splice(i, 1);
       }
     }
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       if (!this.projectiles[i].isAlive) {
-        this.scene.remove(this.projectiles[i].mesh);
+        this.disposeMesh(this.projectiles[i].mesh);
         this.projectiles.splice(i, 1);
+      }
+    }
+  }
+
+  private lastCleanupTime = 0;
+  private performanceCleanup() {
+    // Run every 5 seconds
+    if (this.gameTime - this.lastCleanupTime < 5) return;
+    this.lastCleanupTime = this.gameTime;
+
+    // Cap particles at 100
+    while (this.particles.length > 100) {
+      const p = this.particles.shift()!;
+      this.disposeMesh(p.mesh);
+    }
+
+    // Cap fire segments at 50
+    while (this.fireSegments.length > 50) {
+      const f = this.fireSegments.shift()!;
+      this.disposeMesh(f.mesh as unknown as THREE.Object3D);
+    }
+
+    // Cap XP gems at 200 (remove oldest)
+    while (this.xpGems.length > 200) {
+      const g = this.xpGems.shift()!;
+      this.disposeMesh(g.mesh);
+    }
+
+    // Cap damage numbers at 20
+    while (this.damageNumbers.length > 20) {
+      const d = this.damageNumbers.shift()!;
+      this.disposeMesh(d.mesh);
+    }
+
+    // Cap lightnings at 10
+    while (this.lightnings.length > 10) {
+      const l = this.lightnings.shift()!;
+      this.disposeMesh(l.line);
+    }
+
+    // Cap shockwaves at 10
+    while (this.shockWaves.length > 10) {
+      const s = this.shockWaves.shift()!;
+      this.disposeMesh(s.mesh);
+    }
+
+    // Reduce max enemies more aggressively at late game
+    const maxEnemyHard = Math.min(250, 150 + this.player.level * 3);
+    const bossTypes = new Set(Object.keys(BOSSES));
+    if (this.enemies.length > maxEnemyHard) {
+      const removable = this.enemies
+        .filter(e => e.isAlive && !bossTypes.has(e.type) && e.position.distanceToSquared(this.player.position) > 400)
+        .sort((a, b) => b.position.distanceToSquared(this.player.position) - a.position.distanceToSquared(this.player.position));
+      let toRemove = this.enemies.length - maxEnemyHard;
+      for (const e of removable) {
+        if (toRemove <= 0) break;
+        e.isAlive = false;
+        this.disposeMesh(e.mesh);
+        toRemove--;
+      }
+      for (let i = this.enemies.length - 1; i >= 0; i--) {
+        if (!this.enemies[i].isAlive) this.enemies.splice(i, 1);
       }
     }
   }
@@ -3427,7 +3507,9 @@ export class GameEngine {
   // ========== PARTICLES ==========
 
   private createDeathParticles(position: THREE.Vector3, color: number) {
-    const particleCount = 8 + Math.floor(Math.random() * 5); // 8-12 particles
+    // Reduce particles when many are active to prevent lag
+    if (this.particles.length > 80) return; // skip if too many particles already
+    const particleCount = this.particles.length > 50 ? 2 : 3 + Math.floor(Math.random() * 3); // 3-5 normally, 2 when busy
 
     // Death flash
     const flash = new THREE.Mesh(
@@ -3436,7 +3518,7 @@ export class GameEngine {
     );
     flash.position.copy(position);
     this.scene.add(flash);
-    setTimeout(() => this.scene.remove(flash), 100);
+    setTimeout(() => { this.disposeMesh(flash); }, 100);
 
     for (let i = 0; i < particleCount; i++) {
       const size = 0.08 + Math.random() * 0.15;
@@ -3552,7 +3634,7 @@ export class GameEngine {
       
       // Remove when life exceeded
       if (particle.life >= particle.maxLife) {
-        this.scene.remove(particle.mesh);
+        this.disposeMesh(particle.mesh);
         this.particles.splice(i, 1);
       }
     }
@@ -3560,9 +3642,11 @@ export class GameEngine {
 
   // ========== XP & LEVEL ==========
 
+  private sharedGemGeo: THREE.OctahedronGeometry | null = null;
   private spawnXPGem(pos: THREE.Vector3, value: number) {
-    const gemGeo = new THREE.OctahedronGeometry(0.15, 0);
+    if (!this.sharedGemGeo) this.sharedGemGeo = new THREE.OctahedronGeometry(0.15, 0);
     const gemMat = new THREE.MeshBasicMaterial({ color: COLORS.xpGem });
+    const gemGeo = this.sharedGemGeo;
     const mesh = new THREE.Mesh(gemGeo, gemMat);
     mesh.position.copy(pos).add(new THREE.Vector3(0, 0.3, 0));
     this.scene.add(mesh);
