@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { GameEngine } from "@/game/engine";
+import { GameEngine, Audio } from "@/game/engine";
 import type { GameState, UpgradeOption } from "@/game/types";
 import { t, getLang, setLang, type Lang } from "@/game/i18n";
+import { CHARACTERS } from "@/game/characters";
 import { getActiveNickname, registerNickname, claimNickname, isNicknameClaimed, logoutNickname } from "@/game/nickname";
 
 export default function PlayPage() {
@@ -37,6 +38,8 @@ export default function PlayPage() {
   const [scoreSubmitted, setScoreSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showNicknameInput, setShowNicknameInput] = useState(false);
+  const [selectedChar, setSelectedChar] = useState("knight");
+  const [showCharSelect, setShowCharSelect] = useState(false);
 
   const submitScore = async (data: Record<string, unknown>) => {
     try {
@@ -118,7 +121,7 @@ export default function PlayPage() {
               survivalTime: engine.stats.survivalTime,
               level: engine.player.level,
               maxCombo: engine.stats.maxCombo,
-              character: "knight",
+              character: selectedChar,
               map: "forest",
             });
             setScoreSubmitted(true);
@@ -230,10 +233,11 @@ export default function PlayPage() {
   }, []);
 
   const startGame = useCallback(() => {
-    engineRef.current?.startGame();
-  }, []);
+    engineRef.current?.startGame(selectedChar);
+  }, [selectedChar]);
 
   const selectUpgrade = useCallback((option: UpgradeOption) => {
+    Audio.playSelect();
     engineRef.current?.applyUpgrade(option);
     setUpgradeOptions([]);
   }, []);
@@ -296,6 +300,62 @@ export default function PlayPage() {
           </button>
           <h1>{t("menu.title")}</h1>
           <p className="subtitle">{t("menu.subtitle")}</p>
+
+          {/* Character Selection */}
+          <button
+            onClick={() => setShowCharSelect(!showCharSelect)}
+            style={{
+              margin: "12px 0 4px", padding: "10px 20px", borderRadius: 10,
+              border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.05)",
+              color: "white", fontSize: 14, cursor: "pointer", width: 250,
+            }}
+          >
+            {CHARACTERS.find(c => c.id === selectedChar)?.icon}{" "}
+            {CHARACTERS.find(c => c.id === selectedChar)?.name()}{" "}
+            {showCharSelect ? "▲" : "▼"}
+          </button>
+
+          {showCharSelect && (
+            <div style={{
+              display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8,
+              width: 320, maxWidth: "90vw", margin: "8px 0",
+            }}>
+              {CHARACTERS.map(ch => (
+                <div
+                  key={ch.id}
+                  onClick={() => { setSelectedChar(ch.id); Audio.playSelect(); }}
+                  style={{
+                    padding: "10px 8px", borderRadius: 10, cursor: "pointer",
+                    border: selectedChar === ch.id
+                      ? "2px solid #ff6b35"
+                      : "1px solid rgba(255,255,255,0.1)",
+                    background: selectedChar === ch.id
+                      ? "rgba(255,107,53,0.15)"
+                      : "rgba(255,255,255,0.03)",
+                    textAlign: "center",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  <div style={{ fontSize: 24 }}>{ch.icon}</div>
+                  <div style={{
+                    fontSize: 13, fontWeight: 700, marginTop: 2,
+                    color: selectedChar === ch.id ? "#ff6b35" : "white",
+                  }}>
+                    {ch.name()}
+                  </div>
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>
+                    {ch.description()}
+                  </div>
+                  {/* Mini stat bars */}
+                  <div style={{ marginTop: 4, display: "flex", gap: 3, justifyContent: "center", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 9, color: "#ff6666" }}>❤️{Math.round(ch.hpMult * 100)}%</span>
+                    <span style={{ fontSize: 9, color: "#66ccff" }}>⚡{Math.round(ch.speedMult * 100)}%</span>
+                    <span style={{ fontSize: 9, color: "#ffaa44" }}>⚔️{Math.round(ch.damageMult * 100)}%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Nickname Section */}
           <div style={{ marginBottom: 8, marginTop: 10, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>

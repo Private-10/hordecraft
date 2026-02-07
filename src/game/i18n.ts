@@ -66,6 +66,26 @@ const translations = {
   // Language
   "lang.tr": { tr: "🇹🇷 Türkçe", en: "🇹🇷 Turkish" },
   "lang.en": { tr: "🇬🇧 İngilizce", en: "🇬🇧 English" },
+
+  // Characters
+  "char.knight": { tr: "Şövalye", en: "Knight" },
+  "char.knight_desc": { tr: "Dengeli savaşçı. Yüksek HP, zırh bonusu.", en: "Balanced warrior. High HP, armor bonus." },
+  "char.mage": { tr: "Büyücü", en: "Mage" },
+  "char.mage_desc": { tr: "Güçlü hasar, hızlı bekleme. Kırılgan.", en: "High damage, fast cooldowns. Fragile." },
+  "char.rogue": { tr: "Hırsız", en: "Rogue" },
+  "char.rogue_desc": { tr: "Hızlı ve kritik vuruşlu. Düşük HP.", en: "Fast with high crit. Low HP." },
+  "char.priest": { tr: "Rahip", en: "Priest" },
+  "char.priest_desc": { tr: "XP avcısı, geniş mıknatıs. Düşük hasar.", en: "XP hunter, wide magnet. Low damage." },
+  "char.berserker": { tr: "Berserker", en: "Berserker" },
+  "char.berserker_desc": { tr: "Çılgın hasar ve HP. Yavaş bekleme, az XP.", en: "Insane damage & HP. Slow cooldown, less XP." },
+  "char.necro": { tr: "Nekromansır", en: "Necromancer" },
+  "char.necro_desc": { tr: "Ateş izi ile başlar. Hızlı bekleme.", en: "Starts with fire trail. Fast cooldowns." },
+  "char.select": { tr: "KARAKTER SEÇ", en: "SELECT CHARACTER" },
+  "char.stats": { tr: "Özellikler", en: "Stats" },
+  "char.hp": { tr: "Can", en: "HP" },
+  "char.speed": { tr: "Hız", en: "Speed" },
+  "char.damage": { tr: "Hasar", en: "Damage" },
+  "char.crit": { tr: "Kritik", en: "Crit" },
 } as const;
 
 type TranslationKey = keyof typeof translations;

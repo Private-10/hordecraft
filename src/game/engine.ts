@@ -2,6 +2,9 @@ import * as THREE from "three";
 import { InputManager } from "./input";
 import { MobileInputManager } from "./mobile-input";
 import { PLAYER, CAMERA, ARENA, ENEMIES, WEAPONS, XP_TABLE, SCORE, COLORS, BOSSES } from "./constants";
+import * as Audio from "./audio";
+import { getCharacter, type CharacterDef } from "./characters";
+export { Audio };
 import { t } from "./i18n";
 import type {
   GameState, PlayerState, EnemyInstance, XPGem, Projectile,
@@ -62,6 +65,9 @@ export class GameEngine {
   onStatsUpdate?: () => void;
   onLevelUp?: (options: UpgradeOption[]) => void;
   onDamage?: () => void;
+
+  // Character
+  private selectedCharacter: CharacterDef = getCharacter("knight");
 
   // Upgrade tracking
   private passiveUpgrades: Record<string, number> = {};
@@ -860,15 +866,33 @@ export class GameEngine {
     };
   }
 
-  startGame() {
+  startGame(characterId?: string) {
+    this.selectedCharacter = getCharacter(characterId || "knight");
+    const ch = this.selectedCharacter;
+
     this.player = this.createDefaultPlayer();
+    // Apply character stats
+    this.player.maxHp = Math.round(PLAYER.baseHP * ch.hpMult);
+    this.player.hp = this.player.maxHp;
+    this.player.speed = PLAYER.baseSpeed * ch.speedMult;
+    this.player.damageMultiplier = ch.damageMult;
+    this.player.xpMultiplier = ch.xpMult;
+    this.player.cooldownReduction = 1 - ch.cooldownMult;
+    this.player.critChance = ch.critChance;
+    this.player.armor = ch.armor;
+    this.player.magnetRange = ch.magnetRange;
+
     this.stats = this.createDefaultStats();
     this.gameTime = 0;
     this.spawnTimer = 0;
+
+    // Starting weapon based on character
+    const weaponId = ch.startWeapon;
+    const weaponDef = WEAPONS[weaponId as keyof typeof WEAPONS];
     this.weapons = [{
-      id: "orbitBlade",
-      name: WEAPONS.orbitBlade.name,
-      icon: WEAPONS.orbitBlade.icon,
+      id: weaponId,
+      name: weaponDef ? (weaponDef as { name: string }).name : "Orbit Blade",
+      icon: weaponDef ? (weaponDef as { icon: string }).icon : "⚔️",
       level: 1,
       timer: 0,
     }];
@@ -900,6 +924,16 @@ export class GameEngine {
     this.player.position.set(0, startY, 0);
     this.playerMesh.visible = true;
 
+    // Update player color based on character
+    this.playerMesh.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.material) {
+        const mat = child.material as THREE.MeshLambertMaterial;
+        if (mat.color && mat.color.getHex() === 0x4488cc) {
+          mat.color.setHex(ch.color);
+        }
+      }
+    });
+
     // Portal cleanup
     if (this.portalMesh) { this.scene.remove(this.portalMesh); this.portalMesh = null; }
     this.portalParticles.forEach(p => this.scene.remove(p.mesh));
@@ -910,6 +944,8 @@ export class GameEngine {
     this.spawnPortalParticles(new THREE.Vector3(0, startY, 0), 0x00ccff, 25);
     this.portalState = "spawning";
     this.portalTimer = 1.5;
+    Audio.playPortal();
+    Audio.startMusic();
 
     this.state = "playing";
     this.onStateChange?.(this.state);
@@ -1428,6 +1464,7 @@ export class GameEngine {
 
     // Spawn XP gem
     this.spawnXPGem(enemy.position.clone(), enemy.xpValue);
+    Audio.playKill();
   }
 
   // ========== BOSS SYSTEM ==========
@@ -1521,6 +1558,7 @@ export class GameEngine {
     this.activeBoss = boss;
     this.bossSlamTimers.set(boss.id, BOSSES[type as keyof typeof BOSSES]?.slamInterval || 4);
     this.onBossSpawn?.(type);
+    Audio.playBossSpawn();
   }
 
   private bossSlam(boss: EnemyInstance, radius: number, damage: number) {
@@ -1530,6 +1568,7 @@ export class GameEngine {
       this.damagePlayer(damage);
     }
 
+    Audio.playBossSlam();
     // Visual: expanding ring
     const ringGeo = new THREE.RingGeometry(0.5, radius, 24);
     const ringMat = new THREE.MeshBasicMaterial({
@@ -1648,6 +1687,7 @@ export class GameEngine {
   }
 
   private fireShockWave(weapon: WeaponState) {
+    Audio.playShockWave();
     const range = WEAPONS.shockWave.range + weapon.level * 0.8;
     const damage = WEAPONS.shockWave.baseDamage * (1 + (weapon.level - 1) * 0.3) * this.player.damageMultiplier;
 
@@ -1675,6 +1715,7 @@ export class GameEngine {
   }
 
   private fireLightningArc(weapon: WeaponState) {
+    Audio.playLightning();
     const chains = WEAPONS.lightningArc.chainCount + weapon.level - 1;
     const damage = WEAPONS.lightningArc.baseDamage * (1 + (weapon.level - 1) * 0.25) * this.player.damageMultiplier;
 
@@ -1848,6 +1889,7 @@ export class GameEngine {
     }
 
     enemy.hp -= finalDamage;
+    Audio.playHit();
 
     // Flash red - traverse all meshes in group
     enemy.mesh.traverse((child) => {
@@ -1871,6 +1913,7 @@ export class GameEngine {
     this.player.hp -= finalDamage;
     this.player.iFrameTimer = PLAYER.iFrames;
     this.onDamage?.();
+    Audio.playDamage();
 
     if (this.player.hp <= 0) {
       this.player.hp = 0;
@@ -1923,6 +1966,7 @@ export class GameEngine {
       if (dist < 0.8) {
         gem.isAlive = false;
         this.player.xp += gem.value;
+        Audio.playXP();
         this.checkLevelUp();
       }
     }
@@ -1941,6 +1985,7 @@ export class GameEngine {
       }
       this.onStateChange?.(this.state);
       this.onLevelUp?.(this.generateUpgradeOptions());
+      Audio.playLevelUp();
       return; // handle one level at a time
     }
   }
@@ -2279,6 +2324,8 @@ export class GameEngine {
     this.portalTimer = 1.0;
     this.createPortal(this.player.position.clone());
     this.spawnPortalParticles(this.player.position.clone(), 0xff0044, 20);
+    Audio.playGameOver();
+    Audio.stopMusic();
     if (document.pointerLockElement) {
       document.exitPointerLock();
     }
