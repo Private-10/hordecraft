@@ -48,7 +48,7 @@ export default function PlayPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [invertY, setInvertY] = useState(false);
   const [metaState, setMetaState] = useState<MetaState | null>(null);
-  const [showChat, setShowChat] = useState(false);
+  const [showChat, setShowChat] = useState(true);
   const [chatMessages, setChatMessages] = useState<{nickname:string;text:string;color:string}[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatCooldown, setChatCooldown] = useState(false);
@@ -646,10 +646,8 @@ export default function PlayPage() {
 
             {/* Chat */}
             <div className="menu-section" style={{ alignItems: "center" }}>
-              <button className="btn-chat" onClick={() => setShowChat(!showChat)}>
-                {t("chat.title")}
-              </button>
-              {showChat && (
+              <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>{t("chat.title")}</div>
+              {true && (
                 <div className="chat-panel">
                   <div className="chat-messages">
                     {chatMessages.length === 0 && (
