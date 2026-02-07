@@ -159,6 +159,7 @@ export class GameEngine {
     this.input.init(canvas);
     if (this.isMobile) {
       this.mobileInput.init(document.body);
+      this.mobileInput.setVisible(false); // Hidden until game starts
     }
 
     // Resize
@@ -1216,6 +1217,9 @@ export class GameEngine {
     // Auto pointer lock on game start (desktop)
     if (!this.isMobile) {
       this.renderer.domElement.requestPointerLock();
+    }
+    if (this.isMobile) {
+      this.mobileInput.setVisible(true);
     }
   }
 
@@ -2857,6 +2861,9 @@ export class GameEngine {
     this.state = "gameover";
     if (document.pointerLockElement) {
       document.exitPointerLock();
+    }
+    if (this.isMobile) {
+      this.mobileInput.setVisible(false);
     }
     this.stats.gold = Math.floor(
       this.stats.survivalTime * 2 +

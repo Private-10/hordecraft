@@ -34,6 +34,7 @@ export class MobileInputManager {
 
     // Joystick
     this.joystickBase = document.createElement("div");
+    this.joystickBase.setAttribute("data-mobile-ui", "joystick");
     Object.assign(this.joystickBase.style, {
       position: "fixed",
       bottom: "80px",
@@ -64,6 +65,7 @@ export class MobileInputManager {
 
     // Jump button
     const jumpBtn = document.createElement("div");
+    jumpBtn.setAttribute("data-mobile-ui", "jump");
     Object.assign(jumpBtn.style, {
       position: "fixed",
       bottom: "80px",
@@ -94,6 +96,7 @@ export class MobileInputManager {
 
     // Slide button
     const slideBtn = document.createElement("div");
+    slideBtn.setAttribute("data-mobile-ui", "slide");
     Object.assign(slideBtn.style, {
       position: "fixed",
       bottom: "160px",
@@ -221,10 +224,21 @@ export class MobileInputManager {
     return { dx, dy };
   }
 
+  setVisible(visible: boolean) {
+    const display = visible ? "" : "none";
+    document.querySelectorAll('[data-mobile-ui]').forEach(el => {
+      (el as HTMLElement).style.display = display;
+    });
+  }
+
   dispose() {
     document.removeEventListener("touchstart", this.onTouchStart);
     document.removeEventListener("touchmove", this.onTouchMove);
     document.removeEventListener("touchend", this.onTouchEnd);
     document.removeEventListener("touchcancel", this.onTouchEnd);
+    // Remove DOM elements
+    if (this.joystickBase?.parentNode) this.joystickBase.parentNode.removeChild(this.joystickBase);
+    // Remove all fixed-position mobile UI elements
+    document.querySelectorAll('[data-mobile-ui]').forEach(el => el.remove());
   }
 }
