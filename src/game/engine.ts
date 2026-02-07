@@ -2615,7 +2615,9 @@ export class GameEngine {
     // Random position near player
     const angle = Math.random() * Math.PI * 2;
     const dist = 5 + Math.random() * 10;
-    const pos = this.player.position.clone().add(new THREE.Vector3(Math.cos(angle) * dist, 0.5, Math.sin(angle) * dist));
+    const vx = this.player.position.x + Math.cos(angle) * dist;
+    const vz = this.player.position.z + Math.sin(angle) * dist;
+    const pos = new THREE.Vector3(vx, this.getTerrainHeight(vx, vz) + 0.5, vz);
 
     // Visual: dark purple vortex group
     const group = new THREE.Group();
