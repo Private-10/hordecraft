@@ -550,7 +550,7 @@ export default function PlayPage() {
           {/* Next Boss Timer */}
           {!bossInfo && nextBossTime !== null && nextBossTime > 0 && (
             <div style={{
-              position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)",
+              position: "fixed", top: 52, left: "50%", transform: "translateX(-50%)",
               zIndex: 20, textAlign: "center",
             }}>
               <div style={{
@@ -571,7 +571,7 @@ export default function PlayPage() {
           {/* Boss HP Bar */}
           {bossInfo && (
             <div style={{
-              position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)",
+              position: "fixed", top: 52, left: "50%", transform: "translateX(-50%)",
               width: 400, maxWidth: "90vw", zIndex: 20,
             }}>
               <div style={{
