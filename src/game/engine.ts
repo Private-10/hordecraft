@@ -2298,6 +2298,7 @@ export class GameEngine {
     const range = WEAPONS.shockWave.range + weapon.level * 0.8;
     const damage = WEAPONS.shockWave.baseDamage * (1 + (weapon.level - 1) * 0.3) * this.player.damageMultiplier;
     const pos = this.player.position.clone();
+    pos.y = this.getTerrainHeight(pos.x, pos.z); // always use terrain height
 
     // Vertical pulse column
     const col = new THREE.Mesh(
@@ -2491,7 +2492,8 @@ export class GameEngine {
         flame.rotation.z = (Math.random() - 0.5) * 0.3;
         flameGroup.add(flame);
       }
-      flameGroup.position.copy(this.player.position).add(new THREE.Vector3(0, 0.05, 0));
+      const fireY = this.getTerrainHeight(this.player.position.x, this.player.position.z);
+      flameGroup.position.set(this.player.position.x, fireY + 0.05, this.player.position.z);
       this.scene.add(flameGroup);
 
       this.fireSegments.push({
@@ -2541,6 +2543,7 @@ export class GameEngine {
     const effectiveSlow = evolved ? 1.0 : slowAmount;
     const effectiveSlowDur = evolved ? 3000 : slowDuration;
     const pos = this.player.position.clone();
+    pos.y = this.getTerrainHeight(pos.x, pos.z); // always use terrain height
 
     // White flash at center
     const flash = new THREE.Mesh(
