@@ -3155,8 +3155,11 @@ export class GameEngine {
       this.player.level++;
       this.player.xpToNext = XP_TABLE.getRequired(this.player.level);
 
-      // Trigger level up UI - release pointer lock
+      // Trigger level up UI - release pointer lock and touch
       this.state = "levelup";
+      if (this.isMobile) {
+        this.mobileInput.setActive(false);
+      }
       if (document.pointerLockElement) {
         document.exitPointerLock();
       }
@@ -3292,8 +3295,10 @@ export class GameEngine {
     option.apply();
     this.state = "playing";
     this.onStateChange?.(this.state);
-    // Re-lock pointer after upgrade selection (desktop only)
-    if (!this.isMobile) {
+    // Re-enable controls
+    if (this.isMobile) {
+      this.mobileInput.setActive(true);
+    } else {
       const canvas = this.renderer.domElement;
       setTimeout(() => {
         canvas.requestPointerLock();
