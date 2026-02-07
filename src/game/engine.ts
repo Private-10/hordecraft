@@ -81,6 +81,12 @@ export class GameEngine {
   onBossSpawn?: (name: string) => void;
   onBossDeath?: (name: string) => void;
 
+  // Portal system
+  private portalMesh: THREE.Group | null = null;
+  private portalState: "none" | "spawning" | "dying" = "none";
+  private portalTimer = 0;
+  private portalParticles: { mesh: THREE.Mesh; vel: THREE.Vector3; life: number }[] = [];
+
   init(canvas: HTMLCanvasElement) {
     // Renderer
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -890,8 +896,20 @@ export class GameEngine {
     this.fireSegments = [];
 
     const startY = this.getTerrainHeight(0, 0);
-    this.playerMesh.position.set(0, startY, 0);
+    this.playerMesh.position.set(0, startY - 2, 0);
     this.player.position.set(0, startY, 0);
+    this.playerMesh.visible = true;
+
+    // Portal cleanup
+    if (this.portalMesh) { this.scene.remove(this.portalMesh); this.portalMesh = null; }
+    this.portalParticles.forEach(p => this.scene.remove(p.mesh));
+    this.portalParticles = [];
+
+    // Spawn portal animation
+    this.createPortal(new THREE.Vector3(0, startY, 0));
+    this.spawnPortalParticles(new THREE.Vector3(0, startY, 0), 0x00ccff, 25);
+    this.portalState = "spawning";
+    this.portalTimer = 1.5;
 
     this.state = "playing";
     this.onStateChange?.(this.state);
@@ -903,6 +921,14 @@ export class GameEngine {
   }
 
   update(dt: number) {
+    // Always update portal animations
+    if (this.portalState !== "none") {
+      this.updatePortal(dt);
+      this.updateCamera();
+      this.renderer.render(this.scene, this.camera);
+      if (this.state !== "playing") return;
+    }
+
     if (this.state !== "playing") {
       this.renderer.render(this.scene, this.camera);
       return;
@@ -933,6 +959,7 @@ export class GameEngine {
   }
 
   private updatePlayer(dt: number) {
+    if (this.portalState !== "none") return; // No input during portal
     const p = this.player;
 
     // Get input from desktop or mobile
@@ -1830,6 +1857,7 @@ export class GameEngine {
   }
 
   private damagePlayer(damage: number) {
+    if (this.portalState === "dying") return; // Already dying
     const finalDamage = Math.max(1, damage - this.player.armor);
     this.player.hp -= finalDamage;
     this.player.iFrameTimer = PLAYER.iFrames;
@@ -2067,7 +2095,163 @@ export class GameEngine {
 
   // ========== GAME OVER ==========
 
-  private gameOver() {
+  // ========== PORTAL SYSTEM ==========
+
+  private createPortal(pos: THREE.Vector3) {
+    if (this.portalMesh) {
+      this.scene.remove(this.portalMesh);
+    }
+
+    const group = new THREE.Group();
+    
+    // Outer ring
+    const ringGeo = new THREE.TorusGeometry(1.5, 0.12, 8, 32);
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0x00ccff });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = -Math.PI / 2;
+    group.add(ring);
+
+    // Inner ring
+    const innerRingGeo = new THREE.TorusGeometry(1.1, 0.06, 8, 32);
+    const innerRingMat = new THREE.MeshBasicMaterial({ color: 0x44ffff });
+    const innerRing = new THREE.Mesh(innerRingGeo, innerRingMat);
+    innerRing.rotation.x = -Math.PI / 2;
+    group.add(innerRing);
+
+    // Portal surface (glowing disc)
+    const discGeo = new THREE.CircleGeometry(1.4, 32);
+    const discMat = new THREE.MeshBasicMaterial({
+      color: 0x0066ff,
+      transparent: true,
+      opacity: 0.4,
+      side: THREE.DoubleSide,
+    });
+    const disc = new THREE.Mesh(discGeo, discMat);
+    disc.rotation.x = -Math.PI / 2;
+    disc.position.y = 0.01;
+    group.add(disc);
+
+    // Rune particles around the ring
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2;
+      const particle = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.1),
+        new THREE.MeshBasicMaterial({ color: 0x44ffff })
+      );
+      particle.position.set(Math.cos(angle) * 1.5, 0.3, Math.sin(angle) * 1.5);
+      group.add(particle);
+    }
+
+    group.position.copy(pos);
+    group.position.y = this.getTerrainHeight(pos.x, pos.z) + 0.05;
+    this.scene.add(group);
+    this.portalMesh = group;
+  }
+
+  private spawnPortalParticles(pos: THREE.Vector3, color: number, count: number) {
+    for (let i = 0; i < count; i++) {
+      const mesh = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.08 + Math.random() * 0.08),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8 })
+      );
+      mesh.position.set(
+        pos.x + (Math.random() - 0.5) * 2,
+        pos.y + Math.random() * 0.5,
+        pos.z + (Math.random() - 0.5) * 2
+      );
+      this.scene.add(mesh);
+      this.portalParticles.push({
+        mesh,
+        vel: new THREE.Vector3(
+          (Math.random() - 0.5) * 3,
+          2 + Math.random() * 4,
+          (Math.random() - 0.5) * 3
+        ),
+        life: 0.8 + Math.random() * 0.6,
+      });
+    }
+  }
+
+  private updatePortal(dt: number) {
+    // Animate portal rotation
+    if (this.portalMesh) {
+      this.portalMesh.rotation.y += dt * 1.5;
+      // Bobbing particles
+      this.portalMesh.children.forEach((child, i) => {
+        if (i >= 3) { // rune particles
+          child.position.y = 0.3 + Math.sin(this.gameTime * 3 + i) * 0.2;
+        }
+      });
+    }
+
+    // Spawn animation
+    if (this.portalState === "spawning") {
+      this.portalTimer -= dt;
+      if (this.portalTimer > 0.8) {
+        // Player rising from portal
+        const progress = 1 - (this.portalTimer - 0.8) / 0.7;
+        this.playerMesh.position.y = this.getTerrainHeight(0, 0) - 2 + progress * 2;
+        this.playerMesh.visible = true;
+      } else if (this.portalTimer > 0) {
+        // Portal fading
+        this.playerMesh.position.y = this.getTerrainHeight(0, 0);
+        if (this.portalMesh) {
+          const fade = this.portalTimer / 0.8;
+          this.portalMesh.scale.set(fade, fade, fade);
+        }
+      } else {
+        // Done
+        this.portalState = "none";
+        if (this.portalMesh) {
+          this.scene.remove(this.portalMesh);
+          this.portalMesh = null;
+        }
+      }
+    }
+
+    // Death animation
+    if (this.portalState === "dying") {
+      this.portalTimer -= dt;
+      if (this.portalTimer > 0.5) {
+        // Portal opening
+        const progress = 1 - (this.portalTimer - 0.5) / 0.5;
+        if (this.portalMesh) {
+          this.portalMesh.scale.set(progress, progress, progress);
+        }
+      } else if (this.portalTimer > 0) {
+        // Player sinking
+        const progress = 1 - this.portalTimer / 0.5;
+        this.playerMesh.position.y = this.getTerrainHeight(
+          this.player.position.x, this.player.position.z
+        ) - progress * 2.5;
+        this.playerMesh.rotation.y += dt * 8; // spin
+      } else {
+        // Done — trigger actual game over
+        this.portalState = "none";
+        if (this.portalMesh) {
+          this.scene.remove(this.portalMesh);
+          this.portalMesh = null;
+        }
+        this.playerMesh.visible = false;
+        this.actualGameOver();
+      }
+    }
+
+    // Update particles
+    for (let i = this.portalParticles.length - 1; i >= 0; i--) {
+      const p = this.portalParticles[i];
+      p.life -= dt;
+      p.mesh.position.add(p.vel.clone().multiplyScalar(dt));
+      p.vel.y -= 5 * dt; // gravity
+      (p.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0, p.life / 1.2);
+      if (p.life <= 0) {
+        this.scene.remove(p.mesh);
+        this.portalParticles.splice(i, 1);
+      }
+    }
+  }
+
+  private actualGameOver() {
     this.state = "gameover";
     if (document.pointerLockElement) {
       document.exitPointerLock();
@@ -2078,6 +2262,18 @@ export class GameEngine {
       this.stats.bossKills * 50
     );
     this.onStateChange?.(this.state);
+  }
+
+  private gameOver() {
+    // Start death portal animation instead of instant game over
+    this.portalState = "dying";
+    this.portalTimer = 1.0;
+    this.createPortal(this.player.position.clone());
+    this.spawnPortalParticles(this.player.position.clone(), 0xff0044, 20);
+    if (document.pointerLockElement) {
+      document.exitPointerLock();
+    }
+    // Keep state as "playing" so portal animation renders, actualGameOver sets "gameover"
   }
 
   // ========== RENDER HELPERS (orbit blade visuals) ==========
