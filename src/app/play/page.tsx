@@ -247,8 +247,12 @@ export default function PlayPage() {
       <canvas
         ref={canvasRef}
         style={{
-          width: "100vw", height: "100vh", touchAction: "none",
+          width: "100vw", height: "100vh",
+          touchAction: gameState === "menu" ? "auto" : "none",
           pointerEvents: gameState === "menu" ? "none" : "auto",
+          position: "fixed",
+          top: 0, left: 0,
+          zIndex: gameState === "menu" ? -1 : 1,
         }}
         onContextMenu={(e) => e.preventDefault()}
         onMouseDown={(e) => {
