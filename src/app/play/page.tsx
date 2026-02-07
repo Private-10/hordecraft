@@ -26,6 +26,10 @@ export default function PlayPage() {
   useEffect(() => {
     setMounted(true);
     setLangState(getLang());
+    const savedNick = getNickname();
+    if (savedNick && savedNick.trim().length >= 2) {
+      setNicknameState(savedNick);
+    }
 
     const onMouseMove = (e: MouseEvent) => {
       setCursorPos({ x: e.clientX, y: e.clientY });
@@ -58,7 +62,36 @@ export default function PlayPage() {
     engineRef.current = engine;
     engine.init(canvasRef.current);
 
-    engine.onStateChange = (state: GameState) => setGameState(state);
+    engine.onStateChange = (state: GameState) => {
+      setGameState(state);
+      if (state === "gameover") {
+        setScoreSubmitted(false);
+        setSubmitting(false);
+        setShowNicknameInput(false);
+        // Auto-submit score
+        const saved = getNickname();
+        const name = (saved && saved.trim().length >= 2) ? saved.trim() : "Anonim";
+        setTimeout(async () => {
+          try {
+            setSubmitting(true);
+            await submitScore({
+              nickname: name,
+              score: engine.stats.score,
+              kills: engine.stats.kills,
+              survivalTime: engine.stats.survivalTime,
+              level: engine.player.level,
+              maxCombo: engine.stats.maxCombo,
+              character: "knight",
+              map: "forest",
+            });
+            setScoreSubmitted(true);
+          } catch (err) {
+            console.error("Score submit failed:", err);
+          }
+          setSubmitting(false);
+        }, 300);
+      }
+    };
 
     engine.onStatsUpdate = () => {
       const e = engine;
@@ -173,13 +206,63 @@ export default function PlayPage() {
           </button>
           <h1>{t("menu.title")}</h1>
           <p className="subtitle">{t("menu.subtitle")}</p>
-          <button className="btn btn-primary" onClick={startGame}>
-            {t("menu.play")}
+
+          {/* Nickname input */}
+          <div style={{ marginBottom: 8, marginTop: 10 }}>
+            <input
+              type="text"
+              placeholder={t("menu.nickname_placeholder")}
+              value={nickname}
+              onChange={(e) => {
+                const val = e.target.value.replace(/[^a-zA-Z0-9_\-çğıöşüÇĞİÖŞÜ ]/g, "").slice(0, 16);
+                setNicknameState(val);
+              }}
+              maxLength={16}
+              style={{
+                padding: "12px 20px", borderRadius: 10,
+                border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.08)",
+                color: "white", fontSize: 16, width: 250, textAlign: "center", outline: "none",
+              }}
+              onFocus={(e) => (e.target.style.borderColor = "#ff6b35")}
+              onBlur={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.2)")}
+            />
+            {nickname.trim().length > 0 && (
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>
+                {t("menu.nickname_hint")}
+              </div>
+            )}
+          </div>
+
+          {/* Play registered */}
+          <button
+            className="btn btn-primary"
+            onClick={() => { if (nickname.trim().length >= 2) { saveNickname(nickname.trim()); startGame(); } }}
+            style={{ width: 250, opacity: nickname.trim().length >= 2 ? 1 : 0.4, cursor: nickname.trim().length >= 2 ? "pointer" : "not-allowed" }}
+          >
+            {t("menu.play_registered")}
           </button>
-          <button className="btn btn-secondary" style={{ opacity: 0.5, cursor: "not-allowed" }}>
+
+          {/* Divider */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, width: 250, margin: "4px 0" }}>
+            <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.1)" }} />
+            <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>{lang === "tr" ? "veya" : "or"}</span>
+            <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.1)" }} />
+          </div>
+
+          {/* Play as guest */}
+          <button className="btn btn-secondary" onClick={() => { setNicknameState(""); saveNickname(""); startGame(); }} style={{ width: 250 }}>
+            {t("menu.play_guest")}
+          </button>
+          <div style={{ fontSize: 11, color: "rgba(255,215,0,0.5)", marginTop: 4, maxWidth: 280, textAlign: "center" }}>
+            {t("menu.guest_warning")}
+          </div>
+
+          {/* Leaderboard */}
+          <button className="btn btn-secondary" onClick={() => { window.location.href = "/leaderboard"; }} style={{ width: 250, marginTop: 12 }}>
             {t("menu.leaderboard")}
           </button>
-          <p style={{ marginTop: 30, fontSize: 12, color: "rgba(255,255,255,0.3)" }}>
+
+          <p style={{ marginTop: 20, fontSize: 12, color: "rgba(255,255,255,0.3)" }}>
             {t("menu.controls")}
           </p>
         </div>
@@ -281,15 +364,34 @@ export default function PlayPage() {
               <span>📊 Lvl {stats.level}</span>
               <span>🔥 x{stats.maxCombo} {t("gameover.max_combo")}</span>
             </div>
-            <div style={{ marginBottom: 20, color: "var(--gold)" }}>
+            <div style={{ marginBottom: 16, color: "var(--gold)" }}>
               💰 +{stats.gold} {t("gameover.gold_earned")}
             </div>
-            <button className="btn btn-primary" onClick={startGame}>
-              {t("gameover.retry")}
-            </button>
-            <button className="btn btn-secondary" onClick={() => setGameState("menu")}>
-              {t("gameover.menu")}
-            </button>
+
+            {submitting && (
+              <div style={{ marginBottom: 12, color: "rgba(255,255,255,0.5)", fontSize: 14 }}>
+                ⏳ {lang === "tr" ? "Skor kaydediliyor..." : "Saving score..."}
+              </div>
+            )}
+            {scoreSubmitted && (
+              <div style={{ marginBottom: 12, color: "var(--success)", fontWeight: "bold", fontSize: 14 }}>
+                ✅ {lang === "tr"
+                  ? `Skor kaydedildi! (${nickname || "Anonim"})`
+                  : `Score saved! (${nickname || "Anonymous"})`}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
+              <button className="btn btn-primary" onClick={startGame}>
+                {t("gameover.retry")}
+              </button>
+              <button className="btn btn-secondary" onClick={() => setGameState("menu")}>
+                {t("gameover.menu")}
+              </button>
+              <button className="btn btn-secondary" onClick={() => { window.location.href = "/leaderboard"; }}>
+                🏆 {lang === "tr" ? "Sıralama" : "Leaderboard"}
+              </button>
+            </div>
           </div>
         </div>
       )}

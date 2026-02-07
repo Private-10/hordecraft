@@ -5,6 +5,11 @@ const translations = {
   "menu.title": { tr: "HORDECRAFT", en: "HORDECRAFT" },
   "menu.subtitle": { tr: "3D Roguelike Hayatta Kalma", en: "3D Roguelike Survival" },
   "menu.play": { tr: "▶ OYNA", en: "▶ PLAY" },
+  "menu.play_guest": { tr: "👤 Misafir Oyna", en: "👤 Play as Guest" },
+  "menu.play_registered": { tr: "✨ Kayıtlı Oyna", en: "✨ Play Registered" },
+  "menu.nickname_placeholder": { tr: "Takma adını gir...", en: "Enter nickname..." },
+  "menu.nickname_hint": { tr: "Sıralamada bu isimle görünürsün", en: "You'll appear with this name on leaderboard" },
+  "menu.guest_warning": { tr: "⚠️ Misafir skorları sıralamada 'Anonim' olarak görünür", en: "⚠️ Guest scores appear as 'Anonymous' on leaderboard" },
   "menu.leaderboard": { tr: "🏆 SIRALAMALAR", en: "🏆 LEADERBOARD" },
   "menu.controls": {
     tr: "WASD: Hareket · Mouse: Kamera · Space: Zıpla · Shift: Kay",
