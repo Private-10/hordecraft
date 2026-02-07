@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1a0a2e"/>
+      <stop offset="100%" stop-color="#0a1628"/>
+    </linearGradient>
+    <linearGradient id="sword" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#aabbcc"/>
+    </linearGradient>
+    <linearGradient id="fire" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#ff6b35"/>
+      <stop offset="100%" stop-color="#ffd700"/>
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="64" height="64" rx="12" fill="url(#bg)"/>
+  <!-- Crossed swords -->
+  <g transform="translate(32,30)">
+    <!-- Left sword -->
+    <rect x="-18" y="-14" width="4" height="28" rx="1" fill="url(#sword)" transform="rotate(-30)"/>
+    <rect x="-22" y="10" width="12" height="3" rx="1" fill="#664422" transform="rotate(-30)"/>
+    <!-- Right sword -->
+    <rect x="14" y="-14" width="4" height="28" rx="1" fill="url(#sword)" transform="rotate(30)"/>
+    <rect x="10" y="10" width="12" height="3" rx="1" fill="#664422" transform="rotate(30)"/>
+  </g>
+  <!-- Fire/shield emblem center -->
+  <circle cx="32" cy="32" r="8" fill="url(#fire)" opacity="0.9"/>
+  <circle cx="32" cy="32" r="5" fill="#ff6b35"/>
+  <text x="32" y="36" text-anchor="middle" font-size="10" font-weight="900" fill="white" font-family="sans-serif">H</text>
+  <!-- Bottom text -->
+  <text x="32" y="56" text-anchor="middle" font-size="7" font-weight="700" fill="#ff6b35" font-family="sans-serif">CRAFT</text>
+</svg>
