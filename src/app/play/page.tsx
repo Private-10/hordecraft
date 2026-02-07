@@ -91,6 +91,17 @@ export default function PlayPage() {
     };
   }, []);
 
+  // Control body overflow based on game state - iOS needs this
+  useEffect(() => {
+    if (gameState === "menu") {
+      document.body.style.overflow = "auto";
+      document.body.style.position = "static";
+    } else {
+      document.body.style.overflow = "hidden";
+      document.body.style.position = "fixed";
+    }
+  }, [gameState]);
+
   const toggleLang = useCallback(() => {
     const newLang = lang === "tr" ? "en" : "tr";
     setLang(newLang);
@@ -244,20 +255,18 @@ export default function PlayPage() {
 
   return (
     <>
+      {/* Canvas: hidden behind menu via visibility+zIndex, fully active during gameplay */}
       <canvas
         ref={canvasRef}
         style={{
           width: "100vw", height: "100vh",
-          touchAction: gameState === "menu" ? "auto" : "none",
-          pointerEvents: gameState === "menu" ? "none" : "auto",
+          touchAction: "none",
           position: "fixed",
           top: 0, left: 0,
           zIndex: gameState === "menu" ? -1 : 1,
+          visibility: gameState === "menu" ? "hidden" : "visible",
         }}
         onContextMenu={(e) => e.preventDefault()}
-        onMouseDown={(e) => {
-          if (!isMobileDevice) e.preventDefault();
-        }}
       />
 
       {/* Custom cursor - desktop only */}
