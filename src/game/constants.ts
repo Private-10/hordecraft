@@ -38,6 +38,10 @@ export const ENEMIES = {
   spider: { hp: 12, speed: 5, damage: 4, xp: 3, radius: 0.3, color: 0x332222 },
   zombie: { hp: 40, speed: 1.5, damage: 8, xp: 5, radius: 0.5, color: 0x556644 },
   wolf: { hp: 18, speed: 5.5, damage: 7, xp: 4, radius: 0.4, color: 0x666666 },
+  // Tier 3
+  necromancer: { hp: 60, speed: 3, damage: 15, xp: 25, radius: 0.5, color: 0x663399 },
+  troll: { hp: 200, speed: 2.5, damage: 35, xp: 35, radius: 0.8, color: 0x447744 },
+  shaman: { hp: 40, speed: 3.5, damage: 8, xp: 30, radius: 0.4, color: 0xaa8833 },
   // Bosses
   stoneGolem: { hp: 800, speed: 1.2, damage: 40, xp: 200, radius: 1.8, color: 0x888888 },
   fireWraith: { hp: 1200, speed: 1.5, damage: 50, xp: 350, radius: 1.5, color: 0xff4400 },

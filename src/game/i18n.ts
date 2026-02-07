@@ -151,6 +151,12 @@ const translations = {
   "settings.volume": { tr: "Ses Seviyesi", en: "Volume" },
   "settings.close": { tr: "Kapat", en: "Close" },
 
+  // Tier 3 enemies
+  "enemy.necromancer": { tr: "Nekromansır", en: "Necromancer" },
+  "enemy.troll": { tr: "Trol", en: "Troll" },
+  "enemy.shaman": { tr: "Şaman", en: "Shaman" },
+  "enemy.elite": { tr: "Elit", en: "Elite" },
+
   // Chat
   "chat.title": { tr: "💬 SOHBET", en: "💬 CHAT" },
   "chat.placeholder": { tr: "Mesaj yaz...", en: "Type a message..." },

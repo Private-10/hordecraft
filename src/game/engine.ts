@@ -53,6 +53,18 @@ export class GameEngine {
   weapons: WeaponState[] = [];
   private orbitAngle = 0;
 
+  // Enemy projectiles (necromancer etc)
+  private enemyProjectiles: { position: THREE.Vector3; velocity: THREE.Vector3; damage: number; mesh: THREE.Mesh; lifetime: number; isAlive: boolean }[] = [];
+
+  // Boss scaling
+  private bossRound = 0;
+  private lastScaledBossTime = 0;
+
+  // Tier 3 spawn timers
+  private tier3ShamanTimer = 20;
+  private tier3NecroTimer = 15;
+  private tier3TrollTimer = 20;
+
   // Game state
   state: GameState = "menu";
   stats: GameStats = this.createDefaultStats();
@@ -1259,6 +1271,103 @@ export class GameEngine {
       g.scale.set(1.4, 1.4, 1.4);
       return g;
     };
+
+    // === TIER 3: Necromancer ===
+    this.enemyMeshFactories.necromancer = () => {
+      const g = new THREE.Group();
+      const robeMat = new THREE.MeshLambertMaterial({ color: 0x221133 });
+      const purpleMat = new THREE.MeshBasicMaterial({ color: 0x9933ff });
+      const skinMat = new THREE.MeshLambertMaterial({ color: 0x443355 });
+      // Robe body
+      const body = new THREE.Mesh(new THREE.ConeGeometry(0.4, 1.5, 6), robeMat);
+      body.position.y = 0.75; g.add(body);
+      // Head
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 6, 5), skinMat);
+      head.position.y = 1.6; g.add(head);
+      // Hood
+      const hood = new THREE.Mesh(new THREE.SphereGeometry(0.25, 6, 5), robeMat);
+      hood.position.y = 1.65; hood.scale.set(1, 0.8, 1.2); g.add(hood);
+      // Purple glow eyes
+      const eyeGeo = new THREE.SphereGeometry(0.04, 4, 4);
+      const le = new THREE.Mesh(eyeGeo, purpleMat); le.position.set(-0.08, 1.62, 0.18); g.add(le);
+      const re = new THREE.Mesh(eyeGeo, purpleMat); re.position.set(0.08, 1.62, 0.18); g.add(re);
+      // Staff
+      const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1.8, 5), new THREE.MeshLambertMaterial({ color: 0x332244 }));
+      staff.position.set(0.35, 0.9, 0); g.add(staff);
+      const orb = new THREE.Mesh(new THREE.SphereGeometry(0.1, 6, 6), purpleMat);
+      orb.position.set(0.35, 1.85, 0); g.add(orb);
+      // Floating skull orbiting (will animate in update)
+      const skull = new THREE.Mesh(new THREE.SphereGeometry(0.08, 5, 4), new THREE.MeshLambertMaterial({ color: 0xccccaa }));
+      skull.position.set(0.6, 1.4, 0); skull.name = "orbitSkull"; g.add(skull);
+      return g;
+    };
+
+    // === TIER 3: Troll ===
+    this.enemyMeshFactories.troll = () => {
+      const g = new THREE.Group();
+      const trollMat = new THREE.MeshLambertMaterial({ color: 0x447744 });
+      const darkMat = new THREE.MeshLambertMaterial({ color: 0x335533 });
+      // Body (large)
+      const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.5, 1.0, 5, 6), trollMat);
+      body.position.y = 1.2; g.add(body);
+      // Head (small relative to body)
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 6, 5), trollMat);
+      head.position.y = 2.0; g.add(head);
+      // Eyes (small, angry)
+      const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff4400 });
+      const eyeGeo = new THREE.SphereGeometry(0.04, 4, 4);
+      const le = new THREE.Mesh(eyeGeo, eyeMat); le.position.set(-0.1, 2.05, 0.2); g.add(le);
+      const re = new THREE.Mesh(eyeGeo, eyeMat); re.position.set(0.1, 2.05, 0.2); g.add(re);
+      // Big arms
+      const armGeo = new THREE.CapsuleGeometry(0.18, 0.9, 4, 5);
+      const la = new THREE.Mesh(armGeo, darkMat); la.position.set(-0.7, 1.0, 0); la.rotation.z = 0.2; g.add(la);
+      const ra = new THREE.Mesh(armGeo, darkMat); ra.position.set(0.7, 1.0, 0); ra.rotation.z = -0.2; g.add(ra);
+      // Legs
+      const legGeo = new THREE.CapsuleGeometry(0.15, 0.5, 4, 5);
+      const ll = new THREE.Mesh(legGeo, darkMat); ll.position.set(-0.25, 0.3, 0); g.add(ll);
+      const rl = new THREE.Mesh(legGeo, darkMat); rl.position.set(0.25, 0.3, 0); g.add(rl);
+      // Club in right hand
+      const club = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.1, 0.8, 5), new THREE.MeshLambertMaterial({ color: 0x664422 }));
+      club.position.set(0.8, 0.5, 0); club.rotation.z = -0.4; g.add(club);
+      g.scale.set(1.2, 1.2, 1.2);
+      return g;
+    };
+
+    // === TIER 3: Shaman ===
+    this.enemyMeshFactories.shaman = () => {
+      const g = new THREE.Group();
+      const skinMat = new THREE.MeshLambertMaterial({ color: 0x886644 });
+      const goldMat = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
+      const maskMat = new THREE.MeshLambertMaterial({ color: 0xccaa66 });
+      // Small body
+      const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 0.5, 5, 5), skinMat);
+      body.position.y = 0.5; g.add(body);
+      // Head with mask
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 6, 5), maskMat);
+      head.position.y = 1.0; g.add(head);
+      // Mask eyes (dark slots)
+      const slotMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+      const slotGeo = new THREE.PlaneGeometry(0.06, 0.03);
+      const ls = new THREE.Mesh(slotGeo, slotMat); ls.position.set(-0.06, 1.02, 0.17); g.add(ls);
+      const rs = new THREE.Mesh(slotGeo, slotMat); rs.position.set(0.06, 1.02, 0.17); g.add(rs);
+      // Feathered headdress
+      for (let i = 0; i < 5; i++) {
+        const feather = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.25, 4), new THREE.MeshLambertMaterial({ color: [0xff4400, 0xffcc00, 0x44aa44, 0xff4400, 0xffcc00][i] }));
+        const a = (i / 5) * Math.PI - Math.PI / 2;
+        feather.position.set(Math.cos(a) * 0.12, 1.25 + Math.abs(Math.cos(a)) * 0.08, Math.sin(a) * 0.05 - 0.05);
+        g.add(feather);
+      }
+      // Golden staff
+      const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.0, 5), new THREE.MeshLambertMaterial({ color: 0x886622 }));
+      staff.position.set(0.25, 0.5, 0); g.add(staff);
+      const staffOrb = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 6), goldMat);
+      staffOrb.position.set(0.25, 1.05, 0); g.add(staffOrb);
+      // Golden aura ring (visual indicator)
+      const ringGeo = new THREE.TorusGeometry(0.8, 0.02, 8, 24);
+      const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0xffcc00, transparent: true, opacity: 0.4 }));
+      ring.rotation.x = -Math.PI / 2; ring.position.y = 0.05; ring.name = "auraRing"; g.add(ring);
+      return g;
+    };
   }
 
   private createDefaultPlayer(): PlayerState {
@@ -1368,6 +1477,13 @@ export class GameEngine {
     this.xpGems = [];
     this.projectiles.forEach(p => { if (p.mesh.parent) this.scene.remove(p.mesh); });
     this.projectiles = [];
+    this.enemyProjectiles.forEach(p => { if (p.mesh.parent) this.scene.remove(p.mesh); });
+    this.enemyProjectiles = [];
+    this.bossRound = 0;
+    this.lastScaledBossTime = 0;
+    this.tier3ShamanTimer = 20;
+    this.tier3NecroTimer = 15;
+    this.tier3TrollTimer = 20;
     this.shockWaves.forEach(s => { if (s.mesh.parent) this.scene.remove(s.mesh); });
     this.shockWaves = [];
     this.lightnings.forEach(l => { if (l.line.parent) this.scene.remove(l.line); });
@@ -1446,6 +1562,7 @@ export class GameEngine {
     this.updateEnemies(cappedDt);
     this.updateWeapons(cappedDt);
     this.updateProjectiles(cappedDt);
+    this.updateEnemyProjectiles(cappedDt);
     this.updateShockWaves(cappedDt);
     this.updateLightnings(cappedDt);
     this.updateFireSegments(cappedDt);
@@ -1760,13 +1877,110 @@ export class GameEngine {
         if (enemy.burnTimer <= 0) { enemy.burnTimer = 0; enemy.burnDamage = 0; }
       }
 
+      // Shaman aura buff — reset speed/damage each frame, shaman will re-apply
+      // (We reset buffed enemies at the start; shaman applies in a second pass below)
+
       // Move toward player
       const dir = new THREE.Vector3().subVectors(playerPos, enemy.position).normalize();
       const isBat = enemy.type === "bat";
-      const effectiveSpeed = enemy.speed * (1 - enemy.slowAmount);
 
+      // Troll berserker: double speed when HP < 30%
+      let trollSpeedMult = 1;
+      if (enemy.type === "troll" && enemy.hp < enemy.maxHp * 0.3) {
+        trollSpeedMult = 2;
+      }
+      // Troll regen: if no damage for 5s, heal 5% maxHP/s
+      if (enemy.type === "troll" && this.gameTime - enemy.lastDamageTime > 5) {
+        enemy.hp = Math.min(enemy.maxHp, enemy.hp + enemy.maxHp * 0.05 * dt);
+        // Green particles
+        if (Math.random() < 0.3) {
+          const p = new THREE.Mesh(new THREE.SphereGeometry(0.05, 4, 3), new THREE.MeshBasicMaterial({ color: 0x44ff44, transparent: true }));
+          p.position.copy(enemy.position).add(new THREE.Vector3((Math.random() - 0.5) * 0.5, Math.random() * 1.5, (Math.random() - 0.5) * 0.5));
+          this.scene.add(p);
+          this.particles.push({ mesh: p, velocity: new THREE.Vector3(0, 0.5, 0), life: 0, maxLife: 0.5 });
+        }
+      }
+
+      const effectiveSpeed = enemy.speed * (1 - enemy.slowAmount) * trollSpeedMult;
+
+      // Necromancer AI: keep distance, strafe, fire projectiles, summon
+      if (enemy.type === "necromancer") {
+        const distToPlayer = enemy.position.distanceTo(playerPos);
+        if (distToPlayer < 15) {
+          // Move away
+          enemy.position.x -= dir.x * effectiveSpeed * dt;
+          enemy.position.z -= dir.z * effectiveSpeed * dt;
+        } else if (distToPlayer > 18) {
+          enemy.position.x += dir.x * effectiveSpeed * dt;
+          enemy.position.z += dir.z * effectiveSpeed * dt;
+        } else {
+          // Strafe
+          const lateral = new THREE.Vector3(-dir.z, 0, dir.x);
+          enemy.position.x += lateral.x * effectiveSpeed * dt;
+          enemy.position.z += lateral.z * effectiveSpeed * dt;
+        }
+        // Fire projectile every 2s
+        enemy.attackTimer += dt;
+        if (enemy.attackTimer >= 2) {
+          enemy.attackTimer = 0;
+          this.fireNecromancerProjectile(enemy);
+        }
+        // Summon 3 skeletons every 10s
+        enemy.summonTimer += dt;
+        if (enemy.summonTimer >= 10) {
+          enemy.summonTimer = 0;
+          for (let s = 0; s < 3; s++) {
+            this.spawnEnemyAtPosition("skeleton",
+              enemy.position.x + (Math.random() - 0.5) * 3,
+              enemy.position.z + (Math.random() - 0.5) * 3);
+          }
+        }
+        // Animate orbiting skull
+        if (enemy.mesh instanceof THREE.Group) {
+          const skull = enemy.mesh.getObjectByName("orbitSkull");
+          if (skull) {
+            const sa = this.gameTime * 2 + enemy.id;
+            skull.position.set(Math.cos(sa) * 0.6, 1.4, Math.sin(sa) * 0.6);
+          }
+        }
+      }
+      // Shaman AI: stay behind pack
+      else if (enemy.type === "shaman") {
+        // Find average enemy position (excluding self)
+        let avgX = 0, avgZ = 0, count = 0;
+        for (const e of this.enemies) {
+          if (!e.isAlive || e.id === enemy.id || e.type === "shaman") continue;
+          const d = e.position.distanceTo(enemy.position);
+          if (d < 25) { avgX += e.position.x; avgZ += e.position.z; count++; }
+        }
+        if (count > 0) {
+          avgX /= count; avgZ /= count;
+          // Target: opposite side of player from enemy pack
+          const packToPlayer = new THREE.Vector3(playerPos.x - avgX, 0, playerPos.z - avgZ).normalize();
+          const targetX = avgX - packToPlayer.x * 20;
+          const targetZ = avgZ - packToPlayer.z * 20;
+          const toTarget = new THREE.Vector3(targetX - enemy.position.x, 0, targetZ - enemy.position.z);
+          if (toTarget.length() > 1) {
+            toTarget.normalize();
+            enemy.position.x += toTarget.x * effectiveSpeed * dt;
+            enemy.position.z += toTarget.z * effectiveSpeed * dt;
+          }
+        } else {
+          // No nearby enemies, just move toward player slowly
+          enemy.position.x += dir.x * effectiveSpeed * 0.5 * dt;
+          enemy.position.z += dir.z * effectiveSpeed * 0.5 * dt;
+        }
+        // Animate aura ring pulse
+        if (enemy.mesh instanceof THREE.Group) {
+          const ring = enemy.mesh.getObjectByName("auraRing");
+          if (ring) {
+            const pulse = 1 + Math.sin(this.gameTime * 3) * 0.15;
+            ring.scale.set(pulse, pulse, pulse);
+          }
+        }
+      }
       // Spider: zigzag lateral offset
-      if (enemy.type === "spider") {
+      else if (enemy.type === "spider") {
         const lateral = new THREE.Vector3(-dir.z, 0, dir.x); // perpendicular
         const zigzag = Math.sin(this.gameTime * 8 + enemy.id * 2.5) * 0.7;
         enemy.position.x += (dir.x + lateral.x * zigzag) * effectiveSpeed * dt;
@@ -1842,6 +2056,75 @@ export class GameEngine {
         this.damagePlayer(enemy.damage);
       }
     }
+
+    // Shaman aura pass: reset all enemies to base stats then apply buff
+    // First reset
+    for (const enemy of this.enemies) {
+      if (!enemy.isAlive) continue;
+      enemy.speed = enemy.baseSpeed;
+      enemy.damage = enemy.baseDamage;
+    }
+    // Then apply shaman buffs
+    for (const shaman of this.enemies) {
+      if (!shaman.isAlive || shaman.type !== "shaman") continue;
+      for (const enemy of this.enemies) {
+        if (!enemy.isAlive || enemy.id === shaman.id) continue;
+        if (enemy.position.distanceTo(shaman.position) < 12) {
+          enemy.speed = enemy.baseSpeed * 1.3;
+          enemy.damage = enemy.baseDamage * 1.2;
+        }
+      }
+    }
+  }
+
+  private fireNecromancerProjectile(necro: EnemyInstance) {
+    const dir = new THREE.Vector3()
+      .subVectors(this.player.position, necro.position).normalize();
+    const projMat = new THREE.MeshBasicMaterial({ color: 0x9933ff });
+    const projMesh = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 5), projMat);
+    const pos = necro.position.clone().add(new THREE.Vector3(0, 1, 0));
+    projMesh.position.copy(pos);
+    this.scene.add(projMesh);
+    // Enemy projectile — we add to projectiles with negative damage flag
+    // Actually we handle it as a custom enemy projectile
+    this.enemyProjectiles.push({
+      position: pos,
+      velocity: dir.multiplyScalar(8),
+      damage: 15,
+      mesh: projMesh,
+      lifetime: 3,
+      isAlive: true,
+    });
+  }
+
+  private updateEnemyProjectiles(dt: number) {
+    for (const proj of this.enemyProjectiles) {
+      if (!proj.isAlive) continue;
+      proj.position.add(proj.velocity.clone().multiplyScalar(dt));
+      proj.mesh.position.copy(proj.position);
+      proj.lifetime -= dt;
+      if (proj.lifetime <= 0) { proj.isAlive = false; continue; }
+      // Trail particles
+      if (Math.random() < 0.3) {
+        const trail = new THREE.Mesh(new THREE.SphereGeometry(0.03, 4, 3), new THREE.MeshBasicMaterial({ color: 0x9933ff, transparent: true }));
+        trail.position.copy(proj.position);
+        this.scene.add(trail);
+        this.particles.push({ mesh: trail, velocity: new THREE.Vector3((Math.random() - 0.5) * 0.3, 0.2, (Math.random() - 0.5) * 0.3), life: 0, maxLife: 0.3 });
+      }
+      // Hit player
+      const dist = proj.position.distanceTo(this.player.position);
+      if (dist < PLAYER.radius + 0.2 && this.player.iFrameTimer <= 0) {
+        this.damagePlayer(proj.damage);
+        proj.isAlive = false;
+      }
+    }
+    // Cleanup
+    for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
+      if (!this.enemyProjectiles[i].isAlive) {
+        this.scene.remove(this.enemyProjectiles[i].mesh);
+        this.enemyProjectiles.splice(i, 1);
+      }
+    }
   }
 
   private spawnEnemy(type: string) {
@@ -1881,26 +2164,87 @@ export class GameEngine {
 
     // Difficulty scaling
     const minuteScale = 1 + this.gameTime / 60 * 0.15;
+    let hp = stats.hp * minuteScale;
+    let maxHp = hp;
+    let damage = stats.damage * (1 + this.gameTime / 120 * 0.1);
+    let xpValue = stats.xp;
+    let isElite = false;
+
+    // Elite roll (not for bosses)
+    const bossTypes = new Set(Object.keys(BOSSES));
+    if (!bossTypes.has(type)) {
+      const eliteChance = Math.min(0.5, (this.gameTime / 60) * 0.025);
+      if (Math.random() < eliteChance) {
+        isElite = true;
+        hp *= 2; maxHp = hp;
+        damage *= 1.5;
+        xpValue *= 3;
+        // Add golden glow sphere
+        const glowMat = new THREE.MeshBasicMaterial({ color: 0xffcc00, transparent: true, opacity: 0.25 });
+        const glowSphere = new THREE.Mesh(new THREE.SphereGeometry(stats.radius * 1.3, 8, 6), glowMat);
+        glowSphere.name = "eliteGlow";
+        mesh.add(glowSphere);
+        // Add golden point light
+        const glow = new THREE.PointLight(0xffcc00, 1, 5);
+        glow.position.y = 0.5;
+        mesh.add(glow);
+      }
+    }
 
     this.enemies.push({
       id: this.nextEnemyId++,
       type,
       position: pos,
       velocity: new THREE.Vector3(),
-      hp: stats.hp * minuteScale,
-      maxHp: stats.hp * minuteScale,
-      damage: stats.damage * (1 + this.gameTime / 120 * 0.1),
+      hp,
+      maxHp,
+      damage,
       speed: stats.speed,
       radius: stats.radius,
       mesh,
       isAlive: true,
       hitTimer: 0,
-      xpValue: stats.xp,
+      xpValue,
       color: stats.color,
       slowTimer: 0,
       slowAmount: 0,
       burnTimer: 0,
       burnDamage: 0,
+      lastDamageTime: this.gameTime,
+      isElite,
+      attackTimer: 0,
+      summonTimer: 0,
+      baseSpeed: stats.speed,
+      baseDamage: damage,
+    });
+  }
+
+  private spawnEnemyAtPosition(type: string, x: number, z: number) {
+    const stats = ENEMIES[type as keyof typeof ENEMIES];
+    if (!stats) return;
+    const factory = this.enemyMeshFactories[type];
+    let mesh: THREE.Object3D;
+    if (factory) { mesh = factory(); } else {
+      const geo = this.enemyGeometries[type];
+      const mat = this.enemyMaterials[type].clone();
+      mesh = new THREE.Mesh(geo, mat);
+    }
+    mesh.castShadow = true;
+    const sx = Math.max(-ARENA.halfSize + 2, Math.min(ARENA.halfSize - 2, x));
+    const sz = Math.max(-ARENA.halfSize + 2, Math.min(ARENA.halfSize - 2, z));
+    const pos = new THREE.Vector3(sx, type === "bat" ? 1.5 : 0.5, sz);
+    mesh.position.copy(pos);
+    this.scene.add(mesh);
+    const minuteScale = 1 + this.gameTime / 60 * 0.15;
+    this.enemies.push({
+      id: this.nextEnemyId++, type, position: pos, velocity: new THREE.Vector3(),
+      hp: stats.hp * minuteScale, maxHp: stats.hp * minuteScale,
+      damage: stats.damage * (1 + this.gameTime / 120 * 0.1),
+      speed: stats.speed, radius: stats.radius, mesh, isAlive: true, hitTimer: 0,
+      xpValue: stats.xp, color: stats.color, slowTimer: 0, slowAmount: 0,
+      burnTimer: 0, burnDamage: 0, lastDamageTime: this.gameTime, isElite: false,
+      attackTimer: 0, summonTimer: 0, baseSpeed: stats.speed,
+      baseDamage: stats.damage * (1 + this.gameTime / 120 * 0.1),
     });
   }
 
@@ -1937,6 +2281,27 @@ export class GameEngine {
       spawnInterval = 0.5;
       types = ["skeleton", "bat", "ogre"];
       groupSize = 8;
+    }
+
+    // Tier 3 solo spawns via dedicated timers
+    if (minute >= 12) {
+      this.tier3ShamanTimer -= dt;
+      if (this.tier3ShamanTimer <= 0) {
+        this.spawnEnemy("shaman");
+        this.tier3ShamanTimer = 20;
+      }
+    }
+    if (minute >= 15) {
+      this.tier3NecroTimer -= dt;
+      if (this.tier3NecroTimer <= 0) {
+        this.spawnEnemy("necromancer");
+        this.tier3NecroTimer = 15;
+      }
+      this.tier3TrollTimer -= dt;
+      if (this.tier3TrollTimer <= 0) {
+        this.spawnEnemy("troll");
+        this.tier3TrollTimer = 20;
+      }
     }
 
     // Level scaling: more enemies per group based on player level
@@ -2051,6 +2416,23 @@ export class GameEngine {
       }
     }
 
+    // Boss scaling after all 3 original bosses defeated (20+ minutes)
+    const allBossKeys = Object.keys(BOSSES);
+    const allOriginalBossesDefeated = allBossKeys.every(k => this.bossSpawned.has(k));
+    if (allOriginalBossesDefeated && !this.activeBoss && minute >= 20) {
+      const nextBossMinute = 20 + this.bossRound * 5;
+      if (minute >= nextBossMinute && this.gameTime - this.lastScaledBossTime > 10) {
+        const bossIndex = this.bossRound % allBossKeys.length;
+        const bossType = allBossKeys[bossIndex];
+        const round = Math.floor(this.bossRound / allBossKeys.length) + 1;
+        const hpScale = Math.pow(1.5, round);
+        const dmgScale = Math.pow(1.25, round);
+        this.spawnScaledBoss(bossType, hpScale, dmgScale);
+        this.lastScaledBossTime = this.gameTime;
+        this.bossRound++;
+      }
+    }
+
     // Boss slam attacks
     if (this.activeBoss && this.activeBoss.isAlive) {
       const bossType = this.activeBoss.type as keyof typeof BOSSES;
@@ -2128,8 +2510,50 @@ export class GameEngine {
       slowAmount: 0,
       burnTimer: 0,
       burnDamage: 0,
+      lastDamageTime: this.gameTime,
+      isElite: false,
+      attackTimer: 0,
+      summonTimer: 0,
+      baseSpeed: stats.speed,
+      baseDamage: stats.damage * (1 + this.gameTime / 120 * 0.1),
     };
 
+    this.enemies.push(boss);
+    this.activeBoss = boss;
+    this.bossSlamTimers.set(boss.id, BOSSES[type as keyof typeof BOSSES]?.slamInterval || 4);
+    this.onBossSpawn?.(type);
+    Audio.playBossSpawn();
+  }
+
+  private spawnScaledBoss(type: string, hpScale: number, dmgScale: number) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 20;
+    const pos = new THREE.Vector3(
+      this.player.position.x + Math.cos(angle) * dist, 0.5,
+      this.player.position.z + Math.sin(angle) * dist);
+    pos.x = Math.max(-ARENA.halfSize + 5, Math.min(ARENA.halfSize - 5, pos.x));
+    pos.z = Math.max(-ARENA.halfSize + 5, Math.min(ARENA.halfSize - 5, pos.z));
+    pos.y = this.getTerrainHeight(pos.x, pos.z);
+
+    const stats = ENEMIES[type as keyof typeof ENEMIES];
+    if (!stats) return;
+    const factory = this.enemyMeshFactories[type];
+    if (!factory) return;
+    const mesh = factory();
+    mesh.position.copy(pos); mesh.castShadow = true;
+    this.scene.add(mesh);
+
+    const minuteScale = 1 + this.gameTime / 60 * 0.15;
+    const boss: EnemyInstance = {
+      id: this.nextEnemyId++, type, position: pos, velocity: new THREE.Vector3(),
+      hp: stats.hp * minuteScale * hpScale, maxHp: stats.hp * minuteScale * hpScale,
+      damage: stats.damage * (1 + this.gameTime / 120 * 0.1) * dmgScale,
+      speed: stats.speed, radius: stats.radius, mesh, isAlive: true, hitTimer: 0,
+      xpValue: stats.xp * Math.ceil(hpScale), color: stats.color,
+      slowTimer: 0, slowAmount: 0, burnTimer: 0, burnDamage: 0,
+      lastDamageTime: this.gameTime, isElite: false, attackTimer: 0, summonTimer: 0,
+      baseSpeed: stats.speed, baseDamage: stats.damage * (1 + this.gameTime / 120 * 0.1) * dmgScale,
+    };
     this.enemies.push(boss);
     this.activeBoss = boss;
     this.bossSlamTimers.set(boss.id, BOSSES[type as keyof typeof BOSSES]?.slamInterval || 4);
@@ -2849,6 +3273,7 @@ export class GameEngine {
     }
 
     enemy.hp -= finalDamage;
+    enemy.lastDamageTime = this.gameTime;
 
     // DPS tracking
     this.damageLog.push({ time: this.gameTime, damage: finalDamage });

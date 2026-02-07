@@ -45,6 +45,13 @@ export interface EnemyInstance {
   slowAmount: number;
   burnTimer: number;
   burnDamage: number;
+  // Tier 3 + Elite fields
+  lastDamageTime: number;
+  isElite: boolean;
+  attackTimer: number;
+  summonTimer: number;
+  baseSpeed: number;
+  baseDamage: number;
 }
 
 export interface XPGem {
