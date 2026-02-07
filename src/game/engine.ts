@@ -1738,6 +1738,7 @@ export class GameEngine {
     this.updateCamera();
     this.updateEnemies(cappedDt);
     this.updateWeapons(cappedDt);
+    this.cleanupDead();
     this.updateProjectiles(cappedDt);
     this.updateEnemyProjectiles(cappedDt);
     this.updateShockWaves(cappedDt);
@@ -3533,6 +3534,7 @@ export class GameEngine {
   private lastHitSoundTime = 0;
 
   private damageEnemy(enemy: EnemyInstance, damage: number, silent = false, damageType: "physical" | "fire" | "ice" | "lightning" = "physical") {
+    if (!enemy.isAlive) return;
     // Critical hit
     let finalDamage = damage;
     let isCrit = false;
@@ -3566,21 +3568,9 @@ export class GameEngine {
       }
     }
 
-    // Flash red + impact scale
+    // Flash red via hitTimer (handled in render), impact scale
     if (!silent) {
-      enemy.mesh.traverse((child) => {
-        if (child instanceof THREE.Mesh && child.material) {
-          const mat = child.material as THREE.MeshLambertMaterial;
-          if (mat.emissive) {
-            mat.emissive.setHex(0xff0000);
-            setTimeout(() => { mat.emissive?.setHex(0x000000); }, 100);
-          }
-        }
-      });
-      // Impact scale
-      const origScale = enemy.mesh.scale.clone();
-      enemy.mesh.scale.multiplyScalar(1.1);
-      setTimeout(() => { enemy.mesh.scale.copy(origScale); }, 80);
+      enemy.hitTimer = 0.1;
     }
 
     // Damage type effects
