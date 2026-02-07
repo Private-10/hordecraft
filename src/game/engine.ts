@@ -2331,7 +2331,7 @@ export class GameEngine {
         ring.rotation.x = -Math.PI / 2;
         ringMat.depthWrite = false;
         ring.renderOrder = 1;
-        ring.position.copy(pos).add(new THREE.Vector3(0, 2.0, 0));
+        ring.position.copy(pos).add(new THREE.Vector3(0, 0.5, 0));
         this.scene.add(ring);
         this.shockWaves.push({ position: pos.clone(), mesh: ring, timer: 0, maxTime: 0.4 + r * 0.1, maxRadius: range * (1 - r * 0.15), damage: r === 0 ? damage : 0 });
       }, r * 80);
@@ -2344,7 +2344,7 @@ export class GameEngine {
     );
     ground.rotation.x = -Math.PI / 2;
     ground.renderOrder = 1;
-    ground.position.copy(pos).add(new THREE.Vector3(0, 2.0, 0));
+    ground.position.copy(pos).add(new THREE.Vector3(0, 0.5, 0));
     this.scene.add(ground);
     setTimeout(() => this.scene.remove(ground), 500);
 
@@ -2562,7 +2562,7 @@ export class GameEngine {
     const ringMat = new THREE.MeshBasicMaterial({ color: 0x88ddff, transparent: true, opacity: 0.7, side: THREE.DoubleSide });
     const ring = new THREE.Mesh(ringGeo, ringMat);
     ring.rotation.x = -Math.PI / 2;
-    ring.position.copy(pos).add(new THREE.Vector3(0, 2.0, 0));
+    ring.position.copy(pos).add(new THREE.Vector3(0, 0.5, 0));
     ring.renderOrder = 1;
     (ring.material as THREE.MeshBasicMaterial).depthWrite = false;
     this.scene.add(ring);
@@ -2575,7 +2575,7 @@ export class GameEngine {
     );
     groundDisc.rotation.x = -Math.PI / 2;
     groundDisc.renderOrder = 1;
-    groundDisc.position.copy(pos).add(new THREE.Vector3(0, 2.0, 0));
+    groundDisc.position.copy(pos).add(new THREE.Vector3(0, 0.5, 0));
     this.scene.add(groundDisc);
     setTimeout(() => this.scene.remove(groundDisc), 1000);
 
@@ -2647,7 +2647,7 @@ export class GameEngine {
     );
     groundCircle.rotation.x = -Math.PI / 2;
     groundCircle.renderOrder = 1;
-    groundCircle.position.y = 1.5;
+    groundCircle.position.y = 0.2;
     group.add(groundCircle);
     // Orbiting dark energy particles
     for (let i = 0; i < 8; i++) {
