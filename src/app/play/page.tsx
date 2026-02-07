@@ -280,7 +280,8 @@ export default function PlayPage() {
                     setNickMode("idle");
                     setNickClaimed(false);
                   }}
-                  onBlur={async () => {
+                  onBlur={async (e) => {
+                    e.target.style.borderColor = "rgba(255,255,255,0.2)";
                     if (nickname.trim().length >= 2) {
                       setNickChecking(true);
                       const claimed = await isNicknameClaimed(nickname.trim());
@@ -295,7 +296,6 @@ export default function PlayPage() {
                     color: "white", fontSize: 16, width: 250, textAlign: "center", outline: "none",
                   }}
                   onFocus={(e) => (e.target.style.borderColor = "#ff6b35")}
-                  onBlur={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.2)")}
                 />
 
                 {/* PIN input */}
