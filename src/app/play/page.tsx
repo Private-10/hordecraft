@@ -43,6 +43,8 @@ export default function PlayPage() {
   const [isMobileDevice, setIsMobileDevice] = useState(false);
   const [maxDps, setMaxDps] = useState(0);
   const [showShop, setShowShop] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [invertY, setInvertY] = useState(false);
   const [metaState, setMetaState] = useState<MetaState | null>(null);
 
   const submitScore = async (data: Record<string, unknown>) => {
@@ -117,6 +119,7 @@ export default function PlayPage() {
     const engine = new GameEngine();
     engineRef.current = engine;
     engine.init(canvasRef.current);
+    setInvertY(engine.settings.invertY);
 
     engine.onStateChange = (state: GameState) => {
       setGameState(state);
@@ -563,6 +566,10 @@ export default function PlayPage() {
                 🏆 {lang === "tr" ? "SIRALAMA" : "LEADERBOARD"}
               </button>
 
+              <button className="btn-settings" onClick={() => { Audio.playSelect(); setShowSettings(true); }}>
+                ⚙️ {lang === "tr" ? "AYARLAR" : "SETTINGS"}
+              </button>
+
               {isMobileDevice && (
                 <button
                   className="btn-fullscreen"
@@ -782,6 +789,35 @@ export default function PlayPage() {
               <button className="btn btn-secondary" onClick={() => { window.location.href = "/leaderboard"; }}>
                 🏆 {lang === "tr" ? "Sıralama" : "Leaderboard"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Settings Overlay */}
+      {showSettings && mounted && (
+        <div className="shop-overlay" onClick={() => setShowSettings(false)}>
+          <div className="shop-panel settings-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="shop-header">
+              <h2 className="shop-title">{t("settings.title")}</h2>
+              <button className="shop-close" onClick={() => setShowSettings(false)}>{t("settings.close")}</button>
+            </div>
+            <div className="settings-list">
+              <label className="settings-row">
+                <span>{t("settings.invertY")}</span>
+                <input
+                  type="checkbox"
+                  checked={invertY}
+                  onChange={(e) => {
+                    const val = e.target.checked;
+                    setInvertY(val);
+                    if (engineRef.current) {
+                      engineRef.current.settings.invertY = val;
+                      engineRef.current.saveSettings();
+                    }
+                  }}
+                  className="settings-checkbox"
+                />
+              </label>
             </div>
           </div>
         </div>

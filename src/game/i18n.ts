@@ -144,6 +144,12 @@ const translations = {
   "unlock.btn": { tr: "🔓 AÇ", en: "🔓 UNLOCK" },
   "unlock.locked": { tr: "🔒 Kilitli", en: "🔒 Locked" },
   "unlock.condition_not_met": { tr: "Koşul karşılanmadı", en: "Condition not met" },
+
+  // Settings
+  "settings.title": { tr: "⚙️ AYARLAR", en: "⚙️ SETTINGS" },
+  "settings.invertY": { tr: "Mouse Y Ekseni Ters", en: "Invert Mouse Y Axis" },
+  "settings.volume": { tr: "Ses Seviyesi", en: "Volume" },
+  "settings.close": { tr: "Kapat", en: "Close" },
 } as const;
 
 type TranslationKey = keyof typeof translations;

@@ -93,6 +93,9 @@ export class GameEngine {
   // Vortex tracking
   private vortexes: VortexEffect[] = [];
 
+  // Settings
+  settings = this.loadSettings();
+
   // Meta progression
   private metaState: MetaState = this.loadMetaState();
   private metaExtraChoiceCount = 0;
@@ -1478,11 +1481,12 @@ export class GameEngine {
     // Camera rotation
     const camSpeed = this.isMobile ? CAMERA.rotateSpeed * 1.5 : CAMERA.rotateSpeed;
     this.cameraYaw -= dx * camSpeed;
-    this.cameraPitch = Math.max(CAMERA.minPitch, Math.min(CAMERA.maxPitch, this.cameraPitch - dy * camSpeed));
+    const yMul = this.settings.invertY ? 1 : -1;
+    this.cameraPitch = Math.max(CAMERA.minPitch, Math.min(CAMERA.maxPitch, this.cameraPitch + dy * camSpeed * yMul));
 
     // Movement direction relative to camera
     const forward = new THREE.Vector3(-Math.sin(this.cameraYaw), 0, -Math.cos(this.cameraYaw));
-    const right = new THREE.Vector3(forward.z, 0, -forward.x);
+    const right = new THREE.Vector3(-forward.z, 0, forward.x);
 
     const moveDir = new THREE.Vector3();
     if (this.isMobile && this.mobileInput.isMoving) {
@@ -3704,5 +3708,20 @@ export class GameEngine {
     this.metaState.unlockedCharacters.push(id);
     this.saveMetaState();
     return true;
+  }
+
+  // Settings
+  private loadSettings(): { invertY: boolean; volume: number } {
+    try {
+      const raw = localStorage.getItem("hordecraft_settings");
+      if (raw) return { invertY: false, volume: 1, ...JSON.parse(raw) };
+    } catch {}
+    return { invertY: false, volume: 1 };
+  }
+
+  saveSettings() {
+    try {
+      localStorage.setItem("hordecraft_settings", JSON.stringify(this.settings));
+    } catch {}
   }
 }
