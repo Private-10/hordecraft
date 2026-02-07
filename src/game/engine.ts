@@ -3159,6 +3159,7 @@ export class GameEngine {
       this.state = "levelup";
       if (this.isMobile) {
         this.mobileInput.setActive(false);
+        this.mobileInput.setVisible(false);
       }
       if (document.pointerLockElement) {
         document.exitPointerLock();
@@ -3297,6 +3298,7 @@ export class GameEngine {
     this.onStateChange?.(this.state);
     // Re-enable controls
     if (this.isMobile) {
+      this.mobileInput.setVisible(true);
       this.mobileInput.setActive(true);
     } else {
       const canvas = this.renderer.domElement;

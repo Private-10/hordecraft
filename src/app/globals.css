@@ -520,10 +520,11 @@ button, .btn, a, [role="button"] {
 }
 
 .combo-display {
-  position: absolute; top: 50%; right: 30px; transform: translateY(-50%);
-  font-size: 28px; font-weight: 900; color: var(--gold);
+  position: absolute; top: 80px; right: 20px;
+  font-size: 22px; font-weight: 900; color: var(--gold);
   text-shadow: 0 0 20px rgba(255, 215, 0, 0.6);
   opacity: 0; transition: opacity 0.3s;
+  pointer-events: none;
 }
 .combo-display.active {
   opacity: 1;
@@ -531,8 +532,8 @@ button, .btn, a, [role="button"] {
 }
 
 @keyframes comboPulse {
-  0%, 100% { transform: translateY(-50%) scale(1); }
-  50% { transform: translateY(-50%) scale(1.1); }
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
 }
 @keyframes pulse {
   from { opacity: 0.7; transform: translateX(-50%) scale(1); }
@@ -564,7 +565,8 @@ button, .btn, a, [role="button"] {
   position: fixed; inset: 0;
   background: rgba(0, 0, 0, 0.7);
   display: flex; align-items: center; justify-content: center;
-  z-index: 100; backdrop-filter: blur(4px);
+  z-index: 500; backdrop-filter: blur(4px);
+  touch-action: auto;
 }
 .level-up-title {
   font-size: 36px; font-weight: 900; color: var(--gold);
@@ -595,7 +597,8 @@ button, .btn, a, [role="button"] {
   position: fixed; inset: 0;
   background: rgba(0, 0, 0, 0.85);
   display: flex; align-items: center; justify-content: center;
-  z-index: 200; backdrop-filter: blur(6px);
+  z-index: 500; backdrop-filter: blur(6px);
+  touch-action: auto;
 }
 .game-over-panel {
   text-align: center; padding: 30px 24px;

@@ -235,9 +235,10 @@ export class MobileInputManager {
   }
 
   setVisible(visible: boolean) {
-    const display = visible ? "" : "none";
     document.querySelectorAll('[data-mobile-ui]').forEach(el => {
-      (el as HTMLElement).style.display = display;
+      const s = (el as HTMLElement).style;
+      s.display = visible ? "" : "none";
+      s.pointerEvents = visible ? "auto" : "none";
     });
   }
 
