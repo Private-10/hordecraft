@@ -4,7 +4,8 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { GameEngine, Audio } from "@/game/engine";
 import type { GameState, UpgradeOption } from "@/game/types";
 import { t, getLang, setLang, type Lang } from "@/game/i18n";
-import { CHARACTERS } from "@/game/characters";
+import { CHARACTERS, type CharacterDef } from "@/game/characters";
+import type { MetaState } from "@/game/types";
 import { getActiveNickname, registerNickname, claimNickname, isNicknameClaimed, logoutNickname } from "@/game/nickname";
 
 export default function PlayPage() {
@@ -41,6 +42,8 @@ export default function PlayPage() {
   const [dps, setDps] = useState(0);
   const [isMobileDevice, setIsMobileDevice] = useState(false);
   const [maxDps, setMaxDps] = useState(0);
+  const [showShop, setShowShop] = useState(false);
+  const [metaState, setMetaState] = useState<MetaState | null>(null);
 
   const submitScore = async (data: Record<string, unknown>) => {
     try {
@@ -251,6 +254,49 @@ export default function PlayPage() {
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
+  const refreshMeta = useCallback(() => {
+    if (engineRef.current) setMetaState({ ...engineRef.current.getMetaState() });
+  }, []);
+
+  // Refresh meta on mount and when returning to menu
+  useEffect(() => {
+    if (gameState === "menu" && engineRef.current) refreshMeta();
+  }, [gameState, refreshMeta]);
+
+  const SHOP_UPGRADES = [
+    { id: "metaHp", icon: "❤️", nameKey: "meta.hp" as const, effectKey: "shop.effect.metaHp" as const, maxLevel: 10 },
+    { id: "metaDamage", icon: "⚔️", nameKey: "meta.damage" as const, effectKey: "shop.effect.metaDamage" as const, maxLevel: 10 },
+    { id: "metaSpeed", icon: "🏃", nameKey: "meta.speed" as const, effectKey: "shop.effect.metaSpeed" as const, maxLevel: 5 },
+    { id: "metaXp", icon: "📚", nameKey: "meta.xp" as const, effectKey: "shop.effect.metaXp" as const, maxLevel: 5 },
+    { id: "metaMagnet", icon: "🧲", nameKey: "meta.magnet" as const, effectKey: "shop.effect.metaMagnet" as const, maxLevel: 5 },
+    { id: "metaStartLevel", icon: "🌟", nameKey: "meta.startLevel" as const, effectKey: "shop.effect.metaStartLevel" as const, maxLevel: 3 },
+    { id: "metaExtraChoice", icon: "🎯", nameKey: "meta.extraChoice" as const, effectKey: "shop.effect.metaExtraChoice" as const, maxLevel: 1 },
+  ];
+
+  const handleBuyUpgrade = useCallback((id: string) => {
+    if (!engineRef.current) return;
+    Audio.playSelect();
+    engineRef.current.buyPermanentUpgrade(id);
+    refreshMeta();
+  }, [refreshMeta]);
+
+  const handleUnlockCharacter = useCallback((id: string) => {
+    if (!engineRef.current) return;
+    Audio.playSelect();
+    engineRef.current.unlockCharacter(id);
+    refreshMeta();
+  }, [refreshMeta]);
+
+  const isCharUnlocked = (ch: CharacterDef) => {
+    if (ch.unlock.isDefault) return true;
+    return metaState?.unlockedCharacters.includes(ch.id) ?? false;
+  };
+
+  const isConditionMet = (ch: CharacterDef) => {
+    if (!metaState) return false;
+    return ch.unlock.checkUnlocked(metaState.achievements);
+  };
+
   const selectedCharData = CHARACTERS.find(c => c.id === selectedChar);
 
   return (
@@ -323,22 +369,49 @@ export default function PlayPage() {
 
               {showCharSelect && (
                 <div className="char-grid">
-                  {CHARACTERS.map(ch => (
-                    <button
-                      key={ch.id}
-                      onClick={() => { setSelectedChar(ch.id); Audio.playSelect(); }}
-                      className={`char-card ${selectedChar === ch.id ? "selected" : ""}`}
-                    >
-                      <span className="char-card-icon">{ch.icon}</span>
-                      <span className="char-card-name">{ch.name()}</span>
-                      <span className="char-card-desc">{ch.description()}</span>
-                      <div className="char-card-stats">
-                        <span className="stat-hp">❤️{Math.round(ch.hpMult * 100)}%</span>
-                        <span className="stat-spd">⚡{Math.round(ch.speedMult * 100)}%</span>
-                        <span className="stat-dmg">⚔️{Math.round(ch.damageMult * 100)}%</span>
-                      </div>
-                    </button>
-                  ))}
+                  {CHARACTERS.map(ch => {
+                    const unlocked = isCharUnlocked(ch);
+                    const condMet = isConditionMet(ch);
+                    const canAfford = (metaState?.gold ?? 0) >= ch.unlock.unlockCost;
+                    return (
+                      <button
+                        key={ch.id}
+                        onClick={() => { if (unlocked) { setSelectedChar(ch.id); Audio.playSelect(); } }}
+                        className={`char-card ${selectedChar === ch.id && unlocked ? "selected" : ""} ${!unlocked ? "locked" : ""}`}
+                        style={{ cursor: unlocked ? "pointer" : "default" }}
+                      >
+                        <span className="char-card-icon">{unlocked ? ch.icon : "🔒"}</span>
+                        <span className="char-card-name">{ch.name()}</span>
+                        {unlocked ? (
+                          <>
+                            <span className="char-card-desc">{ch.description()}</span>
+                            <div className="char-card-stats">
+                              <span className="stat-hp">❤️{Math.round(ch.hpMult * 100)}%</span>
+                              <span className="stat-spd">⚡{Math.round(ch.speedMult * 100)}%</span>
+                              <span className="stat-dmg">⚔️{Math.round(ch.damageMult * 100)}%</span>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <span className="char-card-lock">{t(ch.unlock.unlockCondition as never)}</span>
+                            {condMet ? (
+                              <button
+                                className="char-unlock-btn"
+                                disabled={!canAfford}
+                                onClick={(e) => { e.stopPropagation(); handleUnlockCharacter(ch.id); }}
+                              >
+                                {t("unlock.btn")} ({ch.unlock.unlockCost}G)
+                              </button>
+                            ) : (
+                              <span className="char-card-lock" style={{ color: "rgba(255,100,100,0.5)", fontSize: 9 }}>
+                                {t("unlock.condition_not_met")}
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -483,6 +556,9 @@ export default function PlayPage() {
 
             {/* Action buttons */}
             <div className="menu-section menu-actions">
+              <button className="btn-shop" onClick={() => { Audio.playSelect(); refreshMeta(); setShowShop(true); }}>
+                {t("shop.btn")} {metaState ? `(💰${metaState.gold})` : ""}
+              </button>
               <button className="btn-leaderboard" onClick={() => { window.location.href = "/leaderboard"; }}>
                 🏆 {lang === "tr" ? "SIRALAMA" : "LEADERBOARD"}
               </button>
@@ -638,6 +714,43 @@ export default function PlayPage() {
       )}
 
       {/* Game Over */}
+      {/* Shop Overlay */}
+      {showShop && metaState && mounted && (
+        <div className="shop-overlay" onClick={() => setShowShop(false)}>
+          <div className="shop-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="shop-header">
+              <span className="shop-title">{t("shop.title")}</span>
+              <span className="shop-gold">💰 {metaState.gold} {t("shop.gold")}</span>
+              <button className="shop-close" onClick={() => setShowShop(false)}>{t("shop.close")}</button>
+            </div>
+            <div className="shop-grid">
+              {SHOP_UPGRADES.map(up => {
+                const level = metaState.permanentUpgrades[up.id] || 0;
+                const isMax = level >= up.maxLevel;
+                const cost = engineRef.current?.getUpgradeCost(up.id, level) ?? 0;
+                const canAfford = metaState.gold >= cost;
+                return (
+                  <div key={up.id} className="shop-card">
+                    <span className="shop-card-icon">{up.icon}</span>
+                    <span className="shop-card-name">{t(up.nameKey)}</span>
+                    <span className="shop-card-level">{level} / {up.maxLevel}</span>
+                    <span className="shop-card-effect">{t(up.effectKey)}</span>
+                    {!isMax && <span className="shop-card-cost">💰 {cost}</span>}
+                    <button
+                      className={`shop-buy-btn ${isMax ? "maxed" : ""}`}
+                      disabled={isMax || !canAfford}
+                      onClick={() => handleBuyUpgrade(up.id)}
+                    >
+                      {isMax ? t("shop.maxed") : t("shop.buy")}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       {gameState === "gameover" && mounted && (
         <div className="game-over-overlay">
           <div className="game-over-panel">

@@ -3541,6 +3541,12 @@ export class GameEngine {
     // Meta progression
     this.metaState.gold += this.stats.gold;
     this.metaState.totalRuns++;
+    // Update achievements
+    const a = this.metaState.achievements;
+    a.totalRuns = this.metaState.totalRuns;
+    if (this.stats.kills > a.maxKills) a.maxKills = this.stats.kills;
+    if (this.stats.survivalTime > a.maxSurvivalTime) a.maxSurvivalTime = this.stats.survivalTime;
+    if (this.player.level > a.maxLevel) a.maxLevel = this.player.level;
     this.saveMetaState();
     this.onStateChange?.(this.state);
   }
@@ -3656,9 +3662,13 @@ export class GameEngine {
   private loadMetaState(): MetaState {
     try {
       const raw = localStorage.getItem("hordecraft_meta");
-      if (raw) return JSON.parse(raw);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (!parsed.achievements) parsed.achievements = { maxKills: 0, maxSurvivalTime: 0, maxLevel: 0, totalRuns: parsed.totalRuns || 0 };
+        return parsed;
+      }
     } catch {}
-    return { gold: 0, permanentUpgrades: {}, unlockedCharacters: ["knight"], totalRuns: 0 };
+    return { gold: 0, permanentUpgrades: {}, unlockedCharacters: ["knight"], totalRuns: 0, achievements: { maxKills: 0, maxSurvivalTime: 0, maxLevel: 0, totalRuns: 0 } };
   }
 
   private saveMetaState() {
@@ -3681,6 +3691,17 @@ export class GameEngine {
     if (this.metaState.gold < cost) return false;
     this.metaState.gold -= cost;
     this.metaState.permanentUpgrades[id] = current + 1;
+    this.saveMetaState();
+    return true;
+  }
+
+  unlockCharacter(id: string): boolean {
+    if (this.metaState.unlockedCharacters.includes(id)) return false;
+    const ch = getCharacter(id);
+    const cost = ch.unlock.unlockCost;
+    if (this.metaState.gold < cost) return false;
+    this.metaState.gold -= cost;
+    this.metaState.unlockedCharacters.push(id);
     this.saveMetaState();
     return true;
   }

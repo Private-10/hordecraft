@@ -118,6 +118,32 @@ const translations = {
   "meta.magnet": { tr: "Kalıcı Mıknatıs+", en: "Permanent Magnet+" },
   "meta.startLevel": { tr: "Başlangıç Seviyesi+", en: "Starting Level+" },
   "meta.extraChoice": { tr: "Ekstra Seçenek", en: "Extra Choice" },
+
+  // Shop
+  "shop.title": { tr: "🛒 MAĞAZA", en: "🛒 SHOP" },
+  "shop.btn": { tr: "🛒 MAĞAZA", en: "🛒 SHOP" },
+  "shop.gold": { tr: "Altın", en: "Gold" },
+  "shop.buy": { tr: "SATIN AL", en: "BUY" },
+  "shop.maxed": { tr: "MAKS", en: "MAXED" },
+  "shop.close": { tr: "✕ KAPAT", en: "✕ CLOSE" },
+  "shop.effect.metaHp": { tr: "+5 maks HP / seviye", en: "+5 max HP / level" },
+  "shop.effect.metaDamage": { tr: "+%2 hasar / seviye", en: "+2% damage / level" },
+  "shop.effect.metaSpeed": { tr: "+%3 hız / seviye", en: "+3% speed / level" },
+  "shop.effect.metaXp": { tr: "+%5 XP / seviye", en: "+5% XP / level" },
+  "shop.effect.metaMagnet": { tr: "+%10 mıknatıs / seviye", en: "+10% magnet / level" },
+  "shop.effect.metaStartLevel": { tr: "Seviye 2/3/4 başla", en: "Start at level 2/3/4" },
+  "shop.effect.metaExtraChoice": { tr: "Seviye atlayınca 4. seçenek", en: "4th option on level up" },
+
+  // Unlock conditions
+  "unlock.knight": { tr: "Varsayılan karakter", en: "Default character" },
+  "unlock.rogue": { tr: "1 oyun tamamla", en: "Complete 1 run" },
+  "unlock.mage": { tr: "1 oyunda 100 düşman öldür", en: "Kill 100 enemies in 1 run" },
+  "unlock.priest": { tr: "5 oyun tamamla", en: "Complete 5 runs" },
+  "unlock.berserker": { tr: "15 dakika hayatta kal", en: "Survive 15 minutes" },
+  "unlock.necromancer": { tr: "1 oyunda seviye 20'ye ulaş", en: "Reach level 20 in a run" },
+  "unlock.btn": { tr: "🔓 AÇ", en: "🔓 UNLOCK" },
+  "unlock.locked": { tr: "🔒 Kilitli", en: "🔒 Locked" },
+  "unlock.condition_not_met": { tr: "Koşul karşılanmadı", en: "Condition not met" },
 } as const;
 
 type TranslationKey = keyof typeof translations;

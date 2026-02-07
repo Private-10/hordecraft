@@ -656,3 +656,89 @@ button, .btn, a, [role="button"] {
   font-size: 11px; color: rgba(255,255,255,0.2);
   text-align: center; white-space: nowrap;
 }
+
+/* ============ SHOP ============ */
+.shop-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 400; backdrop-filter: blur(6px);
+  touch-action: auto;
+}
+.shop-panel {
+  width: 95vw; max-width: 560px; max-height: 90vh;
+  background: var(--bg);
+  border: 1.5px solid var(--card-border);
+  border-radius: 20px;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.shop-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--card-border);
+}
+.shop-title { font-size: 20px; font-weight: 900; }
+.shop-gold { font-size: 16px; font-weight: 700; color: var(--gold); }
+.shop-close {
+  padding: 8px 16px; background: var(--card); border: 1px solid var(--card-border);
+  border-radius: 10px; color: rgba(255,255,255,0.7); font-size: 13px; font-weight: 600;
+}
+.shop-close:active { background: var(--card-hover); }
+.shop-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 10px; padding: 16px;
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
+}
+@media (max-width: 400px) { .shop-grid { grid-template-columns: 1fr; } }
+.shop-card {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 14px 10px;
+  background: var(--card); border: 1.5px solid var(--card-border);
+  border-radius: 14px; text-align: center;
+}
+.shop-card-icon { font-size: 28px; }
+.shop-card-name { font-size: 13px; font-weight: 700; }
+.shop-card-level { font-size: 11px; color: rgba(255,255,255,0.5); }
+.shop-card-effect { font-size: 10px; color: rgba(255,255,255,0.35); line-height: 1.3; }
+.shop-card-cost { font-size: 12px; font-weight: 700; color: var(--gold); margin-top: 2px; }
+.shop-buy-btn {
+  margin-top: 6px; padding: 8px 18px;
+  background: linear-gradient(135deg, var(--primary), #ff8855);
+  border: none; border-radius: 10px;
+  color: white; font-size: 12px; font-weight: 700;
+  transition: all 0.15s;
+}
+.shop-buy-btn:active { transform: scale(0.95); }
+.shop-buy-btn:disabled { opacity: 0.4; }
+.shop-buy-btn.maxed {
+  background: rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.4);
+}
+.btn-shop {
+  width: 100%; max-width: 300px;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, #0a2a0a, #1a3a1a);
+  border: 1.5px solid rgba(0, 255, 100, 0.2);
+  border-radius: 14px;
+  color: var(--success); font-size: 16px; font-weight: 700;
+  transition: all 0.2s;
+}
+.btn-shop:active { transform: scale(0.97); }
+
+/* Character card lock overlay */
+.char-card.locked {
+  opacity: 0.6; position: relative;
+}
+.char-card-lock {
+  font-size: 10px; color: rgba(255,255,255,0.4);
+  text-align: center; line-height: 1.3;
+}
+.char-unlock-btn {
+  margin-top: 4px; padding: 6px 12px;
+  background: linear-gradient(135deg, var(--primary), #ff8855);
+  border: none; border-radius: 8px;
+  color: white; font-size: 11px; font-weight: 700;
+}
+.char-unlock-btn:disabled { opacity: 0.4; }
+.char-unlock-btn:active { transform: scale(0.95); }

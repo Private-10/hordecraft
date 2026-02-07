@@ -1,5 +1,12 @@
 import { t } from "./i18n";
 
+export interface CharacterUnlockDef {
+  isDefault: boolean;
+  unlockCondition: string; // i18n key for condition text
+  unlockCost: number;
+  checkUnlocked: (achievements: { maxKills: number; maxSurvivalTime: number; maxLevel: number; totalRuns: number }) => boolean;
+}
+
 export interface CharacterDef {
   id: string;
   name: () => string;
@@ -16,6 +23,7 @@ export interface CharacterDef {
   armor: number;
   magnetRange: number;
   startWeapon: string;
+  unlock: CharacterUnlockDef;
 }
 
 export const CHARACTERS: CharacterDef[] = [
@@ -34,6 +42,7 @@ export const CHARACTERS: CharacterDef[] = [
     armor: 2,
     magnetRange: 3,
     startWeapon: "orbitBlade",
+    unlock: { isDefault: true, unlockCondition: "unlock.knight", unlockCost: 0, checkUnlocked: () => true },
   },
   {
     id: "mage",
@@ -50,6 +59,7 @@ export const CHARACTERS: CharacterDef[] = [
     armor: 0,
     magnetRange: 4,
     startWeapon: "lightningArc",
+    unlock: { isDefault: false, unlockCondition: "unlock.mage", unlockCost: 500, checkUnlocked: (a) => a.maxKills >= 100 },
   },
   {
     id: "rogue",
@@ -66,6 +76,7 @@ export const CHARACTERS: CharacterDef[] = [
     armor: 0,
     magnetRange: 3,
     startWeapon: "boneToss",
+    unlock: { isDefault: false, unlockCondition: "unlock.rogue", unlockCost: 200, checkUnlocked: (a) => a.totalRuns >= 1 },
   },
   {
     id: "priest",
@@ -82,6 +93,7 @@ export const CHARACTERS: CharacterDef[] = [
     armor: 1,
     magnetRange: 5,
     startWeapon: "shockWave",
+    unlock: { isDefault: false, unlockCondition: "unlock.priest", unlockCost: 800, checkUnlocked: (a) => a.totalRuns >= 5 },
   },
   {
     id: "berserker",
@@ -98,6 +110,7 @@ export const CHARACTERS: CharacterDef[] = [
     armor: 0,
     magnetRange: 2,
     startWeapon: "orbitBlade",
+    unlock: { isDefault: false, unlockCondition: "unlock.berserker", unlockCost: 1000, checkUnlocked: (a) => a.maxSurvivalTime >= 900 },
   },
   {
     id: "necromancer",
@@ -114,6 +127,7 @@ export const CHARACTERS: CharacterDef[] = [
     armor: 0,
     magnetRange: 4,
     startWeapon: "fireTrail",
+    unlock: { isDefault: false, unlockCondition: "unlock.necromancer", unlockCost: 1500, checkUnlocked: (a) => a.maxLevel >= 20 },
   },
 ];
 

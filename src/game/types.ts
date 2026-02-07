@@ -95,11 +95,19 @@ export interface VortexEffect {
   radius: number;
 }
 
+export interface MetaAchievements {
+  maxKills: number;
+  maxSurvivalTime: number;
+  maxLevel: number;
+  totalRuns: number;
+}
+
 export interface MetaState {
   gold: number;
   permanentUpgrades: Record<string, number>;
   unlockedCharacters: string[];
   totalRuns: number;
+  achievements: MetaAchievements;
 }
 
 export interface GameStats {
