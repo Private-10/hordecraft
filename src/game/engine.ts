@@ -309,12 +309,51 @@ export class GameEngine {
     }
   }
 
-  private createPlayerMesh() {
+  private createPlayerMesh(charId = "knight") {
+    // Remove old mesh if exists
+    if (this.playerMesh) {
+      this.scene.remove(this.playerMesh);
+    }
     this.playerMesh = new THREE.Group();
 
-    // Boots
+    // CHARACTER-SPECIFIC COLORS & ACCESSORIES
+    // Child order MUST stay: 0=leftBoot 1=rightBoot 2=leftLeg 3=rightLeg 4=torso 5=chest
+    // 6=accessory 7=leftArm 8=rightArm 9=leftHand 10=rightHand 11=head 12-15=eyes 16=headgear 17+=weapon
+
+    const skin = COLORS.playerHead;
+    let bootColor = 0x553322;
+    let legColor = 0x334466;
+    let torsoColor = 0xcc5522;
+    let chestColor = 0xddaa44;
+    let headgearColor = 0x884411;
+    let armColor = 0xcc5522;
+
+    switch (charId) {
+      case "knight":
+        torsoColor = 0x4488cc; chestColor = 0xaabbcc; headgearColor = 0x778899; bootColor = 0x556677; legColor = 0x334466; armColor = 0x4488cc;
+        break;
+      case "mage":
+        torsoColor = 0x6633aa; chestColor = 0x7744bb; headgearColor = 0x6633aa; bootColor = 0x443366; legColor = 0x332255; armColor = 0x6633aa;
+        break;
+      case "rogue":
+        torsoColor = 0x2a5a2a; chestColor = 0x3a6a3a; headgearColor = 0x222222; bootColor = 0x333333; legColor = 0x222222; armColor = 0x2a5a2a;
+        break;
+      case "priest":
+        torsoColor = 0xddcc88; chestColor = 0xffeeaa; headgearColor = 0xffdd44; bootColor = 0xaa9966; legColor = 0xccbb88; armColor = 0xddcc88;
+        break;
+      case "berserker":
+        torsoColor = 0xaa3333; chestColor = 0x884422; headgearColor = 0x993322; bootColor = 0x553322; legColor = 0x553333; armColor = 0xaa3333;
+        break;
+      case "necromancer":
+        torsoColor = 0x224422; chestColor = 0x336633; headgearColor = 0x113311; bootColor = 0x222222; legColor = 0x1a1a1a; armColor = 0x224422;
+        break;
+    }
+
+    // === BASE BODY (same structure, different colors) ===
+
+    // 0,1: Boots
     const bootGeo = new THREE.BoxGeometry(0.22, 0.2, 0.35);
-    const bootMat = new THREE.MeshLambertMaterial({ color: 0x553322 });
+    const bootMat = new THREE.MeshLambertMaterial({ color: bootColor });
     const leftBoot = new THREE.Mesh(bootGeo, bootMat);
     leftBoot.position.set(-0.15, 0.1, 0.03);
     this.playerMesh.add(leftBoot);
@@ -322,9 +361,9 @@ export class GameEngine {
     rightBoot.position.set(0.15, 0.1, 0.03);
     this.playerMesh.add(rightBoot);
 
-    // Legs
+    // 2,3: Legs
     const legGeo = new THREE.CapsuleGeometry(0.1, 0.35, 4, 6);
-    const legMat = new THREE.MeshLambertMaterial({ color: 0x334466 });
+    const legMat = new THREE.MeshLambertMaterial({ color: legColor });
     const leftLeg = new THREE.Mesh(legGeo, legMat);
     leftLeg.position.set(-0.15, 0.45, 0);
     this.playerMesh.add(leftLeg);
@@ -332,24 +371,95 @@ export class GameEngine {
     rightLeg.position.set(0.15, 0.45, 0);
     this.playerMesh.add(rightLeg);
 
-    // Body (torso with armor)
-    const torsoGeo = new THREE.CapsuleGeometry(0.3, 0.5, 4, 8);
-    const torsoMat = new THREE.MeshLambertMaterial({ color: 0xcc5522 });
+    // 4: Torso
+    const torsoGeo = new THREE.CapsuleGeometry(charId === "berserker" ? 0.35 : 0.3, 0.5, 4, 8);
+    const torsoMat = new THREE.MeshLambertMaterial({ color: torsoColor });
     const torso = new THREE.Mesh(torsoGeo, torsoMat);
     torso.position.y = 0.95;
     torso.castShadow = true;
     this.playerMesh.add(torso);
 
-    // Chest plate
-    const chestGeo = new THREE.BoxGeometry(0.45, 0.35, 0.2);
-    const chestMat = new THREE.MeshLambertMaterial({ color: 0xddaa44 });
-    const chest = new THREE.Mesh(chestGeo, chestMat);
-    chest.position.set(0, 1.0, 0.18);
-    this.playerMesh.add(chest);
+    // 5: Chest armor/robe detail
+    if (charId === "mage" || charId === "necromancer" || charId === "priest") {
+      // Robe — wider, longer
+      const robeGeo = new THREE.ConeGeometry(0.4, 0.8, 8);
+      const robeMat = new THREE.MeshLambertMaterial({ color: chestColor });
+      const robe = new THREE.Mesh(robeGeo, robeMat);
+      robe.position.set(0, 0.6, 0);
+      this.playerMesh.add(robe);
+    } else if (charId === "berserker") {
+      // Fur collar
+      const furGeo = new THREE.TorusGeometry(0.32, 0.08, 6, 8);
+      const furMat = new THREE.MeshLambertMaterial({ color: 0x886644 });
+      const fur = new THREE.Mesh(furGeo, furMat);
+      fur.position.set(0, 1.2, 0);
+      fur.rotation.x = Math.PI / 2;
+      this.playerMesh.add(fur);
+    } else {
+      // Chest plate
+      const chestGeo = new THREE.BoxGeometry(0.45, 0.35, 0.2);
+      const chestMat = new THREE.MeshLambertMaterial({ color: chestColor });
+      const chest = new THREE.Mesh(chestGeo, chestMat);
+      chest.position.set(0, 1.0, 0.18);
+      this.playerMesh.add(chest);
+    }
 
-    // Arms
-    const armGeo = new THREE.CapsuleGeometry(0.09, 0.4, 4, 6);
-    const armMat = new THREE.MeshLambertMaterial({ color: 0xcc5522 });
+    // 6: Character-specific accessory
+    if (charId === "mage") {
+      // Floating orb
+      const orb = new THREE.Mesh(
+        new THREE.SphereGeometry(0.12, 8, 6),
+        new THREE.MeshBasicMaterial({ color: 0xaa44ff, transparent: true, opacity: 0.8 })
+      );
+      orb.position.set(0.5, 1.3, 0.2);
+      this.playerMesh.add(orb);
+    } else if (charId === "priest") {
+      // Holy halo
+      const halo = new THREE.Mesh(
+        new THREE.TorusGeometry(0.3, 0.03, 8, 16),
+        new THREE.MeshBasicMaterial({ color: 0xffdd44 })
+      );
+      halo.position.set(0, 1.85, 0);
+      halo.rotation.x = Math.PI / 2;
+      this.playerMesh.add(halo);
+    } else if (charId === "necromancer") {
+      // Skull shoulder pad
+      const skull = new THREE.Mesh(
+        new THREE.SphereGeometry(0.12, 6, 4),
+        new THREE.MeshBasicMaterial({ color: 0x88ff88, transparent: true, opacity: 0.7 })
+      );
+      skull.position.set(-0.45, 1.15, 0);
+      this.playerMesh.add(skull);
+    } else if (charId === "berserker") {
+      // War paint glow
+      const warpaint = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.12, 0.04),
+        new THREE.MeshBasicMaterial({ color: 0xff2200, side: THREE.DoubleSide })
+      );
+      warpaint.position.set(0, 1.52, 0.26);
+      this.playerMesh.add(warpaint);
+    } else if (charId === "rogue") {
+      // Scarf
+      const scarf = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.15, 0.4),
+        new THREE.MeshLambertMaterial({ color: 0x882222, side: THREE.DoubleSide })
+      );
+      scarf.position.set(0.2, 1.15, -0.2);
+      scarf.rotation.z = -0.3;
+      this.playerMesh.add(scarf);
+    } else {
+      // Knight: shield on back
+      const shield = new THREE.Mesh(
+        new THREE.CircleGeometry(0.2, 6),
+        new THREE.MeshLambertMaterial({ color: 0xaabbcc, side: THREE.DoubleSide })
+      );
+      shield.position.set(-0.2, 1.0, -0.28);
+      this.playerMesh.add(shield);
+    }
+
+    // 7,8: Arms
+    const armGeo = new THREE.CapsuleGeometry(charId === "berserker" ? 0.12 : 0.09, 0.4, 4, 6);
+    const armMat = new THREE.MeshLambertMaterial({ color: armColor });
     const leftArm = new THREE.Mesh(armGeo, armMat);
     leftArm.position.set(-0.4, 0.9, 0);
     leftArm.rotation.z = 0.2;
@@ -359,9 +469,9 @@ export class GameEngine {
     rightArm.rotation.z = -0.2;
     this.playerMesh.add(rightArm);
 
-    // Hands
+    // 9,10: Hands
     const handGeo = new THREE.SphereGeometry(0.1, 6, 4);
-    const handMat = new THREE.MeshLambertMaterial({ color: COLORS.playerHead });
+    const handMat = new THREE.MeshLambertMaterial({ color: skin });
     const leftHand = new THREE.Mesh(handGeo, handMat);
     leftHand.position.set(-0.45, 0.6, 0);
     this.playerMesh.add(leftHand);
@@ -369,26 +479,26 @@ export class GameEngine {
     rightHand.position.set(0.45, 0.6, 0);
     this.playerMesh.add(rightHand);
 
-    // Head
+    // 11: Head
     const headGeo = new THREE.SphereGeometry(0.25, 8, 6);
-    const headMat = new THREE.MeshLambertMaterial({ color: COLORS.playerHead });
+    const headMat = new THREE.MeshLambertMaterial({ color: skin });
     const head = new THREE.Mesh(headGeo, headMat);
     head.position.y = 1.5;
     head.castShadow = true;
     this.playerMesh.add(head);
 
-    // Eyes
+    // 12-15: Eyes
     const eyeGeo = new THREE.SphereGeometry(0.05, 6, 4);
     const eyeWhiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    const eyePupilMat = new THREE.MeshBasicMaterial({ color: 0x111133 });
-
+    const eyePupilMat = new THREE.MeshBasicMaterial({
+      color: charId === "necromancer" ? 0x00ff44 : charId === "berserker" ? 0xff2200 : charId === "mage" ? 0x8844ff : 0x111133
+    });
     const leftEyeWhite = new THREE.Mesh(eyeGeo, eyeWhiteMat);
     leftEyeWhite.position.set(-0.1, 1.53, 0.2);
     this.playerMesh.add(leftEyeWhite);
     const leftPupil = new THREE.Mesh(new THREE.SphereGeometry(0.03, 4, 4), eyePupilMat);
     leftPupil.position.set(-0.1, 1.53, 0.24);
     this.playerMesh.add(leftPupil);
-
     const rightEyeWhite = new THREE.Mesh(eyeGeo, eyeWhiteMat);
     rightEyeWhite.position.set(0.1, 1.53, 0.2);
     this.playerMesh.add(rightEyeWhite);
@@ -396,33 +506,179 @@ export class GameEngine {
     rightPupil.position.set(0.1, 1.53, 0.24);
     this.playerMesh.add(rightPupil);
 
-    // Helmet/Hair
-    const helmetGeo = new THREE.SphereGeometry(0.27, 8, 4, 0, Math.PI * 2, 0, Math.PI * 0.55);
-    const helmetMat = new THREE.MeshLambertMaterial({ color: 0x884411 });
-    const helmet = new THREE.Mesh(helmetGeo, helmetMat);
-    helmet.position.y = 1.55;
-    this.playerMesh.add(helmet);
+    // 16: Headgear (character-specific)
+    if (charId === "knight") {
+      // Full helmet
+      const helmet = new THREE.Mesh(
+        new THREE.SphereGeometry(0.28, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.6),
+        new THREE.MeshLambertMaterial({ color: headgearColor })
+      );
+      helmet.position.y = 1.55;
+      this.playerMesh.add(helmet);
+      // Visor
+      const visor = new THREE.Mesh(
+        new THREE.BoxGeometry(0.3, 0.06, 0.1),
+        new THREE.MeshLambertMaterial({ color: 0x556677 })
+      );
+      visor.position.set(0, 1.5, 0.22);
+      this.playerMesh.add(visor);
+    } else if (charId === "mage") {
+      // Wizard hat (cone)
+      const hat = new THREE.Mesh(
+        new THREE.ConeGeometry(0.25, 0.6, 8),
+        new THREE.MeshLambertMaterial({ color: headgearColor })
+      );
+      hat.position.y = 1.85;
+      this.playerMesh.add(hat);
+      // Hat brim
+      const brim = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.35, 0.35, 0.04, 12),
+        new THREE.MeshLambertMaterial({ color: headgearColor })
+      );
+      brim.position.y = 1.58;
+      this.playerMesh.add(brim);
+    } else if (charId === "rogue") {
+      // Hood
+      const hood = new THREE.Mesh(
+        new THREE.SphereGeometry(0.3, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.55),
+        new THREE.MeshLambertMaterial({ color: headgearColor })
+      );
+      hood.position.y = 1.55;
+      this.playerMesh.add(hood);
+      // Mask across face
+      const mask = new THREE.Mesh(
+        new THREE.BoxGeometry(0.28, 0.08, 0.12),
+        new THREE.MeshLambertMaterial({ color: 0x111111 })
+      );
+      mask.position.set(0, 1.48, 0.2);
+      this.playerMesh.add(mask);
+    } else if (charId === "priest") {
+      // Crown/Mitre
+      const mitre = new THREE.Mesh(
+        new THREE.BoxGeometry(0.18, 0.35, 0.18),
+        new THREE.MeshLambertMaterial({ color: headgearColor })
+      );
+      mitre.position.y = 1.78;
+      this.playerMesh.add(mitre);
+      const cross = new THREE.Mesh(
+        new THREE.BoxGeometry(0.14, 0.03, 0.04),
+        new THREE.MeshBasicMaterial({ color: 0xffffff })
+      );
+      cross.position.set(0, 1.82, 0.1);
+      this.playerMesh.add(cross);
+    } else if (charId === "berserker") {
+      // Horned helmet
+      const helmet = new THREE.Mesh(
+        new THREE.SphereGeometry(0.27, 8, 4, 0, Math.PI * 2, 0, Math.PI * 0.5),
+        new THREE.MeshLambertMaterial({ color: headgearColor })
+      );
+      helmet.position.y = 1.56;
+      this.playerMesh.add(helmet);
+      // Horns
+      const hornGeo = new THREE.ConeGeometry(0.06, 0.3, 5);
+      const hornMat = new THREE.MeshLambertMaterial({ color: 0xccbb99 });
+      const lHorn = new THREE.Mesh(hornGeo, hornMat);
+      lHorn.position.set(-0.22, 1.7, 0);
+      lHorn.rotation.z = 0.5;
+      this.playerMesh.add(lHorn);
+      const rHorn = new THREE.Mesh(hornGeo, hornMat);
+      rHorn.position.set(0.22, 1.7, 0);
+      rHorn.rotation.z = -0.5;
+      this.playerMesh.add(rHorn);
+    } else if (charId === "necromancer") {
+      // Dark hood with glowing trim
+      const hood = new THREE.Mesh(
+        new THREE.SphereGeometry(0.3, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.55),
+        new THREE.MeshLambertMaterial({ color: headgearColor })
+      );
+      hood.position.y = 1.55;
+      this.playerMesh.add(hood);
+      // Glowing runes
+      const rune = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.06),
+        new THREE.MeshBasicMaterial({ color: 0x44ff66 })
+      );
+      rune.position.set(0, 1.72, 0.25);
+      this.playerMesh.add(rune);
+    }
 
-    // Sword on back
-    const swordBladeGeo = new THREE.BoxGeometry(0.06, 0.8, 0.02);
-    const swordBladeMat = new THREE.MeshLambertMaterial({ color: 0xccccdd });
-    const swordBlade = new THREE.Mesh(swordBladeGeo, swordBladeMat);
-    swordBlade.position.set(0.15, 1.1, -0.25);
-    swordBlade.rotation.z = 0.15;
-    this.playerMesh.add(swordBlade);
-    const swordHandleGeo = new THREE.BoxGeometry(0.08, 0.15, 0.04);
-    const swordHandleMat = new THREE.MeshLambertMaterial({ color: 0x664422 });
-    const swordHandle = new THREE.Mesh(swordHandleGeo, swordHandleMat);
-    swordHandle.position.set(0.15, 0.65, -0.25);
-    swordHandle.rotation.z = 0.15;
-    this.playerMesh.add(swordHandle);
+    // Weapon on back (character-specific)
+    if (charId === "knight" || charId === "berserker") {
+      const bladeGeo = new THREE.BoxGeometry(charId === "berserker" ? 0.1 : 0.06, 0.8, 0.02);
+      const bladeMat = new THREE.MeshLambertMaterial({ color: 0xccccdd });
+      const blade = new THREE.Mesh(bladeGeo, bladeMat);
+      blade.position.set(0.15, 1.1, -0.25);
+      blade.rotation.z = 0.15;
+      this.playerMesh.add(blade);
+      const handleGeo = new THREE.BoxGeometry(0.08, 0.15, 0.04);
+      const handleMat = new THREE.MeshLambertMaterial({ color: 0x664422 });
+      const handle = new THREE.Mesh(handleGeo, handleMat);
+      handle.position.set(0.15, 0.65, -0.25);
+      handle.rotation.z = 0.15;
+      this.playerMesh.add(handle);
+    } else if (charId === "mage") {
+      // Staff
+      const staff = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.03, 0.03, 1.2, 5),
+        new THREE.MeshLambertMaterial({ color: 0x664422 })
+      );
+      staff.position.set(0.2, 1.0, -0.25);
+      this.playerMesh.add(staff);
+      const orb = new THREE.Mesh(
+        new THREE.SphereGeometry(0.1, 6, 6),
+        new THREE.MeshBasicMaterial({ color: 0x8844ff })
+      );
+      orb.position.set(0.2, 1.65, -0.25);
+      this.playerMesh.add(orb);
+    } else if (charId === "rogue") {
+      // Daggers
+      const daggerGeo = new THREE.BoxGeometry(0.03, 0.35, 0.02);
+      const daggerMat = new THREE.MeshLambertMaterial({ color: 0xccccdd });
+      const d1 = new THREE.Mesh(daggerGeo, daggerMat);
+      d1.position.set(-0.2, 0.8, -0.22);
+      d1.rotation.z = 0.3;
+      this.playerMesh.add(d1);
+      const d2 = new THREE.Mesh(daggerGeo, daggerMat);
+      d2.position.set(0.2, 0.8, -0.22);
+      d2.rotation.z = -0.3;
+      this.playerMesh.add(d2);
+    } else if (charId === "priest") {
+      // Staff with cross
+      const staff = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.03, 0.03, 1.2, 5),
+        new THREE.MeshLambertMaterial({ color: 0xccaa66 })
+      );
+      staff.position.set(0.2, 1.0, -0.25);
+      this.playerMesh.add(staff);
+      const cross1 = new THREE.Mesh(
+        new THREE.BoxGeometry(0.2, 0.04, 0.04),
+        new THREE.MeshBasicMaterial({ color: 0xffdd44 })
+      );
+      cross1.position.set(0.2, 1.55, -0.25);
+      this.playerMesh.add(cross1);
+    } else if (charId === "necromancer") {
+      // Scythe
+      const shaft = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.025, 0.025, 1.3, 5),
+        new THREE.MeshLambertMaterial({ color: 0x333333 })
+      );
+      shaft.position.set(0.2, 1.0, -0.25);
+      shaft.rotation.z = 0.1;
+      this.playerMesh.add(shaft);
+      const bladeGeo = new THREE.BoxGeometry(0.3, 0.04, 0.02);
+      const bladeMat = new THREE.MeshLambertMaterial({ color: 0xaaccaa });
+      const blade = new THREE.Mesh(bladeGeo, bladeMat);
+      blade.position.set(0.3, 1.6, -0.25);
+      blade.rotation.z = -0.4;
+      this.playerMesh.add(blade);
+    }
 
     this.playerMesh.position.set(0, 0, 0);
     this.scene.add(this.playerMesh);
 
-    // Store references for animation
+    // Store references for animation (indices 2,3,4,7,8,11 always match)
     this.playerParts = {
-      leftLeg: this.playerMesh.children[2] as THREE.Mesh,   // index matches creation order
+      leftLeg: this.playerMesh.children[2] as THREE.Mesh,
       rightLeg: this.playerMesh.children[3] as THREE.Mesh,
       torso: this.playerMesh.children[4] as THREE.Mesh,
       leftArm: this.playerMesh.children[7] as THREE.Mesh,
@@ -928,15 +1184,8 @@ export class GameEngine {
     this.player.position.set(0, startY, 0);
     this.playerMesh.visible = true;
 
-    // Update player color based on character
-    this.playerMesh.traverse((child) => {
-      if (child instanceof THREE.Mesh && child.material) {
-        const mat = child.material as THREE.MeshLambertMaterial;
-        if (mat.color && mat.color.getHex() === 0x4488cc) {
-          mat.color.setHex(ch.color);
-        }
-      }
-    });
+    // Rebuild player mesh for selected character
+    this.createPlayerMesh(ch.id);
 
     // Portal cleanup
     if (this.portalMesh) { this.scene.remove(this.portalMesh); this.portalMesh = null; }
