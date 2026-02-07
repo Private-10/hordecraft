@@ -99,6 +99,29 @@ export class GameEngine {
   // Upgrade tracking
   private passiveUpgrades: Record<string, number> = {};
 
+  // Reusable temp vectors (avoid per-frame allocations)
+  private _tmpVec = new THREE.Vector3();
+  private _tmpVec2 = new THREE.Vector3();
+  private _tmpDir = new THREE.Vector3();
+  private _tmpPos = new THREE.Vector3();
+
+  // Timer-based removal system (replaces setTimeout)
+  private timedRemovals: { mesh: THREE.Object3D; removeAt: number }[] = [];
+
+  // Object pools
+  private enemyMeshPools: Record<string, THREE.Object3D[]> = {};
+
+  // Shared geometries for particles/effects
+  private sharedParticleBoxGeo!: THREE.BoxGeometry;
+  private sharedParticleOctGeo!: THREE.OctahedronGeometry;
+  private sharedSphereGeo4!: THREE.SphereGeometry;
+  private sharedSphereGeo6!: THREE.SphereGeometry;
+  private sharedSmallSphereGeo!: THREE.SphereGeometry;
+  private sharedTinySphereGeo!: THREE.SphereGeometry;
+  private sharedSmallOctGeo!: THREE.OctahedronGeometry;
+  private sharedTinyOctGeo!: THREE.OctahedronGeometry;
+  private sharedSmallBoxGeo!: THREE.BoxGeometry;
+
   // Fire trail tracking
   private lastFirePos = new THREE.Vector3();
 
@@ -158,7 +181,7 @@ export class GameEngine {
 
   init(canvas: HTMLCanvasElement) {
     // Renderer
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     const isMobileDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0;
@@ -193,6 +216,17 @@ export class GameEngine {
 
     this.hemiLight = new THREE.HemisphereLight(0x4488aa, 0x224422, 0.4);
     this.scene.add(this.hemiLight);
+
+    // Initialize shared geometries for particles/effects
+    this.sharedParticleBoxGeo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+    this.sharedParticleOctGeo = new THREE.OctahedronGeometry(0.1, 0);
+    this.sharedSphereGeo4 = new THREE.SphereGeometry(0.4, 6, 4);
+    this.sharedSphereGeo6 = new THREE.SphereGeometry(0.12, 6, 5);
+    this.sharedSmallSphereGeo = new THREE.SphereGeometry(0.08, 8, 6);
+    this.sharedTinySphereGeo = new THREE.SphereGeometry(0.03, 4, 3);
+    this.sharedSmallOctGeo = new THREE.OctahedronGeometry(0.05);
+    this.sharedTinyOctGeo = new THREE.OctahedronGeometry(0.04);
+    this.sharedSmallBoxGeo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
 
     // Ground - setup arena for current map
     this.setupArena(this.selectedMap);
@@ -1754,6 +1788,7 @@ export class GameEngine {
     this.updateHPRegen(cappedDt);
     this.updateChests(cappedDt);
     this.updateSandstorm(cappedDt);
+    this.updateTimedRemovals();
     this.performanceCleanup();
 
     this.onStatsUpdate?.();
@@ -2031,7 +2066,7 @@ export class GameEngine {
       camZ += (Math.random() - 0.5) * shakeAmount * 2;
     }
 
-    this.camera.position.lerp(new THREE.Vector3(camX, camY, camZ), CAMERA.smoothing);
+    this.camera.position.lerp(this._tmpPos.set(camX, camY, camZ), CAMERA.smoothing);
     this.camera.lookAt(p.x, p.y + 1, p.z);
   }
 
@@ -2062,7 +2097,7 @@ export class GameEngine {
       // (We reset buffed enemies at the start; shaman applies in a second pass below)
 
       // Move toward player
-      const dir = new THREE.Vector3().subVectors(playerPos, enemy.position).normalize();
+      const dir = this._tmpDir.subVectors(playerPos, enemy.position).normalize();
       const isBat = enemy.type === "bat";
 
       // Troll berserker: double speed when HP < 30%
@@ -2086,17 +2121,19 @@ export class GameEngine {
 
       // Necromancer AI: keep distance, strafe, fire projectiles, summon
       if (enemy.type === "necromancer") {
-        const distToPlayer = enemy.position.distanceTo(playerPos);
-        if (distToPlayer < 15) {
+        const edx = enemy.position.x - playerPos.x;
+        const edz = enemy.position.z - playerPos.z;
+        const distToPlayerSq = edx * edx + edz * edz;
+        if (distToPlayerSq < 225) { // 15^2
           // Move away
           enemy.position.x -= dir.x * effectiveSpeed * dt;
           enemy.position.z -= dir.z * effectiveSpeed * dt;
-        } else if (distToPlayer > 18) {
+        } else if (distToPlayerSq > 324) { // 18^2
           enemy.position.x += dir.x * effectiveSpeed * dt;
           enemy.position.z += dir.z * effectiveSpeed * dt;
         } else {
           // Strafe
-          const lateral = new THREE.Vector3(-dir.z, 0, dir.x);
+          const lateral = this._tmpVec.set(-dir.z, 0, dir.x);
           enemy.position.x += lateral.x * effectiveSpeed * dt;
           enemy.position.z += lateral.z * effectiveSpeed * dt;
         }
@@ -2131,16 +2168,17 @@ export class GameEngine {
         let avgX = 0, avgZ = 0, count = 0;
         for (const e of this.enemies) {
           if (!e.isAlive || e.id === enemy.id || e.type === "shaman") continue;
-          const d = e.position.distanceTo(enemy.position);
-          if (d < 25) { avgX += e.position.x; avgZ += e.position.z; count++; }
+          const sdx = e.position.x - enemy.position.x;
+          const sdz = e.position.z - enemy.position.z;
+          if (sdx * sdx + sdz * sdz < 625) { avgX += e.position.x; avgZ += e.position.z; count++; } // 25^2
         }
         if (count > 0) {
           avgX /= count; avgZ /= count;
           // Target: opposite side of player from enemy pack
-          const packToPlayer = new THREE.Vector3(playerPos.x - avgX, 0, playerPos.z - avgZ).normalize();
+          const packToPlayer = this._tmpVec.set(playerPos.x - avgX, 0, playerPos.z - avgZ).normalize();
           const targetX = avgX - packToPlayer.x * 20;
           const targetZ = avgZ - packToPlayer.z * 20;
-          const toTarget = new THREE.Vector3(targetX - enemy.position.x, 0, targetZ - enemy.position.z);
+          const toTarget = this._tmpVec2.set(targetX - enemy.position.x, 0, targetZ - enemy.position.z);
           if (toTarget.length() > 1) {
             toTarget.normalize();
             enemy.position.x += toTarget.x * effectiveSpeed * dt;
@@ -2162,17 +2200,19 @@ export class GameEngine {
       }
       // Spider: zigzag lateral offset
       else if (enemy.type === "spider") {
-        const lateral = new THREE.Vector3(-dir.z, 0, dir.x); // perpendicular
+        const lateral = this._tmpVec.set(-dir.z, 0, dir.x); // perpendicular
         const zigzag = Math.sin(this.gameTime * 8 + enemy.id * 2.5) * 0.7;
         enemy.position.x += (dir.x + lateral.x * zigzag) * effectiveSpeed * dt;
         enemy.position.z += (dir.z + lateral.z * zigzag) * effectiveSpeed * dt;
       }
       // Wolf: flank then charge
       else if (enemy.type === "wolf") {
-        const distToPlayer = enemy.position.distanceTo(playerPos);
-        if (distToPlayer > 4) {
+        const wdx = enemy.position.x - playerPos.x;
+        const wdz = enemy.position.z - playerPos.z;
+        const wolfDistSq = wdx * wdx + wdz * wdz;
+        if (wolfDistSq > 16) { // 4^2
           // Circle: move toward point offset 90 degrees
-          const flankDir = new THREE.Vector3(-dir.z, 0, dir.x); // perpendicular
+          const flankDir = this._tmpVec.set(-dir.z, 0, dir.x); // perpendicular
           const blend = 0.6; // 60% flanking, 40% approaching
           enemy.position.x += (dir.x * (1 - blend) + flankDir.x * blend) * effectiveSpeed * dt;
           enemy.position.z += (dir.z * (1 - blend) + flankDir.z * blend) * effectiveSpeed * dt;
@@ -2203,6 +2243,10 @@ export class GameEngine {
       enemy.mesh.position.copy(enemy.position);
       enemy.mesh.lookAt(playerPos.x, enemy.position.y, playerPos.z);
 
+      // Distance-based culling
+      const camDistSq = enemy.position.distanceToSquared(this.camera.position);
+      enemy.mesh.visible = camDistSq < 2500; // 50^2
+
       // Bat wing flap animation
       if (isBat && enemy.mesh instanceof THREE.Group) {
         const wingFlap = Math.sin(this.gameTime * 12 + enemy.id) * 0.5;
@@ -2232,8 +2276,11 @@ export class GameEngine {
       if (enemy.hitTimer > 0) enemy.hitTimer -= dt;
 
       // Collision with player
-      const dist = enemy.position.distanceTo(playerPos);
-      if (dist < enemy.radius + PLAYER.radius && this.player.iFrameTimer <= 0) {
+      const cdx = enemy.position.x - playerPos.x;
+      const cdz = enemy.position.z - playerPos.z;
+      const collDistSq = cdx * cdx + cdz * cdz;
+      const collRadius = enemy.radius + PLAYER.radius;
+      if (collDistSq < collRadius * collRadius && this.player.iFrameTimer <= 0) {
         this.damagePlayer(enemy.damage);
       }
     }
@@ -2268,7 +2315,7 @@ export class GameEngine {
     const dir = new THREE.Vector3()
       .subVectors(this.player.position, necro.position).normalize();
     const projMat = new THREE.MeshBasicMaterial({ color: 0x9933ff });
-    const projMesh = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 5), projMat);
+    const projMesh = new THREE.Mesh(this.sharedSphereGeo6, projMat);
     const pos = necro.position.clone().add(new THREE.Vector3(0, 1, 0));
     projMesh.position.copy(pos);
     this.scene.add(projMesh);
@@ -2287,20 +2334,25 @@ export class GameEngine {
   private updateEnemyProjectiles(dt: number) {
     for (const proj of this.enemyProjectiles) {
       if (!proj.isAlive) continue;
-      proj.position.add(proj.velocity.clone().multiplyScalar(dt));
+      this._tmpVec.copy(proj.velocity).multiplyScalar(dt);
+      proj.position.add(this._tmpVec);
       proj.mesh.position.copy(proj.position);
       proj.lifetime -= dt;
       if (proj.lifetime <= 0) { proj.isAlive = false; continue; }
       // Trail particles
       if (Math.random() < 0.3) {
-        const trail = new THREE.Mesh(new THREE.SphereGeometry(0.03, 4, 3), new THREE.MeshBasicMaterial({ color: 0x9933ff, transparent: true }));
+        const trail = new THREE.Mesh(this.sharedTinySphereGeo, new THREE.MeshBasicMaterial({ color: 0x9933ff, transparent: true }));
         trail.position.copy(proj.position);
         this.scene.add(trail);
         this.particles.push({ mesh: trail, velocity: new THREE.Vector3((Math.random() - 0.5) * 0.3, 0.2, (Math.random() - 0.5) * 0.3), life: 0, maxLife: 0.3 });
       }
       // Hit player
-      const dist = proj.position.distanceTo(this.player.position);
-      if (dist < PLAYER.radius + 0.2 && this.player.iFrameTimer <= 0) {
+      const epdx = proj.position.x - this.player.position.x;
+      const epdz = proj.position.z - this.player.position.z;
+      const epdy = proj.position.y - this.player.position.y;
+      const epDistSq = epdx * epdx + epdz * epdz + epdy * epdy;
+      const epRadius = PLAYER.radius + 0.2;
+      if (epDistSq < epRadius * epRadius && this.player.iFrameTimer <= 0) {
         this.damagePlayer(proj.damage);
         proj.isAlive = false;
       }
@@ -2314,19 +2366,38 @@ export class GameEngine {
     }
   }
 
+  private getEnemyMesh(type: string): THREE.Object3D {
+    const pool = this.enemyMeshPools[type];
+    if (pool && pool.length > 0) {
+      const mesh = pool.pop()!;
+      mesh.visible = true;
+      // Remove any elite glow/lights from previous use
+      const eliteGlow = mesh instanceof THREE.Group ? mesh.getObjectByName("eliteGlow") : null;
+      if (eliteGlow) mesh.remove(eliteGlow);
+      return mesh;
+    }
+    const factory = this.enemyMeshFactories[type];
+    if (factory) return factory();
+    const geo = this.enemyGeometries[type];
+    const mat = this.enemyMaterials[type].clone();
+    return new THREE.Mesh(geo, mat);
+  }
+
+  private returnEnemyMesh(type: string, mesh: THREE.Object3D) {
+    mesh.visible = false;
+    if (!this.enemyMeshPools[type]) this.enemyMeshPools[type] = [];
+    if (this.enemyMeshPools[type].length < 30) {
+      this.enemyMeshPools[type].push(mesh);
+    } else {
+      this.disposeMesh(mesh);
+    }
+  }
+
   private spawnEnemy(type: string) {
     const stats = ENEMIES[type as keyof typeof ENEMIES];
     if (!stats) return;
 
-    let mesh: THREE.Object3D;
-    const factory = this.enemyMeshFactories[type];
-    if (factory) {
-      mesh = factory();
-    } else {
-      const geo = this.enemyGeometries[type];
-      const mat = this.enemyMaterials[type].clone();
-      mesh = new THREE.Mesh(geo, mat);
-    }
+    const mesh = this.getEnemyMesh(type);
     mesh.castShadow = true;
 
     // Spawn at fixed distance from player, but always inside arena
@@ -2409,13 +2480,7 @@ export class GameEngine {
   private spawnEnemyAtPosition(type: string, x: number, z: number) {
     const stats = ENEMIES[type as keyof typeof ENEMIES];
     if (!stats) return;
-    const factory = this.enemyMeshFactories[type];
-    let mesh: THREE.Object3D;
-    if (factory) { mesh = factory(); } else {
-      const geo = this.enemyGeometries[type];
-      const mat = this.enemyMaterials[type].clone();
-      mesh = new THREE.Mesh(geo, mat);
-    }
+    const mesh = this.getEnemyMesh(type);
     mesh.castShadow = true;
     const sx = Math.max(-ARENA.halfSize + 2, Math.min(ARENA.halfSize - 2, x));
     const sz = Math.max(-ARENA.halfSize + 2, Math.min(ARENA.halfSize - 2, z));
@@ -2526,6 +2591,7 @@ export class GameEngine {
         if (e.position.distanceToSquared(this.player.position) > 900) {
           e.isAlive = false;
           this.scene.remove(e.mesh);
+          this.returnEnemyMesh(e.type, e.mesh);
           removed++;
         }
       }
@@ -2536,11 +2602,34 @@ export class GameEngine {
     }
   }
 
+  private scheduleRemoval(mesh: THREE.Object3D, delaySeconds: number) {
+    this.timedRemovals.push({ mesh, removeAt: this.gameTime + delaySeconds });
+  }
+
+  private updateTimedRemovals() {
+    for (let i = this.timedRemovals.length - 1; i >= 0; i--) {
+      if (this.gameTime >= this.timedRemovals[i].removeAt) {
+        this.disposeMesh(this.timedRemovals[i].mesh);
+        this.timedRemovals.splice(i, 1);
+      }
+    }
+  }
+
+  private isSharedGeometry(geo: THREE.BufferGeometry): boolean {
+    return geo === this.sharedParticleBoxGeo || geo === this.sharedParticleOctGeo ||
+      geo === this.sharedSphereGeo4 || geo === this.sharedSphereGeo6 ||
+      geo === this.sharedSmallSphereGeo || geo === this.sharedTinySphereGeo ||
+      geo === this.sharedSmallOctGeo || geo === this.sharedTinyOctGeo ||
+      geo === this.sharedSmallBoxGeo || geo === this.sharedGemGeo;
+  }
+
   private disposeMesh(obj: THREE.Object3D) {
     this.scene.remove(obj);
     obj.traverse((child) => {
       if (child instanceof THREE.Mesh) {
-        child.geometry?.dispose();
+        if (child.geometry && !this.isSharedGeometry(child.geometry)) {
+          child.geometry.dispose();
+        }
         if (Array.isArray(child.material)) {
           child.material.forEach(m => m.dispose());
         } else if (child.material) {
@@ -2556,13 +2645,22 @@ export class GameEngine {
   private cleanupDead() {
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       if (!this.enemies[i].isAlive) {
-        this.disposeMesh(this.enemies[i].mesh);
+        const e = this.enemies[i];
+        this.scene.remove(e.mesh);
+        this.returnEnemyMesh(e.type, e.mesh);
         this.enemies.splice(i, 1);
       }
     }
     for (let i = this.xpGems.length - 1; i >= 0; i--) {
       if (!this.xpGems[i].isAlive) {
-        this.disposeMesh(this.xpGems[i].mesh);
+        this.scene.remove(this.xpGems[i].mesh);
+        // Don't dispose shared gem geometry
+        this.xpGems[i].mesh.traverse((child) => {
+          if (child instanceof THREE.Mesh && child.material) {
+            if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+            else child.material.dispose();
+          }
+        });
         this.xpGems.splice(i, 1);
       }
     }
@@ -2628,7 +2726,8 @@ export class GameEngine {
       for (const e of removable) {
         if (toRemove <= 0) break;
         e.isAlive = false;
-        this.disposeMesh(e.mesh);
+        this.scene.remove(e.mesh);
+        this.returnEnemyMesh(e.type, e.mesh);
         toRemove--;
       }
       for (let i = this.enemies.length - 1; i >= 0; i--) {
@@ -2833,8 +2932,9 @@ export class GameEngine {
     this.triggerShake(0.8, 0.3);
 
     // AoE damage around boss
-    const dist = boss.position.distanceTo(this.player.position);
-    if (dist < radius && this.player.iFrameTimer <= 0) {
+    const bsdx = boss.position.x - this.player.position.x;
+    const bsdz = boss.position.z - this.player.position.z;
+    if (bsdx * bsdx + bsdz * bsdz < radius * radius && this.player.iFrameTimer <= 0) {
       this.damagePlayer(damage);
     }
 
@@ -3011,24 +3111,22 @@ export class GameEngine {
     };
     requestAnimationFrame(animCol);
 
-    // 3 concentric rings with slight delay
+    // 3 concentric rings (staggered via timer offset)
     for (let r = 0; r < 3; r++) {
-      setTimeout(() => {
-        const ringGeo = new THREE.RingGeometry(0.1, 0.3, 32);
-        const ringMat = new THREE.MeshBasicMaterial({
-          color: COLORS.shockwave,
-          transparent: true,
-          opacity: 0.7 - r * 0.15,
-          side: THREE.DoubleSide,
-        });
-        const ring = new THREE.Mesh(ringGeo, ringMat);
-        ring.rotation.x = -Math.PI / 2;
-        ringMat.depthWrite = false;
-        ring.renderOrder = 1;
-        ring.position.copy(pos).add(new THREE.Vector3(0, 0.5, 0));
-        this.scene.add(ring);
-        this.shockWaves.push({ position: pos.clone(), mesh: ring, timer: 0, maxTime: 0.4 + r * 0.1, maxRadius: range * (1 - r * 0.15), damage: r === 0 ? damage : 0 });
-      }, r * 80);
+      const ringGeo = new THREE.RingGeometry(0.1, 0.3, 32);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: COLORS.shockwave,
+        transparent: true,
+        opacity: 0.7 - r * 0.15,
+        side: THREE.DoubleSide,
+      });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.rotation.x = -Math.PI / 2;
+      ringMat.depthWrite = false;
+      ring.renderOrder = 1;
+      ring.position.copy(pos).add(new THREE.Vector3(0, 0.5, 0));
+      this.scene.add(ring);
+      this.shockWaves.push({ position: pos.clone(), mesh: ring, timer: -(r * 0.08), maxTime: 0.4 + r * 0.1, maxRadius: range * (1 - r * 0.15), damage: r === 0 ? damage : 0 });
     }
 
     // Ground darkening circle
@@ -3040,7 +3138,7 @@ export class GameEngine {
     ground.renderOrder = 1;
     ground.position.copy(pos).add(new THREE.Vector3(0, 0.5, 0));
     this.scene.add(ground);
-    setTimeout(() => this.scene.remove(ground), 500);
+    this.scheduleRemoval(ground, 0.5);
 
     // Debris particles
     for (let i = 0; i < 8; i++) {
@@ -3067,7 +3165,7 @@ export class GameEngine {
     );
     playerFlash.position.copy(this.player.position).add(new THREE.Vector3(0, 1, 0));
     this.scene.add(playerFlash);
-    setTimeout(() => this.scene.remove(playerFlash), 100);
+    this.scheduleRemoval(playerFlash, 0.1);
 
     let currentPos = this.player.position.clone();
     const hitSet = new Set<number>();
@@ -3079,7 +3177,10 @@ export class GameEngine {
 
       for (const enemy of this.enemies) {
         if (!enemy.isAlive || hitSet.has(enemy.id)) continue;
-        const dist = currentPos.distanceTo(enemy.position);
+        const ldx = currentPos.x - enemy.position.x;
+        const ldz = currentPos.z - enemy.position.z;
+        const ldy = currentPos.y - enemy.position.y;
+        const dist = Math.sqrt(ldx * ldx + ldz * ldz + ldy * ldy);
         if (dist < closestDist) {
           closestDist = dist;
           closest = enemy;
@@ -3124,7 +3225,7 @@ export class GameEngine {
         const t = Math.random();
         const pp = start.clone().lerp(end, t);
         const spark = new THREE.Mesh(
-          new THREE.OctahedronGeometry(0.05),
+          this.sharedSmallOctGeo,
           new THREE.MeshBasicMaterial({ color: 0xaaddff, transparent: true })
         );
         spark.position.copy(pp);
@@ -3135,7 +3236,7 @@ export class GameEngine {
       // Impact electric sparks at target
       for (let si = 0; si < 4; si++) {
         const spark = new THREE.Mesh(
-          new THREE.OctahedronGeometry(0.04),
+          this.sharedTinyOctGeo,
           new THREE.MeshBasicMaterial({ color: 0xffff88, transparent: true })
         );
         spark.position.copy(end);
@@ -3150,7 +3251,7 @@ export class GameEngine {
       );
       flash.position.copy(end);
       this.scene.add(flash);
-      setTimeout(() => this.scene.remove(flash), 120);
+      this.scheduleRemoval(flash, 0.12);
 
       this.damageEnemy(closest, chainDamage, false, "lightning");
       hitSet.add(closest.id);
@@ -3160,8 +3261,9 @@ export class GameEngine {
   }
 
   private updateFireTrail(dt: number, weapon: WeaponState) {
-    const dist = this.player.position.distanceTo(this.lastFirePos);
-    if (dist > 1) {
+    const ftdx = this.player.position.x - this.lastFirePos.x;
+    const ftdz = this.player.position.z - this.lastFirePos.z;
+    if (ftdx * ftdx + ftdz * ftdz > 1) { // 1^2
       const evolved = weapon.level >= 6;
       const dps = WEAPONS.fireTrail.damagePerSecond * (1 + (weapon.level - 1) * 0.3) * this.player.damageMultiplier * (evolved ? 5 : 1);
       const duration = WEAPONS.fireTrail.duration + weapon.level * 500;
@@ -3249,7 +3351,7 @@ export class GameEngine {
     );
     flash.position.copy(pos).add(new THREE.Vector3(0, 0.5, 0));
     this.scene.add(flash);
-    setTimeout(() => this.scene.remove(flash), 120);
+    this.scheduleRemoval(flash, 0.12);
 
     // Expanding icy blue ring
     const ringGeo = new THREE.RingGeometry(0.1, 0.3, 32);
@@ -3271,7 +3373,7 @@ export class GameEngine {
     groundDisc.renderOrder = 1;
     groundDisc.position.copy(pos).add(new THREE.Vector3(0, 0.5, 0));
     this.scene.add(groundDisc);
-    setTimeout(() => this.scene.remove(groundDisc), 1000);
+    this.scheduleRemoval(groundDisc, 1.0);
 
     // Ice crystal shards flying outward
     for (let i = 0; i < 4; i++) {
@@ -3299,7 +3401,9 @@ export class GameEngine {
     // Damage + slow enemies in range
     for (const enemy of this.enemies) {
       if (!enemy.isAlive) continue;
-      if (enemy.position.distanceTo(pos) < effectiveRange) {
+      const fndx = enemy.position.x - pos.x;
+      const fndz = enemy.position.z - pos.z;
+      if (fndx * fndx + fndz * fndz < effectiveRange * effectiveRange) {
         this.damageEnemy(enemy, damage, false, "ice");
         enemy.slowAmount = Math.max(enemy.slowAmount, effectiveSlow);
         enemy.slowTimer = effectiveSlowDur;
@@ -3403,11 +3507,16 @@ export class GameEngine {
       // Pull and damage enemies
       for (const enemy of this.enemies) {
         if (!enemy.isAlive) continue;
-        const dist = enemy.position.distanceTo(v.position);
-        if (dist < v.radius) {
+        const vdx = enemy.position.x - v.position.x;
+        const vdz = enemy.position.z - v.position.z;
+        const vDistSq = vdx * vdx + vdz * vdz;
+        if (vDistSq < v.radius * v.radius) {
           // Pull toward center
-          const dir = new THREE.Vector3().subVectors(v.position, enemy.position).normalize();
-          enemy.position.add(dir.multiplyScalar(v.pullForce * dt));
+          const dist = Math.sqrt(vDistSq);
+          const dir = this._tmpDir.set(v.position.x - enemy.position.x, 0, v.position.z - enemy.position.z);
+          if (dist > 0.01) dir.divideScalar(dist);
+          enemy.position.x += dir.x * v.pullForce * dt;
+          enemy.position.z += dir.z * v.pullForce * dt;
           // Damage
           if (enemy.hitTimer <= 0) {
             this.damageEnemy(enemy, v.damage * dt, true);
@@ -3422,7 +3531,8 @@ export class GameEngine {
     for (const proj of this.projectiles) {
       if (!proj.isAlive) continue;
 
-      proj.position.add(proj.velocity.clone().multiplyScalar(dt));
+      this._tmpVec.copy(proj.velocity).multiplyScalar(dt);
+      proj.position.add(this._tmpVec);
       proj.mesh.position.copy(proj.position);
       proj.mesh.rotation.x += dt * 10; // spin
       proj.mesh.rotation.z += dt * 8;
@@ -3430,10 +3540,7 @@ export class GameEngine {
 
       // Trail particles for bone projectiles
       if (Math.random() < 0.3) {
-        const trail = new THREE.Mesh(
-          new THREE.SphereGeometry(0.03, 4, 3),
-          new THREE.MeshBasicMaterial({ color: COLORS.projectile, transparent: true })
-        );
+        const trail = new THREE.Mesh(this.sharedTinySphereGeo, new THREE.MeshBasicMaterial({ color: COLORS.projectile, transparent: true }));
         trail.position.copy(proj.position);
         this.scene.add(trail);
         this.particles.push({ mesh: trail, velocity: new THREE.Vector3((Math.random() - 0.5) * 0.5, 0.3, (Math.random() - 0.5) * 0.5), life: 0, maxLife: 0.3 });
@@ -3447,7 +3554,11 @@ export class GameEngine {
       // Hit detection
       for (const enemy of this.enemies) {
         if (!enemy.isAlive || proj.hitEnemies.has(enemy.id)) continue;
-        if (proj.position.distanceTo(enemy.position) < enemy.radius + 0.2) {
+        const phdx = proj.position.x - enemy.position.x;
+        const phdz = proj.position.z - enemy.position.z;
+        const phdy = proj.position.y - enemy.position.y;
+        const phR = enemy.radius + 0.2;
+        if (phdx * phdx + phdz * phdz + phdy * phdy < phR * phR) {
           this.damageEnemy(enemy, proj.damage);
           proj.hitEnemies.add(enemy.id);
           if (proj.penetration <= 0) {
@@ -3479,13 +3590,19 @@ export class GameEngine {
       // Damage enemies in ring
       for (const enemy of this.enemies) {
         if (!enemy.isAlive || enemy.hitTimer > 0) continue;
-        const dist = enemy.position.distanceTo(sw.position);
+        const swdx = enemy.position.x - sw.position.x;
+        const swdz = enemy.position.z - sw.position.z;
+        const swDistSq = swdx * swdx + swdz * swdz;
+        const dist = Math.sqrt(swDistSq);
         if (dist < currentRadius && dist > currentRadius - 1.5) {
           this.damageEnemy(enemy, sw.damage);
           enemy.hitTimer = 0.5;
           // Knockback
-          const kb = new THREE.Vector3().subVectors(enemy.position, sw.position).normalize().multiplyScalar(WEAPONS.shockWave.knockback);
-          enemy.position.add(kb);
+          if (dist > 0.01) {
+            const kbScale = WEAPONS.shockWave.knockback / dist;
+            enemy.position.x += swdx * kbScale;
+            enemy.position.z += swdz * kbScale;
+          }
         }
       }
     }
@@ -3522,7 +3639,9 @@ export class GameEngine {
       // Damage enemies on fire (silent — no hit sound for DoT)
       for (const enemy of this.enemies) {
         if (!enemy.isAlive) continue;
-        if (enemy.position.distanceTo(seg.position) < WEAPONS.fireTrail.width) {
+        const fsdx = enemy.position.x - seg.position.x;
+        const fsdz = enemy.position.z - seg.position.z;
+        if (fsdx * fsdx + fsdz * fsdz < WEAPONS.fireTrail.width * WEAPONS.fireTrail.width) {
           this.damageEnemy(enemy, seg.damagePerSecond * dt, true, "fire");
         }
       }
@@ -3591,7 +3710,9 @@ export class GameEngine {
         let chainDist = 5;
         for (const e of this.enemies) {
           if (!e.isAlive || e.id === enemy.id) continue;
-          const d = e.position.distanceTo(enemy.position);
+          const ckdx = e.position.x - enemy.position.x;
+          const ckdz = e.position.z - enemy.position.z;
+          const d = Math.sqrt(ckdx * ckdx + ckdz * ckdz);
           if (d < chainDist) { chainDist = d; chainTarget = e; }
         }
         if (chainTarget) {
@@ -3714,18 +3835,17 @@ export class GameEngine {
 
     // Death flash
     const flash = new THREE.Mesh(
-      new THREE.SphereGeometry(0.4, 6, 4),
+      this.sharedSphereGeo4,
       new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 })
     );
     flash.position.copy(position);
     this.scene.add(flash);
-    setTimeout(() => { this.disposeMesh(flash); }, 100);
+    this.scheduleRemoval(flash, 0.1);
 
     for (let i = 0; i < particleCount; i++) {
-      const size = 0.08 + Math.random() * 0.15;
       const geometry = Math.random() > 0.5 
-        ? new THREE.BoxGeometry(size, size, size)
-        : new THREE.OctahedronGeometry(size * 0.7, 0);
+        ? this.sharedParticleBoxGeo
+        : this.sharedParticleOctGeo;
       
       const material = new THREE.MeshBasicMaterial({ color, transparent: true });
       const mesh = new THREE.Mesh(geometry, material);
@@ -3824,7 +3944,8 @@ export class GameEngine {
       
       // Apply gravity and update position
       particle.velocity.y -= 9.8 * dt;
-      particle.mesh.position.add(particle.velocity.clone().multiplyScalar(dt));
+      this._tmpVec.copy(particle.velocity).multiplyScalar(dt);
+      particle.mesh.position.add(this._tmpVec);
       // Spin particles
       particle.mesh.rotation.x += dt * 8;
       particle.mesh.rotation.z += dt * 6;
@@ -3879,16 +4000,24 @@ export class GameEngine {
       gem.position.y += Math.sin(this.gameTime * 3 + gem.id * 0.7) * 0.3 * dt;
 
       // Magnet
-      const dist = gem.position.distanceTo(this.player.position);
-      if (dist < this.player.magnetRange) {
-        const dir = new THREE.Vector3().subVectors(this.player.position, gem.position).normalize();
-        const pullSpeed = 15 * (1 - dist / this.player.magnetRange);
-        gem.position.add(dir.multiplyScalar(pullSpeed * dt));
+      const gdx = gem.position.x - this.player.position.x;
+      const gdz = gem.position.z - this.player.position.z;
+      const gdy = gem.position.y - this.player.position.y;
+      const gDistSq = gdx * gdx + gdz * gdz + gdy * gdy;
+      const gDist = Math.sqrt(gDistSq);
+      if (gDist < this.player.magnetRange) {
+        const pullSpeed = 15 * (1 - gDist / this.player.magnetRange);
+        if (gDist > 0.01) {
+          const invDist = pullSpeed * dt / gDist;
+          gem.position.x -= gdx * invDist;
+          gem.position.y -= gdy * invDist;
+          gem.position.z -= gdz * invDist;
+        }
         gem.mesh.position.copy(gem.position);
       }
 
       // Collect
-      if (dist < 0.8) {
+      if (gDist < 0.8) {
         gem.isAlive = false;
         this.player.xp += gem.value;
         this.createXPParticles(gem.position);
@@ -4112,8 +4241,9 @@ export class GameEngine {
       chest.mesh.position.y = chest.position.y + 0.5 + Math.sin(this.gameTime * 2 + chest.id) * 0.2;
 
       // Check player collision
-      const dist = this.player.position.distanceTo(chest.position);
-      if (dist < 1.5) {
+      const chdx = this.player.position.x - chest.position.x;
+      const chdz = this.player.position.z - chest.position.z;
+      if (chdx * chdx + chdz * chdz < 2.25) { // 1.5^2
         this.collectChest(chest);
       }
     }
@@ -4292,12 +4422,14 @@ export class GameEngine {
 
   private getClosestEnemy(range: number): EnemyInstance | null {
     let closest: EnemyInstance | null = null;
-    let closestDist = range;
+    let closestDistSq = range * range;
     for (const e of this.enemies) {
       if (!e.isAlive) continue;
-      const d = e.position.distanceTo(this.player.position);
-      if (d < closestDist) {
-        closestDist = d;
+      const dx = e.position.x - this.player.position.x;
+      const dz = e.position.z - this.player.position.z;
+      const dSq = dx * dx + dz * dz;
+      if (dSq < closestDistSq) {
+        closestDistSq = dSq;
         closest = e;
       }
     }
@@ -4452,7 +4584,8 @@ export class GameEngine {
     for (let i = this.portalParticles.length - 1; i >= 0; i--) {
       const p = this.portalParticles[i];
       p.life -= dt;
-      p.mesh.position.add(p.vel.clone().multiplyScalar(dt));
+      this._tmpVec.copy(p.vel).multiplyScalar(dt);
+      p.mesh.position.add(this._tmpVec);
       p.vel.y -= 5 * dt; // gravity
       (p.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0, p.life / 1.2);
       if (p.life <= 0) {
