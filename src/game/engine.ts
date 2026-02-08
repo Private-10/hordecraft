@@ -122,6 +122,41 @@ export class GameEngine {
   private sharedTinyOctGeo!: THREE.OctahedronGeometry;
   private sharedSmallBoxGeo!: THREE.BoxGeometry;
 
+  // Shared weapon geometries & materials (initialized once)
+  private sharedBoneEndGeo!: THREE.SphereGeometry;
+  private sharedBoneShaftGeo!: THREE.CylinderGeometry;
+  private sharedBoneMat!: THREE.MeshBasicMaterial;
+  private sharedBonePrototype!: THREE.Group;
+  private sharedShockCylGeo!: THREE.CylinderGeometry;
+  private sharedRingGeo!: THREE.RingGeometry;
+  private sharedFlashGeo!: THREE.SphereGeometry;
+  private sharedSmallFlashGeo!: THREE.SphereGeometry;
+  private sharedDebrisGeo!: THREE.BoxGeometry;
+  private sharedCircleGeoLarge!: THREE.CircleGeometry;
+  private sharedTorusSmall!: THREE.TorusGeometry;
+  private sharedTorusMed!: THREE.TorusGeometry;
+  private sharedCircleGeoMed!: THREE.CircleGeometry;
+  // Shared materials
+  private matGreenParticle!: THREE.MeshBasicMaterial;
+  private matTrailPurple!: THREE.MeshBasicMaterial;
+  private matTrailBone!: THREE.MeshBasicMaterial;
+  private matShockwave!: THREE.MeshBasicMaterial;
+  private matDebris!: THREE.MeshBasicMaterial;
+  private matWhiteFlash!: THREE.MeshBasicMaterial;
+  private matLightningFlash!: THREE.MeshBasicMaterial;
+  private matLightningSpark!: THREE.MeshBasicMaterial;
+  private matElecSpark!: THREE.MeshBasicMaterial;
+  private matIceRing!: THREE.MeshBasicMaterial;
+  private matIceGround!: THREE.MeshBasicMaterial;
+  private matIceCrystal!: THREE.MeshBasicMaterial;
+  private matSnowflake!: THREE.MeshBasicMaterial;
+  private matVortexCore!: THREE.MeshBasicMaterial;
+  private matVortexDistort!: THREE.MeshBasicMaterial;
+  private matVortexGround!: THREE.MeshBasicMaterial;
+  private matVortexParticle!: THREE.MeshBasicMaterial;
+  // ShockWave column animation state
+  private shockColumns: { mesh: THREE.Mesh; startTime: number }[] = [];
+
   // Fire trail tracking
   private lastFirePos = new THREE.Vector3();
 
@@ -227,6 +262,50 @@ export class GameEngine {
     this.sharedSmallOctGeo = new THREE.OctahedronGeometry(0.05);
     this.sharedTinyOctGeo = new THREE.OctahedronGeometry(0.04);
     this.sharedSmallBoxGeo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+
+    // Shared weapon geometries
+    this.sharedBoneEndGeo = new THREE.SphereGeometry(0.08, 5, 4);
+    this.sharedBoneShaftGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.2, 5);
+    this.sharedBoneMat = new THREE.MeshBasicMaterial({ color: COLORS.projectile });
+    this.sharedBonePrototype = new THREE.Group();
+    const _be1 = new THREE.Mesh(this.sharedBoneEndGeo, this.sharedBoneMat);
+    _be1.position.x = -0.12;
+    this.sharedBonePrototype.add(_be1);
+    const _be2 = new THREE.Mesh(this.sharedBoneEndGeo, this.sharedBoneMat);
+    _be2.position.x = 0.12;
+    this.sharedBonePrototype.add(_be2);
+    const _bs = new THREE.Mesh(this.sharedBoneShaftGeo, this.sharedBoneMat);
+    _bs.rotation.z = Math.PI / 2;
+    this.sharedBonePrototype.add(_bs);
+
+    this.sharedShockCylGeo = new THREE.CylinderGeometry(0.3, 0.3, 3, 8);
+    this.sharedRingGeo = new THREE.RingGeometry(0.1, 0.3, 32);
+    this.sharedFlashGeo = new THREE.SphereGeometry(0.6, 6, 4);
+    this.sharedSmallFlashGeo = new THREE.SphereGeometry(0.4, 6, 4);
+    this.sharedDebrisGeo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+    this.sharedCircleGeoLarge = new THREE.CircleGeometry(1, 24); // scaled at use
+    this.sharedTorusSmall = new THREE.TorusGeometry(1, 0.2, 8, 16); // scaled at use
+    this.sharedTorusMed = new THREE.TorusGeometry(1, 0.1, 8, 16); // scaled at use
+    this.sharedCircleGeoMed = new THREE.CircleGeometry(1, 16); // scaled at use
+
+    // Shared materials
+    this.matGreenParticle = new THREE.MeshBasicMaterial({ color: 0x44ff44, transparent: true });
+    this.matTrailPurple = new THREE.MeshBasicMaterial({ color: 0x9933ff, transparent: true });
+    this.matTrailBone = new THREE.MeshBasicMaterial({ color: COLORS.projectile, transparent: true });
+    this.matShockwave = new THREE.MeshBasicMaterial({ color: COLORS.shockwave, transparent: true, opacity: 0.5 });
+    this.matDebris = new THREE.MeshBasicMaterial({ color: 0x445566, transparent: true });
+    this.matWhiteFlash = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
+    this.matLightningFlash = new THREE.MeshBasicMaterial({ color: 0xaaddff, transparent: true });
+    this.matLightningSpark = new THREE.MeshBasicMaterial({ color: 0xaaddff, transparent: true, opacity: 0.8 });
+    this.matElecSpark = new THREE.MeshBasicMaterial({ color: 0xffff88, transparent: true });
+    this.matIceRing = new THREE.MeshBasicMaterial({ color: 0x88ddff, transparent: true, opacity: 0.7, side: THREE.DoubleSide });
+    this.matIceGround = new THREE.MeshBasicMaterial({ color: 0x88ccff, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false });
+    this.matIceCrystal = new THREE.MeshBasicMaterial({ color: 0xaaeeff, transparent: true });
+    this.matSnowflake = new THREE.MeshBasicMaterial({ color: 0xeeffff, transparent: true });
+    this.matVortexCore = new THREE.MeshBasicMaterial({ color: 0x440088, transparent: true, opacity: 0.6 });
+    this.matVortexDistort = new THREE.MeshBasicMaterial({ color: 0x6600aa, transparent: true, opacity: 0.25 });
+    this.matVortexGround = new THREE.MeshBasicMaterial({ color: 0x220044, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false });
+    this.matVortexParticle = new THREE.MeshBasicMaterial({ color: 0xaa44ff, transparent: true, opacity: 0.8 });
 
     // Ground - setup arena for current map
     this.setupArena(this.selectedMap);
@@ -1775,6 +1854,7 @@ export class GameEngine {
     this.cleanupDead();
     this.updateProjectiles(cappedDt);
     this.updateEnemyProjectiles(cappedDt);
+    this.updateShockColumns();
     this.updateShockWaves(cappedDt);
     this.updateLightnings(cappedDt);
     this.updateFireSegments(cappedDt);
@@ -2110,7 +2190,7 @@ export class GameEngine {
         enemy.hp = Math.min(enemy.maxHp, enemy.hp + enemy.maxHp * 0.05 * dt);
         // Green particles
         if (Math.random() < 0.3) {
-          const p = new THREE.Mesh(new THREE.SphereGeometry(0.05, 4, 3), new THREE.MeshBasicMaterial({ color: 0x44ff44, transparent: true }));
+          const p = new THREE.Mesh(this.sharedTinySphereGeo, this.matGreenParticle);
           p.position.copy(enemy.position).add(new THREE.Vector3((Math.random() - 0.5) * 0.5, Math.random() * 1.5, (Math.random() - 0.5) * 0.5));
           this.scene.add(p);
           this.particles.push({ mesh: p, velocity: new THREE.Vector3(0, 0.5, 0), life: 0, maxLife: 0.5 });
@@ -2393,15 +2473,23 @@ export class GameEngine {
     // Don't pool boss meshes — they have unique scale
     const bossTypes = new Set(Object.keys(BOSSES));
     if (bossTypes.has(type)) {
-      this.disposeMesh(mesh);
+      this.scene.remove(mesh);
+      // Don't dispose shared enemy geometries — just remove from scene
       return;
     }
     mesh.visible = false;
+    // Remove elite glow children before pooling
+    if (mesh instanceof THREE.Group) {
+      const toRemove: THREE.Object3D[] = [];
+      mesh.traverse(c => { if (c.name === "eliteGlow" || c.name === "eliteLight") toRemove.push(c); });
+      toRemove.forEach(c => mesh.remove(c));
+    }
     if (!this.enemyMeshPools[type]) this.enemyMeshPools[type] = [];
     if (this.enemyMeshPools[type].length < 30) {
       this.enemyMeshPools[type].push(mesh);
     } else {
-      this.disposeMesh(mesh);
+      // Just remove from scene, don't dispose shared geometries
+      this.scene.remove(mesh);
     }
   }
 
@@ -2454,10 +2542,6 @@ export class GameEngine {
         const glowSphere = new THREE.Mesh(new THREE.SphereGeometry(stats.radius * 1.3, 8, 6), glowMat);
         glowSphere.name = "eliteGlow";
         mesh.add(glowSphere);
-        // Add golden point light
-        const glow = new THREE.PointLight(0xffcc00, 1, 5);
-        glow.position.y = 0.5;
-        mesh.add(glow);
       }
     }
 
@@ -2569,11 +2653,11 @@ export class GameEngine {
     }
 
     // Level scaling: more enemies per group based on player level
-    const levelBonus = Math.floor(this.player.level / 5); // +1 per 5 levels (was 3)
-    const finalGroupSize = Math.min(groupSize + levelBonus, 10); // cap at 10
+    const levelBonus = Math.floor(this.player.level / 8); // +1 per 8 levels (gentler)
+    const finalGroupSize = Math.min(groupSize + levelBonus, 8); // cap at 8
 
     // Level also speeds up spawn rate slightly
-    const levelSpeedFactor = Math.max(0.5, 1 - this.player.level * 0.01); // up to 50% faster (was 70%)
+    const levelSpeedFactor = Math.max(0.7, 1 - this.player.level * 0.005); // up to 30% faster (was 50%)
 
     for (let i = 0; i < finalGroupSize; i++) {
       const type = types[Math.floor(Math.random() * types.length)];
@@ -2583,8 +2667,8 @@ export class GameEngine {
     this.spawnTimer = spawnInterval * levelSpeedFactor;
 
     // Cap enemies (scales with level)
-    const maxEnemies = Math.min(150, 80 + this.player.level * 3);
-    const trimTarget = Math.min(120, 60 + this.player.level * 3);
+    const maxEnemies = Math.min(100, 60 + this.player.level * 2);
+    const trimTarget = Math.min(80, 50 + this.player.level * 2);
     this.cleanupDead();
     if (this.enemies.length > maxEnemies) {
       // Remove farthest non-boss enemies that are far from player
@@ -2628,11 +2712,17 @@ export class GameEngine {
   }
 
   private isSharedGeometry(geo: THREE.BufferGeometry): boolean {
-    return geo === this.sharedParticleBoxGeo || geo === this.sharedParticleOctGeo ||
+    // Check particle/effect shared geos
+    if (geo === this.sharedParticleBoxGeo || geo === this.sharedParticleOctGeo ||
       geo === this.sharedSphereGeo4 || geo === this.sharedSphereGeo6 ||
       geo === this.sharedSmallSphereGeo || geo === this.sharedTinySphereGeo ||
       geo === this.sharedSmallOctGeo || geo === this.sharedTinyOctGeo ||
-      geo === this.sharedSmallBoxGeo || geo === this.sharedGemGeo;
+      geo === this.sharedSmallBoxGeo || geo === this.sharedGemGeo) return true;
+    // Check enemy shared geometries
+    for (const key in this.enemyGeometries) {
+      if (this.enemyGeometries[key] === geo) return true;
+    }
+    return false;
   }
 
   private disposeMesh(obj: THREE.Object3D) {
@@ -2687,8 +2777,8 @@ export class GameEngine {
   private shamanAuraTimer = 0;
   private lastCleanupTime = 0;
   private performanceCleanup() {
-    // Run every 2 seconds
-    if (this.gameTime - this.lastCleanupTime < 2) return;
+    // Run every 1 second
+    if (this.gameTime - this.lastCleanupTime < 1) return;
     this.lastCleanupTime = this.gameTime;
 
     // Cap particles at 50
@@ -2703,8 +2793,8 @@ export class GameEngine {
       this.disposeMesh(f.mesh as unknown as THREE.Object3D);
     }
 
-    // Cap XP gems at 100 (remove oldest)
-    while (this.xpGems.length > 100) {
+    // Cap XP gems at 60 (remove oldest)
+    while (this.xpGems.length > 60) {
       const g = this.xpGems.shift()!;
       this.disposeMesh(g.mesh);
     }
@@ -2728,7 +2818,7 @@ export class GameEngine {
     }
 
     // Reduce max enemies more aggressively at late game
-    const maxEnemyHard = Math.min(120, 70 + this.player.level * 2);
+    const maxEnemyHard = Math.min(80, 50 + this.player.level * 2);
     const bossTypes = new Set(Object.keys(BOSSES));
     if (this.enemies.length > maxEnemyHard) {
       const removable = this.enemies
@@ -3067,18 +3157,8 @@ export class GameEngine {
         dir.normalize();
       }
 
-      // Bone shape: two spheres connected by cylinder
-      const boneGroup = new THREE.Group();
-      const boneMat = new THREE.MeshBasicMaterial({ color: COLORS.projectile });
-      const end1 = new THREE.Mesh(new THREE.SphereGeometry(0.08, 5, 4), boneMat);
-      end1.position.x = -0.12;
-      boneGroup.add(end1);
-      const end2 = new THREE.Mesh(new THREE.SphereGeometry(0.08, 5, 4), boneMat);
-      end2.position.x = 0.12;
-      boneGroup.add(end2);
-      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.2, 5), boneMat);
-      shaft.rotation.z = Math.PI / 2;
-      boneGroup.add(shaft);
+      // Bone shape: clone shared prototype
+      const boneGroup = this.sharedBonePrototype.clone();
       const mesh = boneGroup as unknown as THREE.Mesh;
       const pos = this.player.position.clone().add(new THREE.Vector3(0, 1, 0));
       mesh.position.copy(pos);
@@ -3106,33 +3186,21 @@ export class GameEngine {
     const pos = this.player.position.clone();
     pos.y = this.getTerrainHeight(pos.x, pos.z); // always use terrain height
 
-    // Vertical pulse column
-    const col = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.3, 0.3, 3, 8),
-      new THREE.MeshBasicMaterial({ color: COLORS.shockwave, transparent: true, opacity: 0.5 })
-    );
+    // Vertical pulse column (animated via game loop)
+    const col = new THREE.Mesh(this.sharedShockCylGeo, this.matShockwave.clone());
     col.position.copy(pos).add(new THREE.Vector3(0, 1.5, 0));
     this.scene.add(col);
-    const colStart = performance.now();
-    const animCol = () => {
-      const elapsed = (performance.now() - colStart) / 1000;
-      if (elapsed > 0.4) { this.scene.remove(col); return; }
-      col.scale.set(1 + elapsed * 4, 1 - elapsed * 1.5, 1 + elapsed * 4);
-      (col.material as THREE.MeshBasicMaterial).opacity = 0.5 * (1 - elapsed / 0.4);
-      requestAnimationFrame(animCol);
-    };
-    requestAnimationFrame(animCol);
+    this.shockColumns.push({ mesh: col, startTime: this.gameTime });
 
     // 3 concentric rings (staggered via timer offset)
     for (let r = 0; r < 3; r++) {
-      const ringGeo = new THREE.RingGeometry(0.1, 0.3, 32);
       const ringMat = new THREE.MeshBasicMaterial({
         color: COLORS.shockwave,
         transparent: true,
         opacity: 0.7 - r * 0.15,
         side: THREE.DoubleSide,
       });
-      const ring = new THREE.Mesh(ringGeo, ringMat);
+      const ring = new THREE.Mesh(this.sharedRingGeo, ringMat);
       ring.rotation.x = -Math.PI / 2;
       ringMat.depthWrite = false;
       ring.renderOrder = 1;
@@ -3143,10 +3211,11 @@ export class GameEngine {
 
     // Ground darkening circle
     const ground = new THREE.Mesh(
-      new THREE.CircleGeometry(range, 24),
+      this.sharedCircleGeoLarge,
       new THREE.MeshBasicMaterial({ color: 0x111122, transparent: true, opacity: 0.3, side: THREE.DoubleSide, depthWrite: false })
     );
     ground.rotation.x = -Math.PI / 2;
+    ground.scale.setScalar(range);
     ground.renderOrder = 1;
     ground.position.copy(pos).add(new THREE.Vector3(0, 0.5, 0));
     this.scene.add(ground);
@@ -3155,10 +3224,7 @@ export class GameEngine {
     // Debris particles
     for (let i = 0; i < 8; i++) {
       const a = Math.random() * Math.PI * 2;
-      const debris = new THREE.Mesh(
-        new THREE.BoxGeometry(0.1, 0.1, 0.1),
-        new THREE.MeshBasicMaterial({ color: 0x445566, transparent: true })
-      );
+      const debris = new THREE.Mesh(this.sharedSmallBoxGeo, this.matDebris);
       debris.position.copy(pos).add(new THREE.Vector3(0, 0.3, 0));
       this.scene.add(debris);
       this.particles.push({ mesh: debris, velocity: new THREE.Vector3(Math.cos(a) * 5, 3 + Math.random() * 2, Math.sin(a) * 5), life: 0, maxLife: 0.6 });
@@ -3171,10 +3237,7 @@ export class GameEngine {
     const damage = WEAPONS.lightningArc.baseDamage * (1 + (weapon.level - 1) * 0.25) * this.player.damageMultiplier;
 
     // Bright flash at player
-    const playerFlash = new THREE.Mesh(
-      new THREE.SphereGeometry(0.5, 6, 4),
-      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 })
-    );
+    const playerFlash = new THREE.Mesh(this.sharedFlashGeo, this.matWhiteFlash);
     playerFlash.position.copy(this.player.position).add(new THREE.Vector3(0, 1, 0));
     this.scene.add(playerFlash);
     this.scheduleRemoval(playerFlash, 0.1);
@@ -3580,6 +3643,21 @@ export class GameEngine {
           proj.penetration--;
         }
       }
+    }
+  }
+
+  private updateShockColumns() {
+    for (let i = this.shockColumns.length - 1; i >= 0; i--) {
+      const c = this.shockColumns[i];
+      const elapsed = this.gameTime - c.startTime;
+      if (elapsed > 0.4) {
+        this.scene.remove(c.mesh);
+        (c.mesh.material as THREE.MeshBasicMaterial).dispose();
+        this.shockColumns.splice(i, 1);
+        continue;
+      }
+      c.mesh.scale.set(1 + elapsed * 4, 1 - elapsed * 1.5, 1 + elapsed * 4);
+      (c.mesh.material as THREE.MeshBasicMaterial).opacity = 0.5 * (1 - elapsed / 0.4);
     }
   }
 
