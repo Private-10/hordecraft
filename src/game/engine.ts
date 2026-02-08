@@ -231,6 +231,15 @@ export class GameEngine {
   private nextChestId = 0;
   onChestCollect?: (type: string, amount: number) => void;
 
+  // Anti-cheat integrity tracking
+  private integrityHash = 0;
+  private timeCheckpoints: { gameTime: number; realTime: number }[] = [];
+  private integrityCheckpointTimer = 0;
+  private maxDPSTracked = 0;
+  private killTimestamps: number[] = [];
+  private gameStartRealTime = 0;
+  private totalDamageDealt = 0;
+
   init(canvas: HTMLCanvasElement) {
     // Renderer
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
@@ -323,6 +332,9 @@ export class GameEngine {
     this.matVortexDistort = new THREE.MeshBasicMaterial({ color: 0x6600aa, transparent: true, opacity: 0.25 });
     this.matVortexGround = new THREE.MeshBasicMaterial({ color: 0x220044, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false });
     this.matVortexParticle = new THREE.MeshBasicMaterial({ color: 0xaa44ff, transparent: true, opacity: 0.8 });
+
+    // Auto quality detection (only if user hasn't manually set)
+    this.autoDetectQuality();
 
     // Ground - setup arena for current map
     this.setupArena(this.selectedMap);
@@ -1960,6 +1972,15 @@ export class GameEngine {
     this.gameTime = 0;
     this.spawnTimer = 0;
 
+    // Anti-cheat reset
+    this.integrityHash = 0;
+    this.timeCheckpoints = [];
+    this.integrityCheckpointTimer = 0;
+    this.maxDPSTracked = 0;
+    this.killTimestamps = [];
+    this.gameStartRealTime = Date.now();
+    this.totalDamageDealt = 0;
+
     // Apply meta permanent upgrades
     const meta = this.metaState.permanentUpgrades;
     const metaHp = meta["metaHp"] || 0;
@@ -2133,6 +2154,15 @@ export class GameEngine {
     this.updateCombo(cappedDt);
     this.updateDPS();
     this.updateScore();
+
+    // Anti-cheat: record time checkpoints every 30s
+    this.integrityCheckpointTimer += cappedDt;
+    if (this.integrityCheckpointTimer >= 30) {
+      this.integrityCheckpointTimer = 0;
+      this.timeCheckpoints.push({ gameTime: this.gameTime, realTime: Date.now() });
+    }
+    // Track max DPS
+    if (this.dps > this.maxDPSTracked) this.maxDPSTracked = this.dps;
     this.updateHPRegen(cappedDt);
     this.updateChests(cappedDt);
     this.updateSandstorm(cappedDt);
@@ -3106,6 +3136,8 @@ export class GameEngine {
   private killEnemy(enemy: EnemyInstance) {
     enemy.isAlive = false;
     this.stats.kills++;
+    this.hashEvent(this.stats.kills);
+    this.killTimestamps.push(this.gameTime);
 
     // Screen shake on enemy death
     this.triggerShake(0.05, 0.05);
@@ -3992,6 +4024,7 @@ export class GameEngine {
     }
 
     enemy.hp -= finalDamage;
+    this.totalDamageDealt += finalDamage;
     enemy.lastDamageTime = this.gameTime;
 
     // DPS tracking
@@ -4369,6 +4402,7 @@ export class GameEngine {
     while (this.player.xp >= this.player.xpToNext) {
       this.player.xp -= this.player.xpToNext;
       this.player.level++;
+      this.hashEvent(this.player.level * 1000);
       this.player.xpToNext = XP_TABLE.getRequired(this.player.level);
 
       // Trigger level up UI - release pointer lock and touch
@@ -4936,6 +4970,44 @@ export class GameEngine {
     }
   }
 
+  private hashEvent(value: number) {
+    this.integrityHash = ((this.integrityHash * 31 + value) | 0) & 0x7fffffff;
+  }
+
+  getIntegrityData() {
+    const realElapsed = (Date.now() - this.gameStartRealTime) / 1000;
+    const timeDiff = Math.abs(realElapsed - this.gameTime);
+    const timeConsistency = timeDiff < realElapsed * 0.1 + 5; // 10% + 5s grace
+
+    // Kill rate: check if sustained >200/min
+    const recentKills = this.killTimestamps.filter(t => t > this.gameTime - 60).length;
+    const killRateOk = recentKills <= 200;
+
+    // DPS check
+    const dpsOk = this.maxDPSTracked <= 5000;
+
+    // Calculate integrity score 0-100
+    let score = 100;
+    if (!timeConsistency) score -= 40;
+    if (!killRateOk) score -= 30;
+    if (!dpsOk) score -= 30;
+
+    // Simple stats hash
+    const statsHash = ((this.stats.kills * 7 + Math.floor(this.stats.survivalTime) * 13 + this.player.level * 31 + this.stats.bossKills * 97) | 0) & 0x7fffffff;
+
+    return {
+      integrityHash: this.integrityHash,
+      integrityScore: Math.max(0, score),
+      timeConsistency,
+      timeCheckpoints: this.timeCheckpoints,
+      maxDPS: this.maxDPSTracked,
+      killRate: recentKills,
+      statsHash,
+      realElapsedTime: realElapsed,
+      totalDamageDealt: this.totalDamageDealt,
+    };
+  }
+
   private actualGameOver() {
     this.state = "gameover";
     if (document.pointerLockElement) {
@@ -5162,6 +5234,56 @@ export class GameEngine {
       if (raw) return { invertY: false, volume: 1, quality: "medium", ...JSON.parse(raw) };
     } catch {}
     return { invertY: false, volume: 1, quality: "medium" };
+  }
+
+  private autoDetectQuality() {
+    // Only auto-detect if user hasn't manually set quality
+    const raw = secureGet("hordecraft_settings");
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed.quality) return; // User has set quality manually
+      } catch {}
+    }
+
+    // Quick benchmark: 50 meshes, 10 frames
+    const testScene = new THREE.Scene();
+    const testCamera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
+    testCamera.position.set(0, 5, 10);
+    testCamera.lookAt(0, 0, 0);
+    const light = new THREE.AmbientLight(0xffffff, 1);
+    testScene.add(light);
+    const geo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+    const mat = new THREE.MeshLambertMaterial({ color: 0xff6600 });
+    const meshes: THREE.Mesh[] = [];
+    for (let i = 0; i < 50; i++) {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set((Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10);
+      testScene.add(m);
+      meshes.push(m);
+    }
+
+    // Render 10 frames and measure
+    const times: number[] = [];
+    for (let i = 0; i < 10; i++) {
+      const start = performance.now();
+      this.renderer.render(testScene, testCamera);
+      times.push(performance.now() - start);
+    }
+
+    // Cleanup
+    meshes.forEach(m => testScene.remove(m));
+    geo.dispose();
+    mat.dispose();
+
+    const avg = times.reduce((a, b) => a + b, 0) / times.length;
+    let quality: string;
+    if (avg > 20) quality = "low";
+    else if (avg > 12) quality = "medium";
+    else quality = "high";
+
+    this.settings.quality = quality;
+    this.saveSettings();
   }
 
   applyQualitySettings() {

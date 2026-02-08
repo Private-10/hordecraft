@@ -89,6 +89,11 @@ export default function PlayPage() {
   };
 
   useEffect(() => {
+    document.body.classList.add("play-page");
+    return () => { document.body.classList.remove("play-page"); };
+  }, []);
+
+  useEffect(() => {
     setMounted(true);
     setLangState(getLang());
     const isTouchDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0;

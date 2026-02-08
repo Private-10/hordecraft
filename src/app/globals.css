@@ -63,8 +63,12 @@ body.game-active {
   overflow: hidden;
   position: fixed;
 }
-/* Default: allow normal interaction */
+/* Default: allow scrolling on non-game pages */
 body {
+  overflow: auto;
+}
+/* Lock scroll on play page */
+body.play-page {
   overflow: hidden;
 }
 
