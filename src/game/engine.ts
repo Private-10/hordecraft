@@ -219,6 +219,8 @@ export class GameEngine {
   private groundMesh: THREE.Mesh | null = null;
   private gridHelper: THREE.GridHelper | null = null;
   private environmentObjects: THREE.Object3D[] = [];
+  private activeSkinEffect: string | null = null;
+  private skinEffectTimer = 0;
   private ambientLight: THREE.AmbientLight | null = null;
   private sunLight: THREE.DirectionalLight | null = null;
   private hemiLight: THREE.HemisphereLight | null = null;
@@ -1233,6 +1235,8 @@ export class GameEngine {
     }
 
     // Apply skin colors if one is selected
+    this.activeSkinEffect = null;
+    this.skinEffectTimer = 0;
     const selectedSkinId = this.metaState.selectedSkins?.[charId];
     if (selectedSkinId) {
       const skinDef = getSkin(selectedSkinId);
@@ -1243,6 +1247,7 @@ export class GameEngine {
         bootColor = skinDef.colors.boots;
         headgearColor = skinDef.colors.accessory;
         legColor = skinDef.colors.secondary;
+        this.activeSkinEffect = skinDef.effect || null;
       }
     }
 
@@ -2757,6 +2762,7 @@ export class GameEngine {
     this.updateBloodAxes(cappedDt);
     this.updateArcaneOrbs(cappedDt);
     this.updateLOD();
+    this.updateSkinEffect(cappedDt);
     // Dynamic music intensity based on HP
     Audio.setMusicIntensity(this.player.hp / this.player.maxHp);
     this.updateXPGems(cappedDt);
@@ -3879,6 +3885,82 @@ export class GameEngine {
           if (origMat) enemy.mesh.material = origMat.clone();
         }
       }
+    }
+  }
+
+  private updateSkinEffect(dt: number) {
+    if (!this.activeSkinEffect || this.state !== "playing") return;
+    this.skinEffectTimer += dt;
+    if (this.skinEffectTimer < 0.1) return; // spawn every 0.1s
+    this.skinEffectTimer = 0;
+
+    const pos = this.player.position;
+    const effect = this.activeSkinEffect;
+
+    let color = 0xffffff;
+    let size = 0.12;
+    let speed = 1.5;
+    let spread = 0.6;
+
+    switch (effect) {
+      case "fire":
+        color = [0xff4400, 0xff6600, 0xffaa00][Math.floor(Math.random() * 3)];
+        size = 0.15;
+        speed = 2.5;
+        break;
+      case "ice":
+        color = [0x88ccff, 0xaaddff, 0xffffff][Math.floor(Math.random() * 3)];
+        size = 0.1;
+        speed = 1.0;
+        spread = 0.8;
+        break;
+      case "dark":
+        color = [0x4a0080, 0x220044, 0x660099][Math.floor(Math.random() * 3)];
+        size = 0.14;
+        speed = 1.2;
+        break;
+      case "golden":
+        color = [0xffd700, 0xffcc00, 0xffee88][Math.floor(Math.random() * 3)];
+        size = 0.1;
+        speed = 1.8;
+        break;
+      case "rainbow":
+        color = [0xff0000, 0xff8800, 0xffff00, 0x00ff00, 0x0088ff, 0x8800ff][Math.floor(Math.random() * 6)];
+        size = 0.12;
+        speed = 2.0;
+        spread = 0.7;
+        break;
+      case "crystal":
+        color = [0x88ffff, 0xffffff, 0xccffff][Math.floor(Math.random() * 3)];
+        size = 0.08;
+        speed = 1.5;
+        break;
+      default: return;
+    }
+
+    // Spawn 1-2 particles around player
+    const count = effect === "fire" || effect === "rainbow" ? 2 : 1;
+    for (let i = 0; i < count; i++) {
+      const pGeo = this.sharedTinySphereGeo || new THREE.SphereGeometry(size, 4, 4);
+      const pMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.7 });
+      const p = new THREE.Mesh(pGeo, pMat);
+      p.scale.setScalar(size / 0.05); // scale relative to shared geo
+      p.position.set(
+        pos.x + (Math.random() - 0.5) * spread,
+        pos.y + 0.3 + Math.random() * 1.2,
+        pos.z + (Math.random() - 0.5) * spread
+      );
+      this.scene.add(p);
+      this.particles.push({
+        mesh: p,
+        velocity: new THREE.Vector3(
+          (Math.random() - 0.5) * 0.3,
+          speed * (0.5 + Math.random() * 0.5),
+          (Math.random() - 0.5) * 0.3
+        ),
+        life: 0,
+        maxLife: 0.6 + Math.random() * 0.4,
+      });
     }
   }
 
