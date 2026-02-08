@@ -61,23 +61,47 @@ export async function GET(req: NextRequest) {
       promises.push(setDoc(doc(db, "presence", presId), { timestamp: Date.now() }));
     }
 
-    // Bot chat messages (2-5 messages)
-    const chatMessages = [
+    // Bot chat messages (1-3 messages, smart: each bot speaks their own language, no duplicates)
+    const trMessages = [
       "gg", "bu oyun efsane", "boss çok zor", "necromancer op",
       "kim 20dk geçti?", "lvl 30 geldim 💪", "slime'lar çok kolay",
       "desert haritası zor", "knight en iyi karakter", "combo x5 yaptım",
       "yeni güncelleme süper", "sıralama kaçıncıyım", "berserker deneyin",
-      "fire trail op silah", "ilk boss'u yendim!",
-      "good game", "this game is addictive", "mage is underrated",
-      "just hit 1000 kills", "how do I unlock desert?",
-      "frost nova + orbit blade combo 🔥", "anyone beat shadow lord?",
-      "rogue speed is insane", "priest heal op", "nice game 👍",
+      "fire trail op silah", "ilk boss'u yendim!", "selam herkese",
+      "bu harita çok güzel", "mage ile 15dk geçtim", "biri yardım etsin",
     ];
-    const chatCount = Math.floor(Math.random() * 4) + 2;
+    const enMessages = [
+      "gg", "this game rocks", "boss is tough", "necromancer op",
+      "anyone past 20min?", "lvl 30 let's go 💪", "slimes are easy",
+      "desert map is hard", "knight is the best", "combo x5!",
+      "love the new update", "what's my rank?", "try berserker",
+      "fire trail is op", "beat first boss!", "hey everyone",
+      "this map is amazing", "15min with mage", "need help lol",
+    ];
+    // Turkish bot names speak Turkish, English names speak English
+    const trBotNames = new Set(["xKralx", "GölgeAvcısı", "Yıldırım34", "KurtAdam55", "AlpSavaşçı"]);
+    const chatCount = Math.floor(Math.random() * 3) + 1;
     const chatNickColors = ["#ff6b6b","#4ecdc4","#ffe66d","#a8e6cf","#ff8a80","#82b1ff","#b388ff","#f48fb1"];
+    const usedNicks = new Set<string>();
+    const usedMsgs = new Set<string>();
     for (let i = 0; i < chatCount; i++) {
-      const chatNick = scores[i % scores.length]?.nickname || NAMED_BOTS[Math.floor(Math.random() * NAMED_BOTS.length)];
-      const msg = chatMessages[Math.floor(Math.random() * chatMessages.length)];
+      // Pick unique bot nickname
+      let chatNick: string;
+      let attempts = 0;
+      do {
+        chatNick = scores[Math.floor(Math.random() * scores.length)]?.nickname || NAMED_BOTS[Math.floor(Math.random() * NAMED_BOTS.length)];
+        attempts++;
+      } while (usedNicks.has(chatNick) && attempts < 10);
+      usedNicks.add(chatNick);
+      // Pick message in correct language, no duplicate messages
+      const pool = trBotNames.has(chatNick) ? trMessages : enMessages;
+      let msg: string;
+      attempts = 0;
+      do {
+        msg = pool[Math.floor(Math.random() * pool.length)];
+        attempts++;
+      } while (usedMsgs.has(msg) && attempts < 10);
+      usedMsgs.add(msg);
       const color = chatNickColors[Math.floor(Math.random() * chatNickColors.length)];
       promises.push(addDoc(collection(db, "chat"), {
         nickname: chatNick,
