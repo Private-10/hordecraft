@@ -14,6 +14,7 @@ interface ScoreEntry {
   character: string;
   map: string;
   date: string;
+  verified?: boolean;
 }
 
 function formatTime(seconds: number) {
@@ -77,6 +78,7 @@ export default function LeaderboardPage() {
             character: d.character || "knight",
             map: d.map || "forest",
             date: d.date || "",
+            verified: d.verified ?? undefined,
           });
         });
         setAllScores(entries);
@@ -275,6 +277,7 @@ export default function LeaderboardPage() {
                     </span>
                     <span style={{ textAlign: "right", fontWeight: 700, color: "#ff6b35" }}>
                       {s.score.toLocaleString()}
+                      {s.verified && <span title={tr ? "Doğrulanmış" : "Verified"} style={{ marginLeft: 4, color: "#44ff44", fontSize: 12 }}>✓</span>}
                     </span>
                     <span style={{ textAlign: "right" }}>{s.kills.toLocaleString()}</span>
                     <span style={{ textAlign: "right" }}>{formatTime(s.survivalTime)}</span>

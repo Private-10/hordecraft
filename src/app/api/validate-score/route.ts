@@ -1,9 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { initializeApp, getApps, cert } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
-
-// Initialize Firebase Admin (use env vars or fallback to client config for Firestore REST)
-// For Next.js API routes, we use the client SDK since we don't have admin credentials
 import { db } from "@/game/firebase";
 import { collection, addDoc } from "firebase/firestore";
 
