@@ -8,8 +8,8 @@
     "build": "next build",
     "start": "next start",
     "electron:dev": "concurrently \"next dev\" \"node -e \\\"setTimeout(()=>require('child_process').execSync('npx electron .', {stdio:'inherit'}), 3000)\\\"\"",
-    "electron:build": "cross-env ELECTRON_BUILD=true next build && electron-builder --config electron-builder.yml",
-    "electron:pack": "cross-env ELECTRON_BUILD=true next build && electron-builder --config electron-builder.yml --dir"
+    "electron:build": "next build && electron-builder --config electron-builder.yml",
+    "electron:pack": "next build && electron-builder --config electron-builder.yml --dir"
   },
   "keywords": [],
   "author": "",

@@ -4,23 +4,23 @@ directories:
   output: dist
   buildResources: electron
 files:
-  - out/**/*
+  - .next/**/*
   - electron/**/*
+  - src/**/*
+  - public/**/*
   - package.json
+  - next.config.ts
+  - tsconfig.json
+  - node_modules/**/*
 extraMetadata:
   main: electron/main.cjs
-asar: true
+asar: false
 win:
   target:
-    - nsis
     - portable
   icon: electron/icon.png
-mac:
-  target: dmg
-  icon: electron/icon.png
-linux:
-  target: AppImage
-  icon: electron/icon.png
+  signAndEditExecutable: false
+  forceCodeSigning: false
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
