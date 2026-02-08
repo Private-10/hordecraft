@@ -2671,8 +2671,8 @@ export class GameEngine {
     this.spawnTimer = spawnInterval * levelSpeedFactor;
 
     // Cap enemies (scales with level)
-    const maxEnemies = Math.min(150, 80 + this.player.level * 3);
-    const trimTarget = Math.min(120, 60 + this.player.level * 3);
+    const maxEnemies = Math.min(200, 100 + this.player.level * 4);
+    const trimTarget = Math.min(170, 80 + this.player.level * 4);
     this.cleanupDead();
     if (this.enemies.length > maxEnemies) {
       // Remove farthest non-boss enemies that are far from player
@@ -2818,7 +2818,7 @@ export class GameEngine {
     }
 
     // Reduce max enemies more aggressively at late game
-    const maxEnemyHard = Math.min(120, 70 + this.player.level * 2);
+    const maxEnemyHard = Math.min(170, 90 + this.player.level * 3);
     const bossTypes = new Set(Object.keys(BOSSES));
     if (this.enemies.length > maxEnemyHard) {
       const removable = this.enemies
@@ -4043,19 +4043,13 @@ export class GameEngine {
       value: Math.round(value * this.player.xpMultiplier),
       mesh,
       isAlive: true,
-      lifetime: 30,
+      lifetime: 9999,
     });
   }
 
   private updateXPGems(dt: number) {
     for (const gem of this.xpGems) {
       if (!gem.isAlive) continue;
-
-      gem.lifetime -= dt;
-      if (gem.lifetime <= 0) {
-        gem.isAlive = false;
-        continue;
-      }
 
       // Spin + pulse + bob
       gem.mesh.rotation.y += dt * 3;
