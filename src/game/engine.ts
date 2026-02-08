@@ -4827,7 +4827,8 @@ export class GameEngine {
   /** Replace meta state (used after cloud merge on login) */
   setMetaState(meta: MetaState) {
     this.metaState = meta;
-    this.saveMetaState();
+    // Save to localStorage only (not cloud) — used for logout/guest reset
+    try { localStorage.setItem("hordecraft_meta", JSON.stringify(meta)); } catch {}
   }
 
   getUpgradeCost(id: string, level: number): number {

@@ -594,7 +594,7 @@ export default function PlayPage() {
                   <button className="btn-play" onClick={startGame}>
                     {lang === "tr" ? "⚔️ SAVAŞA GİR" : "⚔️ ENTER BATTLE"}
                   </button>
-                  <button onClick={() => { logoutNickname(); setNickLoggedIn(false); setNicknameState(""); setPin(""); }} className="auth-logout">
+                  <button onClick={() => { logoutNickname(); setNickLoggedIn(false); setNicknameState(""); setPin(""); if (engineRef.current) { engineRef.current.setMetaState({ gold: 0, permanentUpgrades: {}, unlockedCharacters: ["knight"], unlockedMaps: ["forest"], totalRuns: 0, achievements: { maxKills: 0, maxSurvivalTime: 0, maxLevel: 0, totalRuns: 0 } }); } }} className="auth-logout">
                     {lang === "tr" ? "Çıkış yap" : "Logout"}
                   </button>
                 </div>
@@ -713,7 +713,7 @@ export default function PlayPage() {
                   </div>
 
                   {/* Guest play */}
-                  <button className="btn-guest" onClick={() => { logoutNickname(); setNicknameState(""); startGame(); }}>
+                  <button className="btn-guest" onClick={() => { logoutNickname(); setNicknameState(""); if (engineRef.current) { engineRef.current.setMetaState({ gold: 0, permanentUpgrades: {}, unlockedCharacters: ["knight"], unlockedMaps: ["forest"], totalRuns: 0, achievements: { maxKills: 0, maxSurvivalTime: 0, maxLevel: 0, totalRuns: 0 } }); } startGame(); }}>
                     👤 {lang === "tr" ? "Misafir Oyna" : "Play as Guest"}
                   </button>
                   <div className="auth-hint" style={{ marginTop: 4 }}>
