@@ -282,6 +282,14 @@ function buildCharacterMesh(charId: string, selectedSkinId?: string | null): THR
   return group;
 }
 
+interface Particle {
+  mesh: THREE.Mesh;
+  velocity: THREE.Vector3;
+  phase: number;
+}
+
+type EffectType = "fire" | "ice" | "dark" | "golden" | "rainbow" | "crystal";
+
 export class CharacterPreview {
   private renderer: THREE.WebGLRenderer;
   private scene: THREE.Scene;
@@ -290,6 +298,8 @@ export class CharacterPreview {
   private animFrame: number = 0;
   private time = 0;
   private disposed = false;
+  private particles: Particle[] = [];
+  private currentEffect: EffectType | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({
@@ -342,9 +352,163 @@ export class CharacterPreview {
         }
       });
     }
+    this.clearParticles();
     this.characterMesh = buildCharacterMesh(characterId, selectedSkinId);
     this.scene.add(this.characterMesh);
     this.time = 0;
+
+    // Create particles based on skin effect
+    if (selectedSkinId) {
+      const skinDef = getSkin(selectedSkinId);
+      if (skinDef?.effect) {
+        this.createParticles(skinDef.effect);
+      }
+    }
+  }
+
+  private clearParticles() {
+    for (const p of this.particles) {
+      this.scene.remove(p.mesh);
+      p.mesh.geometry.dispose();
+      (p.mesh.material as THREE.Material).dispose();
+    }
+    this.particles = [];
+    this.currentEffect = null;
+  }
+
+  private createParticles(effect: EffectType) {
+    this.currentEffect = effect;
+    switch (effect) {
+      case "fire": {
+        for (let i = 0; i < 15; i++) {
+          const mat = new THREE.MeshBasicMaterial({ color: Math.random() > 0.5 ? 0xff4400 : 0xff6600, transparent: true, opacity: 0.8 });
+          const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.04, 4, 4), mat);
+          mesh.position.set((Math.random() - 0.5) * 1.2, Math.random() * 1.5, (Math.random() - 0.5) * 1.2);
+          this.scene.add(mesh);
+          this.particles.push({ mesh, velocity: new THREE.Vector3((Math.random() - 0.5) * 0.3, 0.5 + Math.random() * 0.5, (Math.random() - 0.5) * 0.3), phase: Math.random() * Math.PI * 2 });
+        }
+        break;
+      }
+      case "ice": {
+        for (let i = 0; i < 12; i++) {
+          const mat = new THREE.MeshBasicMaterial({ color: Math.random() > 0.5 ? 0x88ccff : 0xaaddff, transparent: true, opacity: 0.7 });
+          const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.035, 4, 4), mat);
+          const angle = (i / 12) * Math.PI * 2;
+          mesh.position.set(Math.cos(angle) * 1.0, 0.5 + Math.random() * 1.0, Math.sin(angle) * 1.0);
+          this.scene.add(mesh);
+          this.particles.push({ mesh, velocity: new THREE.Vector3(0, 0, 0), phase: angle });
+        }
+        break;
+      }
+      case "dark": {
+        for (let i = 0; i < 10; i++) {
+          const mat = new THREE.MeshBasicMaterial({ color: Math.random() > 0.5 ? 0x4a0080 : 0x220044, transparent: true, opacity: 0.6 });
+          const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.05, 4, 4), mat);
+          mesh.position.set((Math.random() - 0.5) * 1.5, Math.random() * 1.8, (Math.random() - 0.5) * 1.5);
+          this.scene.add(mesh);
+          this.particles.push({ mesh, velocity: new THREE.Vector3(0, 0, 0), phase: Math.random() * Math.PI * 2 });
+        }
+        break;
+      }
+      case "golden": {
+        for (let i = 0; i < 15; i++) {
+          const mat = new THREE.MeshBasicMaterial({ color: Math.random() > 0.5 ? 0xffd700 : 0xffaa00, transparent: true, opacity: 0.9 });
+          const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.03, 4, 4), mat);
+          mesh.position.set((Math.random() - 0.5) * 1.2, Math.random() * 2.0, (Math.random() - 0.5) * 1.2);
+          this.scene.add(mesh);
+          this.particles.push({ mesh, velocity: new THREE.Vector3((Math.random() - 0.5) * 0.1, 0.3 + Math.random() * 0.4, (Math.random() - 0.5) * 0.1), phase: Math.random() * Math.PI * 2 });
+        }
+        break;
+      }
+      case "rainbow": {
+        for (let i = 0; i < 12; i++) {
+          const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 });
+          const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.04, 4, 4), mat);
+          const angle = (i / 12) * Math.PI * 2;
+          mesh.position.set(Math.cos(angle) * 1.2, 0.8, Math.sin(angle) * 1.2);
+          this.scene.add(mesh);
+          this.particles.push({ mesh, velocity: new THREE.Vector3(0, 0, 0), phase: angle });
+        }
+        break;
+      }
+      case "crystal": {
+        for (let i = 0; i < 10; i++) {
+          const mat = new THREE.MeshBasicMaterial({ color: 0x88ffff, transparent: true, opacity: 0.8 });
+          const mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.04), mat);
+          mesh.position.set((Math.random() - 0.5) * 1.5, 0.3 + Math.random() * 1.5, (Math.random() - 0.5) * 1.5);
+          this.scene.add(mesh);
+          this.particles.push({ mesh, velocity: new THREE.Vector3(0, 0, 0), phase: Math.random() * Math.PI * 2 });
+        }
+        break;
+      }
+    }
+  }
+
+  private updateParticles() {
+    const t = this.time;
+    for (let i = 0; i < this.particles.length; i++) {
+      const p = this.particles[i];
+      switch (this.currentEffect) {
+        case "fire": {
+          p.mesh.position.y += p.velocity.y * 0.016;
+          p.mesh.position.x += Math.sin(t * 3 + p.phase) * 0.005;
+          p.mesh.position.z += Math.cos(t * 2 + p.phase) * 0.005;
+          (p.mesh.material as THREE.MeshBasicMaterial).opacity = 0.8 - (p.mesh.position.y / 3);
+          if (p.mesh.position.y > 2.5) {
+            p.mesh.position.set((Math.random() - 0.5) * 1.2, 0, (Math.random() - 0.5) * 1.2);
+          }
+          break;
+        }
+        case "ice": {
+          const angle = p.phase + t * 0.4;
+          const r = 1.0 + Math.sin(t + p.phase) * 0.2;
+          p.mesh.position.x = Math.cos(angle) * r;
+          p.mesh.position.z = Math.sin(angle) * r;
+          p.mesh.position.y = 0.6 + Math.sin(t * 1.5 + p.phase) * 0.3;
+          break;
+        }
+        case "dark": {
+          const angle = p.phase + t * 0.6;
+          const r = 0.8 + Math.sin(t * 0.8 + p.phase) * 0.4;
+          p.mesh.position.x = Math.cos(angle) * r;
+          p.mesh.position.z = Math.sin(angle) * r;
+          p.mesh.position.y = 0.9 + Math.sin(t + p.phase * 2) * 0.5;
+          (p.mesh.material as THREE.MeshBasicMaterial).opacity = 0.3 + Math.sin(t * 2 + p.phase) * 0.3;
+          break;
+        }
+        case "golden": {
+          p.mesh.position.y += p.velocity.y * 0.016;
+          p.mesh.position.x += Math.sin(t * 2 + p.phase) * 0.003;
+          const scale = 0.8 + Math.sin(t * 4 + p.phase) * 0.4;
+          p.mesh.scale.setScalar(scale);
+          if (p.mesh.position.y > 2.5) {
+            p.mesh.position.set((Math.random() - 0.5) * 1.2, 0, (Math.random() - 0.5) * 1.2);
+          }
+          break;
+        }
+        case "rainbow": {
+          const angle = p.phase + t * 0.7;
+          const r = 1.2 + Math.sin(t + p.phase) * 0.15;
+          p.mesh.position.x = Math.cos(angle) * r;
+          p.mesh.position.z = Math.sin(angle) * r;
+          p.mesh.position.y = 0.8 + Math.sin(t * 1.2 + p.phase) * 0.4;
+          const hue = ((t * 0.3 + i / 12) % 1);
+          (p.mesh.material as THREE.MeshBasicMaterial).color.setHSL(hue, 1, 0.6);
+          break;
+        }
+        case "crystal": {
+          const angle = p.phase + t * 0.3;
+          const r = 0.9 + Math.sin(t * 0.5 + p.phase) * 0.3;
+          p.mesh.position.x = Math.cos(angle) * r;
+          p.mesh.position.z = Math.sin(angle) * r;
+          p.mesh.position.y = 0.7 + Math.sin(t * 0.8 + p.phase) * 0.4;
+          p.mesh.rotation.x = t * 0.5;
+          p.mesh.rotation.y = t * 0.7;
+          (p.mesh.material as THREE.MeshBasicMaterial).opacity = 0.5 + Math.sin(t * 2 + p.phase) * 0.3;
+          break;
+        }
+      }
+    }
   }
 
   resize() {
@@ -368,12 +532,17 @@ export class CharacterPreview {
       this.characterMesh.position.y = Math.sin(this.time * 2) * 0.03;
     }
 
+    if (this.particles.length > 0) {
+      this.updateParticles();
+    }
+
     this.renderer.render(this.scene, this.camera);
   };
 
   dispose() {
     this.disposed = true;
     cancelAnimationFrame(this.animFrame);
+    this.clearParticles();
     if (this.characterMesh) {
       this.characterMesh.traverse((obj) => {
         if ((obj as THREE.Mesh).geometry) (obj as THREE.Mesh).geometry.dispose();

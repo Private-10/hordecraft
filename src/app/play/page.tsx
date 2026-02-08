@@ -53,6 +53,7 @@ export default function PlayPage() {
   const [selectedChar, setSelectedCharState] = useState("knight");
   const selectedCharRef = useRef("knight");
   const setSelectedChar = (v: string) => { setSelectedCharState(v); selectedCharRef.current = v; };
+  const [previewChar, setPreviewChar] = useState("knight");
   const [showCharSelect, setShowCharSelect] = useState(false);
   const [dps, setDps] = useState(0);
   const [isMobileDevice, setIsMobileDevice] = useState(false);
@@ -626,12 +627,12 @@ export default function PlayPage() {
           return;
         }
       }
-      const skinId = metaState?.selectedSkins?.[selectedChar] || null;
-      previewRef.current.setCharacter(selectedChar, skinId);
+      const skinId = metaState?.selectedSkins?.[previewChar] || null;
+      previewRef.current.setCharacter(previewChar, skinId);
       previewRef.current.resize();
     }, 50);
     return () => clearTimeout(timer);
-  }, [showCharSelect, selectedChar, metaState?.selectedSkins]);
+  }, [showCharSelect, previewChar, metaState?.selectedSkins]);
 
   // Cleanup preview on unmount
   useEffect(() => {
@@ -755,7 +756,7 @@ export default function PlayPage() {
                     </div>
                   </div>
                 );
-                const ch = CHARACTERS.find(c => c.id === selectedChar) || CHARACTERS[0];
+                const ch = CHARACTERS.find(c => c.id === previewChar) || CHARACTERS[0];
                 const unlocked = isCharUnlocked(ch);
                 const condMet = isConditionMet(ch);
                 const canAfford = (metaState?.gold ?? 0) >= ch.unlock.unlockCost;
@@ -772,11 +773,24 @@ export default function PlayPage() {
                       {CHARACTERS.map(c => {
                         const isUnlocked = isCharUnlocked(c);
                         const isSel = selectedChar === c.id;
+                        const isPrev = previewChar === c.id;
                         return (
                           <button
                             key={c.id}
-                            className={`char-strip-item ${isSel ? "selected" : ""} ${!isUnlocked ? "locked" : ""}`}
-                            onClick={() => { if (isUnlocked) { setSelectedChar(c.id); Audio.playSelect(); } }}
+                            className={`char-strip-item ${isSel ? "selected" : ""} ${isPrev && !isSel ? "previewing" : ""} ${!isUnlocked ? "locked" : ""}`}
+                            onClick={() => {
+                              Audio.playSelect();
+                              setPreviewChar(c.id);
+                              setShowSkinSelect(null);
+                              if (isUnlocked) {
+                                setSelectedChar(c.id);
+                              }
+                              // Update 3D preview with correct skin for the new character
+                              const skinForChar = metaState?.selectedSkins?.[c.id] || null;
+                              if (previewRef.current) {
+                                previewRef.current.setCharacter(c.id, skinForChar);
+                              }
+                            }}
                           >
                             <span className="char-strip-icon">{isUnlocked ? c.icon : "🔒"}</span>
                             <span className="char-strip-name">{c.name()}</span>
@@ -805,7 +819,7 @@ export default function PlayPage() {
                           </div>
                           <button
                             className="char-info-skin-btn"
-                            onClick={() => setShowSkinSelect(showSkinSelect === ch.id ? null : ch.id)}
+                            onClick={() => setShowSkinSelect(showSkinSelect === previewChar ? null : previewChar)}
                           >
                             🎨 {lang === "tr" ? "Kostüm Seç" : "Select Skin"}
                           </button>
