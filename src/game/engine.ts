@@ -2430,6 +2430,8 @@ export class GameEngine {
     this.updateBloodAxes(cappedDt);
     this.updateArcaneOrbs(cappedDt);
     this.updateLOD();
+    // Dynamic music intensity based on HP
+    Audio.setMusicIntensity(this.player.hp / this.player.maxHp);
     this.updateXPGems(cappedDt);
     this.updateSpawning(cappedDt);
     this.updateBoss(cappedDt);

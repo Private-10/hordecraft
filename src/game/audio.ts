@@ -282,64 +282,140 @@ export function playGameOver() {
 
 // ========== MUSIC ==========
 
+// HP intensity: 0 = full HP (calm), 1 = near death (intense)
+let musicIntensity = 0;
+
+export function setMusicIntensity(hpRatio: number) {
+  // hpRatio: 0-1 (current HP / max HP)
+  // intensity: 1 when low HP, 0 when full HP
+  musicIntensity = Math.max(0, Math.min(1, 1 - hpRatio));
+}
+
 export function startMusic() {
   if (musicPlaying) return;
   const c = getCtx(); if (!c) return;
   musicPlaying = true;
 
-  // Simple ambient loop with layered oscillators
-  const bassNotes = [65, 73, 82, 65]; // C2 D2 E2 C2
-  const padNotes = [262, 294, 330, 262]; // C4 D4 E4 C4
+  // Musical scales for different intensity levels
+  const calmBass = [65, 73, 82, 65];     // C2 D2 E2 C2 — peaceful
+  const tenseBass = [65, 62, 69, 73];     // C2 B1 Db2 D2 — minor/tense
+  const calmPad = [262, 294, 330, 262];   // C4 D4 E4 C4
+  const tensePad = [262, 277, 311, 262];  // C4 Db4 Eb4 C4 — minor
 
   function playMeasure(index: number) {
     if (!musicPlaying || !c) return;
-    const noteIdx = index % bassNotes.length;
+    const noteIdx = index % 4;
     const t = c.currentTime;
+    const intensity = musicIntensity;
 
-    // Bass drone
+    // Tempo scales with intensity: 4s (calm) → 1.5s (intense)
+    const measureDuration = 4 - intensity * 2.5;
+    const fadeOut = measureDuration * 0.1;
+
+    // Blend between calm and tense notes
+    const bassFreq = calmBass[noteIdx] * (1 - intensity) + tenseBass[noteIdx] * intensity;
+    const padFreq = calmPad[noteIdx] * (1 - intensity) + tensePad[noteIdx] * intensity;
+
+    // Bass — gets louder and more distorted with intensity
     const bass = c.createOscillator();
     const bassG = c.createGain();
-    bass.type = "sine";
-    bass.frequency.value = bassNotes[noteIdx];
-    bassG.gain.setValueAtTime(0.15, t);
-    bassG.gain.setValueAtTime(0.15, t + 3.5);
-    bassG.gain.linearRampToValueAtTime(0, t + 4);
+    bass.type = intensity > 0.6 ? "sawtooth" : "sine";
+    bass.frequency.value = bassFreq;
+    const bassVol = 0.12 + intensity * 0.12;
+    bassG.gain.setValueAtTime(bassVol, t);
+    bassG.gain.setValueAtTime(bassVol, t + measureDuration - fadeOut);
+    bassG.gain.linearRampToValueAtTime(0, t + measureDuration);
     bass.connect(bassG);
     bassG.connect(musicGain!);
     bass.start(t);
-    bass.stop(t + 4);
+    bass.stop(t + measureDuration);
     musicOscillators.push(bass);
 
-    // Pad
+    // Pad — higher intensity = tremolo effect
     const pad = c.createOscillator();
     const padG = c.createGain();
     pad.type = "triangle";
-    pad.frequency.value = padNotes[noteIdx];
+    pad.frequency.value = padFreq;
+    const padVol = 0.04 + intensity * 0.06;
     padG.gain.setValueAtTime(0, t);
-    padG.gain.linearRampToValueAtTime(0.06, t + 0.5);
-    padG.gain.setValueAtTime(0.06, t + 3);
-    padG.gain.linearRampToValueAtTime(0, t + 4);
+    padG.gain.linearRampToValueAtTime(padVol, t + measureDuration * 0.15);
+    if (intensity > 0.4) {
+      // Tremolo — pulsing volume
+      const tremoloRate = 4 + intensity * 12;
+      for (let ti = 0; ti < measureDuration; ti += 1 / tremoloRate) {
+        const tv = t + ti;
+        if (tv > t + measureDuration - fadeOut) break;
+        padG.gain.setValueAtTime(padVol, tv);
+        padG.gain.linearRampToValueAtTime(padVol * 0.3, tv + 0.5 / tremoloRate);
+      }
+    }
+    padG.gain.setValueAtTime(padVol, t + measureDuration - fadeOut);
+    padG.gain.linearRampToValueAtTime(0, t + measureDuration);
     pad.connect(padG);
     padG.connect(musicGain!);
     pad.start(t);
-    pad.stop(t + 4);
+    pad.stop(t + measureDuration);
     musicOscillators.push(pad);
 
-    // Sub
+    // Sub bass
     const sub = c.createOscillator();
     const subG = c.createGain();
     sub.type = "sine";
-    sub.frequency.value = bassNotes[noteIdx] / 2;
-    subG.gain.setValueAtTime(0.08, t);
-    subG.gain.setValueAtTime(0.08, t + 3.5);
-    subG.gain.linearRampToValueAtTime(0, t + 4);
+    sub.frequency.value = bassFreq / 2;
+    const subVol = 0.06 + intensity * 0.08;
+    subG.gain.setValueAtTime(subVol, t);
+    subG.gain.setValueAtTime(subVol, t + measureDuration - fadeOut);
+    subG.gain.linearRampToValueAtTime(0, t + measureDuration);
     sub.connect(subG);
     subG.connect(musicGain!);
     sub.start(t);
-    sub.stop(t + 4);
+    sub.stop(t + measureDuration);
     musicOscillators.push(sub);
 
-    setTimeout(() => playMeasure(index + 1), 4000);
+    // Heartbeat kick when HP < 30% (intensity > 0.7)
+    if (intensity > 0.7) {
+      const kickRate = intensity > 0.9 ? 0.3 : 0.5; // faster heartbeat near death
+      for (let ki = 0; ki < measureDuration - 0.2; ki += kickRate) {
+        const kick = c.createOscillator();
+        const kickG = c.createGain();
+        kick.type = "sine";
+        kick.frequency.setValueAtTime(80, t + ki);
+        kick.frequency.exponentialRampToValueAtTime(30, t + ki + 0.15);
+        kickG.gain.setValueAtTime(0.15 + intensity * 0.1, t + ki);
+        kickG.gain.exponentialRampToValueAtTime(0.001, t + ki + 0.2);
+        kick.connect(kickG);
+        kickG.connect(musicGain!);
+        kick.start(t + ki);
+        kick.stop(t + ki + 0.25);
+        musicOscillators.push(kick);
+      }
+    }
+
+    // Hi-hat percussion at medium+ intensity
+    if (intensity > 0.3) {
+      const hatInterval = intensity > 0.6 ? measureDuration / 8 : measureDuration / 4;
+      for (let hi = 0; hi < measureDuration - 0.1; hi += hatInterval) {
+        const bufSize = c.sampleRate * 0.03;
+        const buf = c.createBuffer(1, bufSize, c.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let s = 0; s < bufSize; s++) data[s] = (Math.random() * 2 - 1) * (1 - s / bufSize);
+        const noise = c.createBufferSource();
+        noise.buffer = buf;
+        const hatG = c.createGain();
+        const hatF = c.createBiquadFilter();
+        hatF.type = "highpass";
+        hatF.frequency.value = 8000;
+        hatG.gain.setValueAtTime(0.03 + intensity * 0.04, t + hi);
+        hatG.gain.exponentialRampToValueAtTime(0.001, t + hi + 0.05);
+        noise.connect(hatF);
+        hatF.connect(hatG);
+        hatG.connect(musicGain!);
+        noise.start(t + hi);
+        musicOscillators.push(noise as unknown as OscillatorNode);
+      }
+    }
+
+    setTimeout(() => playMeasure(index + 1), measureDuration * 1000);
   }
 
   playMeasure(0);
@@ -347,6 +423,7 @@ export function startMusic() {
 
 export function stopMusic() {
   musicPlaying = false;
+  musicIntensity = 0;
   musicOscillators.forEach(o => { try { o.stop(); } catch {} });
   musicOscillators = [];
 }
