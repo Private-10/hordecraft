@@ -17,7 +17,7 @@ function getDb() {
   return getFirestore(app);
 }
 
-const BOT_SECRET = "hordecraft_bot_secret_2026";
+const BOT_SECRET = process.env.BOT_SECRET || "hordecraft_bot_secret_2026";
 
 export async function GET(req: NextRequest) {
   const key = req.nextUrl.searchParams.get("key");
