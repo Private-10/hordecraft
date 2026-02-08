@@ -4,6 +4,7 @@ export class InputManager {
   mouseY = 0;
   mouseDeltaX = 0;
   mouseDeltaY = 0;
+  scrollDelta = 0;
   isPointerLocked = false;
   private canvas: HTMLCanvasElement | null = null;
 
@@ -37,6 +38,17 @@ export class InputManager {
         this.mouseDeltaY += e.movementY;
       }
     });
+
+    canvas.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      this.scrollDelta += e.deltaY;
+    }, { passive: false });
+  }
+
+  consumeScroll(): number {
+    const d = this.scrollDelta;
+    this.scrollDelta = 0;
+    return d;
   }
 
   consumeMouseDelta() {

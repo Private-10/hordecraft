@@ -33,6 +33,8 @@ export class GameEngine {
   // Camera state
   private cameraYaw = 0;
   private cameraPitch = 0.6;
+  private cameraDistance = CAMERA.distance;
+  private cameraTargetDistance = CAMERA.distance;
 
   // Screen shake
   private shakeIntensity = 0;
@@ -2486,7 +2488,30 @@ export class GameEngine {
 
   private updateCamera() {
     const p = this.player.position;
-    const dist = CAMERA.distance;
+
+    // Scroll zoom
+    const scroll = this.input.consumeScroll();
+    if (scroll !== 0) {
+      this.cameraTargetDistance += scroll * 0.005;
+      this.cameraTargetDistance = Math.max(CAMERA.minDistance, Math.min(CAMERA.maxDistance, this.cameraTargetDistance));
+    }
+
+    // Combat auto-zoom: count nearby enemies
+    let nearbyEnemies = 0;
+    for (const e of this.enemies) {
+      if (!e.isAlive) continue;
+      const edx = e.position.x - p.x;
+      const edz = e.position.z - p.z;
+      if (edx * edx + edz * edz < 225) nearbyEnemies++; // 15^2
+    }
+    const combatZoomTarget = nearbyEnemies > 10
+      ? this.cameraTargetDistance + 2
+      : this.cameraTargetDistance;
+
+    // Smooth lerp
+    this.cameraDistance += (combatZoomTarget - this.cameraDistance) * 0.05;
+
+    const dist = this.cameraDistance;
 
     let camX = p.x + Math.sin(this.cameraYaw) * Math.cos(this.cameraPitch) * dist;
     let camY = p.y + Math.sin(this.cameraPitch) * dist;
@@ -2534,10 +2559,18 @@ export class GameEngine {
       const dir = this._tmpDir.subVectors(playerPos, enemy.position).normalize();
       const isBat = enemy.type === "bat";
 
-      // Troll berserker: double speed when HP < 30%
-      let trollSpeedMult = 1;
-      if (enemy.type === "troll" && enemy.hp < enemy.maxHp * 0.3) {
-        trollSpeedMult = 2;
+      // Ogre berserker: double speed + red tint when HP < 30%
+      let speedMult = 1;
+      if (enemy.type === "ogre" && enemy.hp < enemy.maxHp * 0.3) {
+        speedMult = 2;
+        // Red tint
+        if (enemy.mesh instanceof THREE.Group) {
+          enemy.mesh.traverse((child) => {
+            if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshLambertMaterial) {
+              child.material.emissive.setHex(0x440000);
+            }
+          });
+        }
       }
       // Troll regen: if no damage for 5s, heal 5% maxHP/s
       if (enemy.type === "troll" && this.gameTime - enemy.lastDamageTime > 5) {
@@ -2551,7 +2584,7 @@ export class GameEngine {
         }
       }
 
-      const effectiveSpeed = enemy.speed * (1 - enemy.slowAmount) * trollSpeedMult;
+      const effectiveSpeed = enemy.speed * (1 - enemy.slowAmount) * speedMult;
 
       // Necromancer AI: keep distance, strafe, fire projectiles, summon
       if (enemy.type === "necromancer") {
@@ -3353,12 +3386,10 @@ export class GameEngine {
         }
       }
 
-      if (boss.type === "shadowLord" && boss.phase === 1 && hpPercent <= 0.3) {
+      if (boss.type === "shadowLord" && boss.phase === 1 && hpPercent <= 0.7) {
         boss.phase = 2;
         boss.phaseTimer = 0;
         this.triggerShake(1.0, 0.6);
-        // Darken scene slightly
-        if (this.ambientLight) this.ambientLight.intensity *= 0.6;
         if (boss.mesh instanceof THREE.Group) {
           const glow = new THREE.Mesh(
             new THREE.SphereGeometry(boss.radius * 1.3, 8, 6),
@@ -3367,6 +3398,15 @@ export class GameEngine {
           glow.name = "phaseGlow";
           boss.mesh.add(glow);
         }
+      }
+
+      if (boss.type === "shadowLord" && boss.phase === 2 && hpPercent <= 0.3) {
+        boss.phase = 3;
+        boss.phaseTimer = 0;
+        boss.speed = boss.baseSpeed * 1.5;
+        this.triggerShake(1.2, 0.8);
+        // Darken scene
+        if (this.ambientLight) this.ambientLight.intensity *= 0.6;
       }
 
       // Phase 2 behaviors
@@ -3391,34 +3431,46 @@ export class GameEngine {
           // Store as temporary lava pool
           this.lavaPoolPositions.push({ x: px, z: pz, radius: poolRadius });
           this.lavaPoolMeshes.push(poolMesh);
-          // Remove after 5s
+          // Remove after 8s
           const poolRef = { x: px, z: pz, radius: poolRadius };
-          this.scheduleRemoval(poolMesh, 5);
+          this.scheduleRemoval(poolMesh, 8);
           setTimeout(() => {
             const idx = this.lavaPoolPositions.findIndex(p => p.x === poolRef.x && p.z === poolRef.z && p.radius === poolRef.radius);
             if (idx >= 0) { this.lavaPoolPositions.splice(idx, 1); this.lavaPoolMeshes.splice(idx, 1); }
             const envIdx = this.environmentObjects.indexOf(poolMesh);
             if (envIdx >= 0) this.environmentObjects.splice(envIdx, 1);
-          }, 5000);
+          }, 8000);
         }
       }
 
       if (boss.type === "shadowLord" && boss.phase === 2) {
-        // Teleport every 5s + summon 3 skeletons
-        if (boss.phaseTimer >= 5) {
+        // Summon 3 skeletons every 10s
+        if (boss.phaseTimer >= 10) {
           boss.phaseTimer = 0;
-          const angle = Math.random() * Math.PI * 2;
-          const dist = 8 + Math.random() * 5;
-          boss.position.x = Math.max(-ARENA.halfSize + 5, Math.min(ARENA.halfSize - 5, this.player.position.x + Math.cos(angle) * dist));
-          boss.position.z = Math.max(-ARENA.halfSize + 5, Math.min(ARENA.halfSize - 5, this.player.position.z + Math.sin(angle) * dist));
-          boss.position.y = this.getTerrainHeight(boss.position.x, boss.position.z) + 0.5;
-          boss.mesh.position.copy(boss.position);
           this.triggerShake(0.3, 0.2);
-          // Summon 3 skeletons
           for (let s = 0; s < 3; s++) {
             this.spawnEnemyAtPosition("skeleton",
               boss.position.x + (Math.random() - 0.5) * 4,
               boss.position.z + (Math.random() - 0.5) * 4);
+          }
+        }
+      }
+
+      if (boss.type === "shadowLord" && boss.phase === 3) {
+        // Summon 5 skeletons every 8s + teleport
+        if (boss.phaseTimer >= 8) {
+          boss.phaseTimer = 0;
+          const angle = Math.random() * Math.PI * 2;
+          const tdist = 8 + Math.random() * 5;
+          boss.position.x = Math.max(-ARENA.halfSize + 5, Math.min(ARENA.halfSize - 5, this.player.position.x + Math.cos(angle) * tdist));
+          boss.position.z = Math.max(-ARENA.halfSize + 5, Math.min(ARENA.halfSize - 5, this.player.position.z + Math.sin(angle) * tdist));
+          boss.position.y = this.getTerrainHeight(boss.position.x, boss.position.z) + 0.5;
+          boss.mesh.position.copy(boss.position);
+          this.triggerShake(0.4, 0.3);
+          for (let s = 0; s < 5; s++) {
+            this.spawnEnemyAtPosition("skeleton",
+              boss.position.x + (Math.random() - 0.5) * 5,
+              boss.position.z + (Math.random() - 0.5) * 5);
           }
         }
       }
@@ -4318,12 +4370,15 @@ export class GameEngine {
     this.onDamage?.();
     Audio.playDamage();
 
-    // Knockback
+    // Knockback (boss hits = 2x force)
     if (knockbackSource) {
       const kbDir = new THREE.Vector3()
         .subVectors(this.player.position, knockbackSource).normalize();
-      this.player.velocity.x += kbDir.x * 3;
-      this.player.velocity.z += kbDir.z * 3;
+      const isBossHit = this.activeBoss && this.activeBoss.isAlive &&
+        knockbackSource.distanceTo(this.activeBoss.position) < this.activeBoss.radius + 1;
+      const kbForce = isBossHit ? 6 : 3;
+      this.player.velocity.x += kbDir.x * kbForce;
+      this.player.velocity.z += kbDir.z * kbForce;
     }
 
     if (this.player.hp <= 0) {
