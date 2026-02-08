@@ -69,6 +69,8 @@ export default function PlayPage() {
   const presenceIdRef = useRef<string>("");
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
+  const [playerRank, setPlayerRank] = useState<number | null>(null);
+  const topScoresRef = useRef<number[]>([]);
 
   const submitScore = async (data: Record<string, unknown>): Promise<string | null> => {
     try {
@@ -457,6 +459,36 @@ export default function PlayPage() {
     };
   }, []);
 
+  // Fetch top scores for rank display
+  useEffect(() => {
+    if (gameState !== "playing" && gameState !== "gameover") return;
+    let cancelled = false;
+    const fetchScores = async () => {
+      try {
+        const q = query(collection(db, "scores"), orderBy("score", "desc"), fbLimit(500));
+        const snap = await getDocs(q);
+        const scores: number[] = [];
+        snap.forEach(d => scores.push(d.data().score || 0));
+        if (!cancelled) topScoresRef.current = scores;
+      } catch {}
+    };
+    fetchScores();
+    const interval = setInterval(fetchScores, 30000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [gameState]);
+
+  // Update rank when score changes
+  useEffect(() => {
+    if (gameState !== "playing") return;
+    const scores = topScoresRef.current;
+    if (scores.length === 0) { setPlayerRank(null); return; }
+    const currentScore = stats.score;
+    if (currentScore <= 0) { setPlayerRank(null); return; }
+    let rank = scores.findIndex(s => currentScore >= s);
+    if (rank === -1) rank = scores.length;
+    setPlayerRank(rank + 1);
+  }, [stats.score, gameState]);
+
   const nickColor = (name: string) => {
     let h = 0;
     for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
@@ -802,6 +834,8 @@ export default function PlayPage() {
                             setNickError(lang === "tr" ? "Yanlış PIN!" : "Wrong PIN!");
                           } else if (err === "not_found") {
                             setNickError(lang === "tr" ? "İsim bulunamadı" : "Name not found");
+                          } else if (err === "inappropriate_name") {
+                            setNickError(lang === "tr" ? "Uygunsuz isim!" : "Inappropriate name!");
                           } else {
                             setNickLoggedIn(true);
                             syncCloudMeta(nickname.trim());
@@ -822,6 +856,8 @@ export default function PlayPage() {
                             if (err === "already_claimed") {
                               setNickClaimed(true);
                               setNickError(lang === "tr" ? "Bu isim alınmış! PIN ile giriş yap." : "Name taken! Login with PIN.");
+                            } else if (err === "inappropriate_name") {
+                              setNickError(lang === "tr" ? "Uygunsuz isim! Başka bir isim dene." : "Inappropriate name! Try another.");
                             } else {
                               setNickError(lang === "tr" ? "Geçersiz giriş" : "Invalid input");
                             }
@@ -952,6 +988,13 @@ export default function PlayPage() {
           </div>
 
           <div className="timer">⏱️ {formatTime(stats.survivalTime)}</div>
+          <div style={{
+            position: "absolute", top: isMobileDevice ? 8 : 12, right: isMobileDevice ? 80 : 120,
+            fontSize: isMobileDevice ? 12 : 14, fontWeight: 700, color: "rgba(255,215,0,0.8)",
+            textShadow: "0 0 4px rgba(0,0,0,0.8)", pointerEvents: "none",
+          }}>
+            🏆 {playerRank ? `#${playerRank}` : "--"}
+          </div>
 
           <div className={`combo-display ${stats.currentCombo >= 10 ? "active" : ""}`}>
             🔥 x{stats.comboMultiplier.toFixed(1)}

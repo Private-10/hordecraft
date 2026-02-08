@@ -45,6 +45,30 @@ const TIME_FILTERS = [
   { id: "today", tr: "Bugün", en: "Today" },
 ];
 
+function getWeekBounds() {
+  const now = new Date();
+  const day = now.getUTCDay(); // 0=Sun
+  const diff = day === 0 ? 6 : day - 1; // days since Monday
+  const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - diff, 0, 0, 0));
+  const sunday = new Date(monday.getTime() + 7 * 24 * 60 * 60 * 1000 - 1);
+  return { start: monday, end: sunday };
+}
+
+function getLastWeekBounds() {
+  const { start } = getWeekBounds();
+  const lastSunday = new Date(start.getTime() - 1);
+  const lastMonday = new Date(start.getTime() - 7 * 24 * 60 * 60 * 1000);
+  return { start: lastMonday, end: lastSunday };
+}
+
+function formatCountdown(ms: number) {
+  if (ms <= 0) return "00:00:00";
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  const s = Math.floor((ms % 60000) / 1000);
+  return `${h.toString().padStart(2,"0")}:${m.toString().padStart(2,"0")}:${s.toString().padStart(2,"0")}`;
+}
+
 export default function LeaderboardPage() {
   const [allScores, setAllScores] = useState<ScoreEntry[]>([]);
   const [lang, setLang] = useState<"tr" | "en">("tr");
@@ -53,6 +77,8 @@ export default function LeaderboardPage() {
   const [mapFilter, setMapFilter] = useState("all");
   const [charFilter, setCharFilter] = useState("all");
   const [timeFilter, setTimeFilter] = useState("all");
+  const [showTournament, setShowTournament] = useState(false);
+  const [countdown, setCountdown] = useState("");
 
   useEffect(() => {
     setMounted(true);
@@ -88,6 +114,56 @@ export default function LeaderboardPage() {
       setLoading(false);
     })();
   }, []);
+
+  // Countdown timer to week end
+  useEffect(() => {
+    const tick = () => {
+      const { end } = getWeekBounds();
+      setCountdown(formatCountdown(end.getTime() - Date.now()));
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Weekly tournament scores
+  const weeklyScores = useMemo(() => {
+    const { start, end } = getWeekBounds();
+    const filtered = allScores.filter(s => {
+      if (!s.date) return false;
+      const d = new Date(s.date);
+      return d >= start && d <= end;
+    });
+    const bestMap = new Map<string, ScoreEntry>();
+    for (const e of filtered) {
+      const key = (e.nickname || "Anonymous").toLowerCase();
+      const existing = bestMap.get(key);
+      if (!existing || e.score > existing.score) bestMap.set(key, e);
+    }
+    return Array.from(bestMap.values()).sort((a, b) => b.score - a.score);
+  }, [allScores]);
+
+  // Last week top 10 nicknames (for badge)
+  const lastWeekWinners = useMemo(() => {
+    const { start, end } = getLastWeekBounds();
+    const filtered = allScores.filter(s => {
+      if (!s.date) return false;
+      const d = new Date(s.date);
+      return d >= start && d <= end;
+    });
+    const bestMap = new Map<string, ScoreEntry>();
+    for (const e of filtered) {
+      const key = (e.nickname || "Anonymous").toLowerCase();
+      const existing = bestMap.get(key);
+      if (!existing || e.score > existing.score) bestMap.set(key, e);
+    }
+    return new Set(
+      Array.from(bestMap.values())
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 10)
+        .map(s => (s.nickname || "Anonymous").toLowerCase())
+    );
+  }, [allScores]);
 
   const scores = useMemo(() => {
     let filtered = allScores;
@@ -225,8 +301,84 @@ export default function LeaderboardPage() {
           </div>
         </div>
 
+        {/* Tournament Toggle */}
+        <div style={{ display: "flex", justifyContent: "center", gap: 12, marginBottom: 20 }}>
+          <button
+            onClick={() => setShowTournament(false)}
+            style={{
+              padding: "10px 20px", borderRadius: 10, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 14,
+              background: !showTournament ? "linear-gradient(135deg, #ff6b35, #ff8c42)" : "rgba(255,255,255,0.06)",
+              color: !showTournament ? "white" : "rgba(255,255,255,0.5)",
+            }}
+          >
+            📊 {tr ? "Genel Sıralama" : "All-Time"}
+          </button>
+          <button
+            onClick={() => setShowTournament(true)}
+            style={{
+              padding: "10px 20px", borderRadius: 10, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 14,
+              background: showTournament ? "linear-gradient(135deg, #ff6b35, #ff8c42)" : "rgba(255,255,255,0.06)",
+              color: showTournament ? "white" : "rgba(255,255,255,0.5)",
+            }}
+          >
+            🏆 {tr ? "Haftalık Turnuva" : "Weekly Tournament"}
+          </button>
+        </div>
+
+        {/* Weekly Tournament Section */}
+        {showTournament && (
+          <div style={{
+            background: "rgba(255,215,0,0.05)", borderRadius: 14, padding: 20,
+            border: "1px solid rgba(255,215,0,0.15)", marginBottom: 24,
+          }}>
+            <div style={{ textAlign: "center", marginBottom: 16 }}>
+              <h2 style={{ fontSize: 24, fontWeight: 900, color: "#ffd700", margin: "0 0 8px" }}>
+                🏆 {tr ? "Haftalık Turnuva" : "Weekly Tournament"}
+              </h2>
+              <div style={{ fontSize: 14, color: "rgba(255,255,255,0.5)" }}>
+                {tr ? "Hafta sonu:" : "Week ends in:"}{" "}
+                <span style={{ color: "#ff6b35", fontWeight: 700, fontFamily: "monospace" }}>{countdown}</span>
+              </div>
+            </div>
+            {weeklyScores.length === 0 ? (
+              <div style={{ textAlign: "center", padding: 30, color: "rgba(255,255,255,0.4)" }}>
+                {tr ? "Bu hafta henüz skor yok" : "No scores this week yet"}
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {weeklyScores.slice(0, 20).map((s, i) => {
+                  const badge = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i < 10 ? "⭐" : `${i + 1}`;
+                  const isTop3 = i < 3;
+                  const isTop10 = i < 10;
+                  return (
+                    <div key={i} style={{
+                      display: "grid",
+                      gridTemplateColumns: "50px 1fr 100px 80px 70px",
+                      padding: "12px 16px",
+                      background: isTop3 ? "rgba(255,215,0,0.08)" : isTop10 ? "rgba(255,215,0,0.03)" : "rgba(255,255,255,0.02)",
+                      borderRadius: 10,
+                      border: isTop3 ? "1px solid rgba(255,215,0,0.2)" : "1px solid rgba(255,255,255,0.05)",
+                      fontSize: 14, alignItems: "center",
+                    }}>
+                      <span style={{ fontWeight: 700, fontSize: isTop10 ? 18 : 14 }}>{badge}</span>
+                      <span style={{ fontWeight: 600, color: isTop3 ? "#ffd700" : "white" }}>
+                        {s.nickname || (tr ? "Anonim" : "Anonymous")}
+                      </span>
+                      <span style={{ textAlign: "right", fontWeight: 700, color: "#ff6b35" }}>
+                        {s.score.toLocaleString()}
+                      </span>
+                      <span style={{ textAlign: "right" }}>{s.kills.toLocaleString()} ☠️</span>
+                      <span style={{ textAlign: "right" }}>{formatTime(s.survivalTime)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Content */}
-        {loading ? (
+        {!showTournament && loading ? (
           <div style={{ textAlign: "center", padding: 60, color: "rgba(255,255,255,0.4)", fontSize: 18 }}>
             ⏳ {tr ? "Yükleniyor..." : "Loading..."}
           </div>

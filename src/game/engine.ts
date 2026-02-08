@@ -362,6 +362,14 @@ export class GameEngine {
     });
   }
 
+  // Procedural seed for map variation
+  private mapSeed = Date.now();
+  private terrainVariation = 1;
+  private seededRandom(seed: number): () => number {
+    let s = seed;
+    return () => { s = (s * 16807 + 0) % 2147483647; return (s - 1) / 2147483646; };
+  }
+
   private clearArena() {
     // Remove environment objects
     this.environmentObjects.forEach(obj => this.scene.remove(obj));
@@ -405,17 +413,24 @@ export class GameEngine {
       if (this.hemiLight) { this.hemiLight.color.set(0x4488aa); (this.hemiLight as THREE.HemisphereLight).groundColor.set(0x224422); }
     }
 
+    // Refresh seed each run for procedural variation
+    this.mapSeed = Date.now();
+    const rng = this.seededRandom(this.mapSeed);
+    // Terrain height variation factor (0.8-1.2)
+    const terrainVar = 0.8 + rng() * 0.4;
+    this.terrainVariation = terrainVar;
+
     // Ground
     const groundGeo = new THREE.PlaneGeometry(ARENA.size, ARENA.size, 40, 40);
     const posAttr = groundGeo.getAttribute("position");
     for (let i = 0; i < posAttr.count; i++) {
       const x = posAttr.getX(i);
       const y = posAttr.getY(i);
-      const height = mapId === "volcanic"
+      const height = (mapId === "volcanic"
         ? Math.sin(x * 0.15) * Math.cos(y * 0.12) * 2.5 + Math.abs(Math.sin(x * 0.08 + y * 0.06)) * 1.5
         : mapId === "desert"
         ? Math.sin(x * 0.08) * Math.cos(y * 0.06) * 3 + Math.sin(x * 0.15) * 1.5 + Math.cos(y * 0.12) * 2
-        : Math.sin(x * 0.1) * Math.cos(y * 0.1) * 1.5 + Math.sin(x * 0.05 + 1) * Math.cos(y * 0.07) * 2;
+        : Math.sin(x * 0.1) * Math.cos(y * 0.1) * 1.5 + Math.sin(x * 0.05 + 1) * Math.cos(y * 0.07) * 2) * terrainVar;
       posAttr.setZ(i, height);
     }
     groundGeo.computeVertexNormals();
@@ -1370,6 +1385,32 @@ export class GameEngine {
       const rp = new THREE.Mesh(pupilGeo, pupilMat);
       rp.position.set(0.12, 0.45, 0.39);
       g.add(rp);
+      return g;
+    };
+
+    this.enemyMeshFactories.mini_slime = () => {
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(
+        new THREE.SphereGeometry(0.25, 8, 6),
+        new THREE.MeshPhongMaterial({ color: 0x88ee88, transparent: true, opacity: 0.8, shininess: 80 })
+      );
+      body.position.y = 0.2;
+      body.scale.y = 0.7;
+      g.add(body);
+      const inner = new THREE.Mesh(
+        new THREE.SphereGeometry(0.15, 6, 5),
+        new THREE.MeshBasicMaterial({ color: 0xaaffaa, transparent: true, opacity: 0.4 })
+      );
+      inner.position.y = 0.2;
+      g.add(inner);
+      const eyeGeo = new THREE.SphereGeometry(0.04, 5, 4);
+      const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      const pupilGeo = new THREE.SphereGeometry(0.025, 4, 4);
+      const pupilMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+      const le = new THREE.Mesh(eyeGeo, eyeMat); le.position.set(-0.08, 0.28, 0.2); g.add(le);
+      const lp = new THREE.Mesh(pupilGeo, pupilMat); lp.position.set(-0.08, 0.28, 0.23); g.add(lp);
+      const re = new THREE.Mesh(eyeGeo, eyeMat); re.position.set(0.08, 0.28, 0.2); g.add(re);
+      const rp = new THREE.Mesh(pupilGeo, pupilMat); rp.position.set(0.08, 0.28, 0.23); g.add(rp);
       return g;
     };
 
@@ -2577,6 +2618,32 @@ export class GameEngine {
           }
         }
       }
+      // Skeleton: ranged AI - keep distance, fire arrows
+      else if (enemy.type === "skeleton") {
+        const edx = enemy.position.x - playerPos.x;
+        const edz = enemy.position.z - playerPos.z;
+        const distToPlayer = Math.sqrt(edx * edx + edz * edz);
+        if (distToPlayer < 12) {
+          // Too close, back away
+          enemy.position.x -= dir.x * effectiveSpeed * dt;
+          enemy.position.z -= dir.z * effectiveSpeed * dt;
+        } else if (distToPlayer > 15) {
+          // Too far, approach
+          enemy.position.x += dir.x * effectiveSpeed * dt;
+          enemy.position.z += dir.z * effectiveSpeed * dt;
+        } else {
+          // In range, strafe
+          const lateral = this._tmpVec.set(-dir.z, 0, dir.x);
+          enemy.position.x += lateral.x * effectiveSpeed * 0.5 * dt;
+          enemy.position.z += lateral.z * effectiveSpeed * 0.5 * dt;
+        }
+        // Fire arrow every 2.5s
+        enemy.attackTimer += dt;
+        if (enemy.attackTimer >= 2.5) {
+          enemy.attackTimer = 0;
+          this.fireSkeletonArrow(enemy);
+        }
+      }
       // Spider: zigzag lateral offset
       else if (enemy.type === "spider") {
         const lateral = this._tmpVec.set(-dir.z, 0, dir.x); // perpendicular
@@ -2637,7 +2704,7 @@ export class GameEngine {
       }
 
       // Slime bounce animation
-      if (enemy.type === "slime") {
+      if (enemy.type === "slime" || enemy.type === "mini_slime") {
         const bounce = 1 + Math.sin(this.gameTime * 5 + enemy.id) * 0.1;
         enemy.mesh.scale.set(1, bounce, 1);
       }
@@ -2707,6 +2774,30 @@ export class GameEngine {
       damage: 15,
       mesh: projMesh,
       lifetime: 3,
+      isAlive: true,
+    });
+  }
+
+  private fireSkeletonArrow(skeleton: EnemyInstance) {
+    const dir = new THREE.Vector3()
+      .subVectors(this.player.position, skeleton.position).normalize();
+    // Arrow visual: thin brownish cylinder (stick-like)
+    const arrowGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.6, 4);
+    const arrowMat = new THREE.MeshBasicMaterial({ color: 0x8B6914 });
+    const arrowMesh = new THREE.Mesh(arrowGeo, arrowMat);
+    arrowMesh.rotation.z = Math.PI / 2; // horizontal
+    const pos = skeleton.position.clone().add(new THREE.Vector3(0, 0.8, 0));
+    arrowMesh.position.copy(pos);
+    // Orient arrow toward player
+    arrowMesh.lookAt(this.player.position);
+    arrowMesh.rotateX(Math.PI / 2);
+    this.scene.add(arrowMesh);
+    this.enemyProjectiles.push({
+      position: pos,
+      velocity: dir.multiplyScalar(8),
+      damage: skeleton.damage,
+      mesh: arrowMesh,
+      lifetime: 4,
       isAlive: true,
     });
   }
@@ -3163,6 +3254,12 @@ export class GameEngine {
       this.stats.maxCombo = this.stats.currentCombo;
     }
 
+    // Slime split: spawn 2 mini slimes (mini slimes don't split further)
+    if (enemy.type === "slime") {
+      this.spawnEnemyAtPosition("mini_slime", enemy.position.x + 0.5, enemy.position.z + 0.5);
+      this.spawnEnemyAtPosition("mini_slime", enemy.position.x - 0.5, enemy.position.z - 0.5);
+    }
+
     // Spawn XP gem
     this.spawnXPGem(enemy.position.clone(), enemy.xpValue);
     Audio.playKill();
@@ -3198,18 +3295,131 @@ export class GameEngine {
       }
     }
 
-    // Boss slam attacks
+    // Boss slam attacks + phase system
     if (this.activeBoss && this.activeBoss.isAlive) {
-      const bossType = this.activeBoss.type as keyof typeof BOSSES;
+      const boss = this.activeBoss;
+      const bossType = boss.type as keyof typeof BOSSES;
       const cfg = BOSSES[bossType];
+
+      // Phase tracking
+      if (boss.phase === undefined) boss.phase = 1;
+      if (boss.phaseTimer === undefined) boss.phaseTimer = 0;
+      boss.phaseTimer += dt;
+
+      const hpPercent = boss.hp / boss.maxHp;
+
+      // Phase transitions
+      if (boss.type === "stoneGolem" && boss.phase === 1 && hpPercent <= 0.5) {
+        boss.phase = 2;
+        boss.speed = boss.baseSpeed * 2;
+        this.triggerShake(0.8, 0.5);
+        // Red glow visual
+        if (boss.mesh instanceof THREE.Group) {
+          const glow = new THREE.Mesh(
+            new THREE.SphereGeometry(boss.radius * 1.2, 8, 6),
+            new THREE.MeshBasicMaterial({ color: 0xff2200, transparent: true, opacity: 0.2 })
+          );
+          glow.name = "phaseGlow";
+          boss.mesh.add(glow);
+        }
+      }
+
+      if (boss.type === "fireWraith" && boss.phase === 1 && hpPercent <= 0.5) {
+        boss.phase = 2;
+        boss.speed = boss.baseSpeed * 1.5;
+        boss.phaseTimer = 0;
+        this.triggerShake(0.8, 0.5);
+        if (boss.mesh instanceof THREE.Group) {
+          const glow = new THREE.Mesh(
+            new THREE.SphereGeometry(boss.radius * 1.2, 8, 6),
+            new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.25 })
+          );
+          glow.name = "phaseGlow";
+          boss.mesh.add(glow);
+        }
+      }
+
+      if (boss.type === "shadowLord" && boss.phase === 1 && hpPercent <= 0.3) {
+        boss.phase = 2;
+        boss.phaseTimer = 0;
+        this.triggerShake(1.0, 0.6);
+        // Darken scene slightly
+        if (this.ambientLight) this.ambientLight.intensity *= 0.6;
+        if (boss.mesh instanceof THREE.Group) {
+          const glow = new THREE.Mesh(
+            new THREE.SphereGeometry(boss.radius * 1.3, 8, 6),
+            new THREE.MeshBasicMaterial({ color: 0x6600cc, transparent: true, opacity: 0.3 })
+          );
+          glow.name = "phaseGlow";
+          boss.mesh.add(glow);
+        }
+      }
+
+      // Phase 2 behaviors
+      if (boss.type === "stoneGolem" && boss.phase === 2) {
+        // Slam cooldown halved (handled below via slamInterval modifier)
+      }
+
+      if (boss.type === "fireWraith" && boss.phase === 2) {
+        // Spawn fire pools every 3s
+        if (boss.phaseTimer >= 3) {
+          boss.phaseTimer = 0;
+          const poolRadius = 2;
+          const px = boss.position.x;
+          const pz = boss.position.z;
+          const py = this.getTerrainHeight(px, pz) + 0.05;
+          const poolMat = new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.7 });
+          const poolMesh = new THREE.Mesh(new THREE.CircleGeometry(poolRadius, 12), poolMat);
+          poolMesh.rotation.x = -Math.PI / 2;
+          poolMesh.position.set(px, py, pz);
+          this.scene.add(poolMesh);
+          this.environmentObjects.push(poolMesh);
+          // Store as temporary lava pool
+          this.lavaPoolPositions.push({ x: px, z: pz, radius: poolRadius });
+          this.lavaPoolMeshes.push(poolMesh);
+          // Remove after 5s
+          const poolRef = { x: px, z: pz, radius: poolRadius };
+          this.scheduleRemoval(poolMesh, 5);
+          setTimeout(() => {
+            const idx = this.lavaPoolPositions.findIndex(p => p.x === poolRef.x && p.z === poolRef.z && p.radius === poolRef.radius);
+            if (idx >= 0) { this.lavaPoolPositions.splice(idx, 1); this.lavaPoolMeshes.splice(idx, 1); }
+            const envIdx = this.environmentObjects.indexOf(poolMesh);
+            if (envIdx >= 0) this.environmentObjects.splice(envIdx, 1);
+          }, 5000);
+        }
+      }
+
+      if (boss.type === "shadowLord" && boss.phase === 2) {
+        // Teleport every 5s + summon 3 skeletons
+        if (boss.phaseTimer >= 5) {
+          boss.phaseTimer = 0;
+          const angle = Math.random() * Math.PI * 2;
+          const dist = 8 + Math.random() * 5;
+          boss.position.x = Math.max(-ARENA.halfSize + 5, Math.min(ARENA.halfSize - 5, this.player.position.x + Math.cos(angle) * dist));
+          boss.position.z = Math.max(-ARENA.halfSize + 5, Math.min(ARENA.halfSize - 5, this.player.position.z + Math.sin(angle) * dist));
+          boss.position.y = this.getTerrainHeight(boss.position.x, boss.position.z) + 0.5;
+          boss.mesh.position.copy(boss.position);
+          this.triggerShake(0.3, 0.2);
+          // Summon 3 skeletons
+          for (let s = 0; s < 3; s++) {
+            this.spawnEnemyAtPosition("skeleton",
+              boss.position.x + (Math.random() - 0.5) * 4,
+              boss.position.z + (Math.random() - 0.5) * 4);
+          }
+        }
+      }
+
       if (cfg) {
-        let timer = this.bossSlamTimers.get(this.activeBoss.id) || cfg.slamInterval;
+        let slamInterval = cfg.slamInterval;
+        // Stone Golem phase 2: halve slam cooldown
+        if (boss.type === "stoneGolem" && boss.phase === 2) slamInterval *= 0.5;
+        let timer = this.bossSlamTimers.get(boss.id) || slamInterval;
         timer -= dt;
         if (timer <= 0) {
-          this.bossSlam(this.activeBoss, cfg.slamRadius, cfg.slamDamage);
-          timer = cfg.slamInterval;
+          this.bossSlam(boss, cfg.slamRadius, cfg.slamDamage);
+          timer = slamInterval;
         }
-        this.bossSlamTimers.set(this.activeBoss.id, timer);
+        this.bossSlamTimers.set(boss.id, timer);
       }
     }
 
@@ -4785,14 +4995,15 @@ export class GameEngine {
   // ========== HELPERS ==========
 
   private getTerrainHeight(x: number, z: number): number {
+    const v = this.terrainVariation || 1;
     if (this.selectedMap === "volcanic") {
-      return Math.sin(x * 0.15) * Math.cos(z * 0.12) * 2.5 + Math.abs(Math.sin(x * 0.08 + z * 0.06)) * 1.5;
+      return (Math.sin(x * 0.15) * Math.cos(z * 0.12) * 2.5 + Math.abs(Math.sin(x * 0.08 + z * 0.06)) * 1.5) * v;
     }
     if (this.selectedMap === "desert") {
-      return Math.sin(x * 0.08) * Math.cos(z * 0.06) * 3 + Math.sin(x * 0.15) * 1.5 + Math.cos(z * 0.12) * 2;
+      return (Math.sin(x * 0.08) * Math.cos(z * 0.06) * 3 + Math.sin(x * 0.15) * 1.5 + Math.cos(z * 0.12) * 2) * v;
     }
-    return Math.sin(x * 0.1) * Math.cos(z * 0.1) * 1.5
-      + Math.sin(x * 0.05 + 1) * Math.cos(z * 0.07) * 2;
+    return (Math.sin(x * 0.1) * Math.cos(z * 0.1) * 1.5
+      + Math.sin(x * 0.05 + 1) * Math.cos(z * 0.07) * 2) * v;
   }
 
   private getClosestEnemy(range: number): EnemyInstance | null {

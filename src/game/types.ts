@@ -52,6 +52,8 @@ export interface EnemyInstance {
   summonTimer: number;
   baseSpeed: number;
   baseDamage: number;
+  phase?: number;
+  phaseTimer?: number;
 }
 
 export interface XPGem {

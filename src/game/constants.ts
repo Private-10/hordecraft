@@ -32,6 +32,7 @@ export const ARENA = {
 export const ENEMIES = {
   goblin: { hp: 15, speed: 3.5, damage: 5, xp: 3, radius: 0.4, color: 0x44aa44 },
   slime: { hp: 25, speed: 2, damage: 3, xp: 2, radius: 0.5, color: 0x66cc66 },
+  mini_slime: { hp: 10, speed: 3, damage: 2, xp: 1, radius: 0.3, color: 0x88ee88 },
   skeleton: { hp: 30, speed: 3, damage: 10, xp: 8, radius: 0.4, color: 0xccccaa },
   bat: { hp: 10, speed: 6, damage: 4, xp: 4, radius: 0.3, color: 0x8844aa },
   ogre: { hp: 120, speed: 1.8, damage: 25, xp: 20, radius: 0.9, color: 0x886644 },
