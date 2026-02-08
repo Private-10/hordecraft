@@ -28,6 +28,17 @@ export async function GET(req: NextRequest) {
   try {
     const db = getDb();
     const promises: Promise<unknown>[] = [];
+    const mode = req.nextUrl.searchParams.get("mode"); // "presence" = only refresh presence
+
+    if (mode === "presence") {
+      // Quick mode: only refresh bot presence (no scores, no chat)
+      const presenceCount = Math.floor(Math.random() * 16) + 30;
+      for (let i = 0; i < presenceCount; i++) {
+        promises.push(setDoc(doc(db, "presence", `bot_persistent_${i}`), { timestamp: Date.now() }));
+      }
+      await Promise.allSettled(promises);
+      return NextResponse.json({ success: true, presenceBots: presenceCount, mode: "presence" });
+    }
 
     // Generate 3-8 bot scores
     const scoreCount = Math.floor(Math.random() * 6) + 3;

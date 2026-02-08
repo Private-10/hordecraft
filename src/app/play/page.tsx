@@ -434,7 +434,7 @@ export default function PlayPage() {
     const fetchOnlineCount = async () => {
       try {
         const snap = await getDocs(collection(db, "presence"));
-        const cutoff = Date.now() - 120000;
+        const cutoff = Date.now() - 300000; // 5 minutes
         let count = 0;
         snap.forEach(d => { if (d.data().timestamp > cutoff) count++; });
         setOnlineCount(Math.max(1, count)); // at least 1 (self)
