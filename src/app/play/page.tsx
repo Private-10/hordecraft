@@ -61,6 +61,8 @@ export default function PlayPage() {
   const [showMapSelect, setShowMapSelect] = useState(false);
   const [sandstormWarning, setSandstormWarning] = useState(false);
   const [sandstormActive, setSandstormActive] = useState(false);
+  const [mistWarning, setMistWarning] = useState(false);
+  const [mistActive, setMistActive] = useState(false);
   const [eruptionWarning, setEruptionWarning] = useState(false);
   const [eruptionActive, setEruptionActive] = useState(false);
   const [graphicsQuality, setGraphicsQuality] = useState("medium");
@@ -288,6 +290,8 @@ export default function PlayPage() {
       setSandstormWarning(warning);
       setSandstormActive(active);
     };
+    engine.onMistWarning = (active: boolean) => setMistWarning(active);
+    engine.onMistActive = (active: boolean) => setMistActive(active);
     engine.onEruption = (warning: boolean, active: boolean) => {
       setEruptionWarning(warning);
       setEruptionActive(active);
@@ -353,6 +357,8 @@ export default function PlayPage() {
       setDps(0);
       setSandstormWarning(false);
       setSandstormActive(false);
+      setMistWarning(false);
+      setMistActive(false);
       setEruptionWarning(false);
       setEruptionActive(false);
       if (!engineRef.current) {
@@ -1148,6 +1154,22 @@ export default function PlayPage() {
             animation: "pulse 0.5s ease-in-out infinite alternate",
           }}>
             {t("hud.sandstorm")}
+          </div>
+        </div>
+      )}
+
+      {/* Mist Warning */}
+      {(mistWarning || mistActive) && gameState === "playing" && (
+        <div style={{
+          position: "fixed", top: "40%", left: "50%", transform: "translate(-50%, -50%)",
+          zIndex: 25, textAlign: "center", pointerEvents: "none",
+        }}>
+          <div style={{
+            fontSize: 32, fontWeight: 900, color: mistActive ? "#44ff88" : "#88ffaa",
+            textShadow: "0 0 20px rgba(68,255,136,0.8), 0 0 40px rgba(34,68,51,0.6)",
+            animation: "pulse 0.5s ease-in-out infinite alternate",
+          }}>
+            {mistActive ? "🌫️ SİS" : "🌫️ Sis Geliyor!"}
           </div>
         </div>
       )}

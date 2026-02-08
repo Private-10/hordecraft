@@ -213,6 +213,19 @@ export class GameEngine {
   private originalFogFar = 80;
   onSandstorm?: (warning: boolean, active: boolean) => void;
 
+  // Mist wave (forest)
+  private mistTimer = 0;
+  private mistActive = false;
+  private mistWarning = false;
+  private mistDuration = 10;
+  private mistInterval = 90;
+  private mistParticles: THREE.Points | null = null;
+  onMistWarning?: (active: boolean) => void;
+  onMistActive?: (active: boolean) => void;
+
+  // Firefly particles (forest)
+  private fireflyParticles: { mesh: THREE.Mesh; baseY: number; phase: number }[] = [];
+
   // Volcanic system
   private lavaPoolPositions: { x: number; z: number; radius: number }[] = [];
   private lavaPoolMeshes: THREE.Mesh[] = [];
@@ -270,11 +283,11 @@ export class GameEngine {
     this.sunLight.position.set(20, 30, 10);
     this.sunLight.castShadow = true;
     this.sunLight.shadow.mapSize.set(1024, 1024);
-    this.sunLight.shadow.camera.far = 120;
-    this.sunLight.shadow.camera.left = -60;
-    this.sunLight.shadow.camera.right = 60;
-    this.sunLight.shadow.camera.top = 60;
-    this.sunLight.shadow.camera.bottom = -60;
+    this.sunLight.shadow.camera.far = 160;
+    this.sunLight.shadow.camera.left = -80;
+    this.sunLight.shadow.camera.right = 80;
+    this.sunLight.shadow.camera.top = 80;
+    this.sunLight.shadow.camera.bottom = -80;
     this.scene.add(this.sunLight);
 
     this.hemiLight = new THREE.HemisphereLight(0x4488aa, 0x224422, 0.4);
@@ -380,6 +393,9 @@ export class GameEngine {
     if (this.groundMesh) { this.scene.remove(this.groundMesh); this.groundMesh = null; }
     if (this.gridHelper) { this.scene.remove(this.gridHelper); this.gridHelper = null; }
     if (this.sandstormParticles) { this.scene.remove(this.sandstormParticles); this.sandstormParticles = null; }
+    if (this.mistParticles) { this.scene.remove(this.mistParticles); this.mistParticles = null; }
+    this.fireflyParticles.forEach(f => this.scene.remove(f.mesh));
+    this.fireflyParticles = [];
     if (this.emberParticles) { this.scene.remove(this.emberParticles); this.emberParticles = null; }
     this.meteorWarnings.forEach(w => this.scene.remove(w.mesh));
     this.meteorWarnings = [];
@@ -410,9 +426,12 @@ export class GameEngine {
       if (this.sunLight) { this.sunLight.color.set(0xffcc88); this.sunLight.intensity = 1.4; }
       if (this.hemiLight) { this.hemiLight.color.set(0xaa8866); (this.hemiLight as THREE.HemisphereLight).groundColor.set(0x443322); }
     } else {
-      if (this.ambientLight) { this.ambientLight.color.set(0x334455); this.ambientLight.intensity = 0.8; }
-      if (this.sunLight) { this.sunLight.color.set(0xffeedd); this.sunLight.intensity = 1.2; }
+      // Forest - enhanced lighting
+      if (this.ambientLight) { this.ambientLight.color.set(0x556644); this.ambientLight.intensity = 1.2; }
+      if (this.sunLight) { this.sunLight.color.set(0xffeedd); this.sunLight.intensity = 1.6; }
       if (this.hemiLight) { this.hemiLight.color.set(0x4488aa); (this.hemiLight as THREE.HemisphereLight).groundColor.set(0x224422); }
+      // Green-tinted fog for forest
+      this.scene.fog = new THREE.Fog(0x112211, 40, 80);
     }
 
     // Refresh seed each run for procedural variation
@@ -478,13 +497,13 @@ export class GameEngine {
     this.rockColliders = [];
     const rng = this.seededRandom(this.mapSeed + 1);
 
-    // Rocks (±20% count variation)
-    const rockCount = Math.floor(35 * (0.8 + rng() * 0.4));
+    // Rocks (±20% count variation) - increased to 50
+    const rockCount = Math.floor(50 * (0.8 + rng() * 0.4));
+    const sharedRockMat = new THREE.MeshLambertMaterial({ color: 0x445544 });
     for (let i = 0; i < rockCount; i++) {
       const rockRadius = Math.random() * 2.5 + 0.5;
       const rockGeo = new THREE.DodecahedronGeometry(rockRadius, 0);
-      const rockMat = new THREE.MeshLambertMaterial({ color: 0x445544 });
-      const rock = new THREE.Mesh(rockGeo, rockMat);
+      const rock = new THREE.Mesh(rockGeo, sharedRockMat);
       const rx = (Math.random() - 0.5) * ARENA.size * 0.85;
       const rz = (Math.random() - 0.5) * ARENA.size * 0.85;
       if (Math.abs(rx) < 5 && Math.abs(rz) < 5) continue;
@@ -498,15 +517,27 @@ export class GameEngine {
       this.rockColliders.push({ position: new THREE.Vector3(rx, ry, rz), radius: rockRadius * 0.8 });
     }
 
-    // Trees
-    const trunkGeo = new THREE.CylinderGeometry(0.15, 0.25, 2, 6);
-    const trunkMat = new THREE.MeshLambertMaterial({ color: 0x664422 });
-    const leafGeo1 = new THREE.ConeGeometry(1.2, 2.5, 6);
-    const leafGeo2 = new THREE.ConeGeometry(0.9, 2, 6);
-    const leafMat = new THREE.MeshLambertMaterial({ color: 0x227733 });
-    const leafMatDark = new THREE.MeshLambertMaterial({ color: 0x1a5c28 });
+    // Shared tree geometries & materials
+    // Oak (original)
+    const oakTrunkGeo = new THREE.CylinderGeometry(0.15, 0.25, 2, 6);
+    const oakTrunkMat = new THREE.MeshLambertMaterial({ color: 0x664422 });
+    const oakLeafGeo1 = new THREE.ConeGeometry(1.2, 2.5, 6);
+    const oakLeafGeo2 = new THREE.ConeGeometry(0.9, 2, 6);
+    const oakLeafMat = new THREE.MeshLambertMaterial({ color: 0x227733 });
+    const oakLeafMatDark = new THREE.MeshLambertMaterial({ color: 0x1a5c28 });
+    // Pine
+    const pineTrunkGeo = new THREE.CylinderGeometry(0.1, 0.18, 2.5, 6);
+    const pineTrunkMat = new THREE.MeshLambertMaterial({ color: 0x553311 });
+    const pineLeafGeo = new THREE.ConeGeometry(1.0, 3.5, 6);
+    const pineLeafMat = new THREE.MeshLambertMaterial({ color: 0x1a5c1a });
+    // Birch
+    const birchTrunkGeo = new THREE.CylinderGeometry(0.08, 0.12, 2.2, 6);
+    const birchTrunkMat = new THREE.MeshLambertMaterial({ color: 0xeeeeee });
+    const birchLeafGeo = new THREE.SphereGeometry(0.8, 6, 5);
+    const birchLeafMat = new THREE.MeshLambertMaterial({ color: 0x44aa44 });
 
-    const treeCount = Math.floor(60 * (0.8 + rng() * 0.4));
+    // Trees - increased to 80
+    const treeCount = Math.floor(80 * (0.8 + rng() * 0.4));
     for (let i = 0; i < treeCount; i++) {
       const tx = (Math.random() - 0.5) * ARENA.size * 0.85;
       const tz = (Math.random() - 0.5) * ARENA.size * 0.85;
@@ -514,23 +545,48 @@ export class GameEngine {
       if (Math.abs(tx) < 8 && Math.abs(tz) < 8) continue;
 
       const tree = new THREE.Group();
-      const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-      trunk.position.y = 1;
-      trunk.castShadow = true;
-      tree.add(trunk);
-
+      const treeType = Math.random();
       const scale = 0.7 + Math.random() * 0.6;
-      const leaves1 = new THREE.Mesh(leafGeo1, Math.random() > 0.5 ? leafMat : leafMatDark);
-      leaves1.position.y = 2.8 * scale;
-      leaves1.scale.setScalar(scale);
-      leaves1.castShadow = true;
-      tree.add(leaves1);
 
-      const leaves2 = new THREE.Mesh(leafGeo2, Math.random() > 0.5 ? leafMatDark : leafMat);
-      leaves2.position.y = 3.8 * scale;
-      leaves2.scale.setScalar(scale);
-      leaves2.castShadow = true;
-      tree.add(leaves2);
+      if (treeType < 0.33) {
+        // Pine tree
+        const trunk = new THREE.Mesh(pineTrunkGeo, pineTrunkMat);
+        trunk.position.y = 1.25;
+        trunk.castShadow = true;
+        tree.add(trunk);
+        const leaves = new THREE.Mesh(pineLeafGeo, pineLeafMat);
+        leaves.position.y = 3.5 * scale;
+        leaves.scale.setScalar(scale);
+        leaves.castShadow = true;
+        tree.add(leaves);
+      } else if (treeType < 0.66) {
+        // Birch tree
+        const trunk = new THREE.Mesh(birchTrunkGeo, birchTrunkMat);
+        trunk.position.y = 1.1;
+        trunk.castShadow = true;
+        tree.add(trunk);
+        const leaves = new THREE.Mesh(birchLeafGeo, birchLeafMat);
+        leaves.position.y = 2.5 * scale;
+        leaves.scale.setScalar(scale);
+        leaves.castShadow = true;
+        tree.add(leaves);
+      } else {
+        // Oak tree (original)
+        const trunk = new THREE.Mesh(oakTrunkGeo, oakTrunkMat);
+        trunk.position.y = 1;
+        trunk.castShadow = true;
+        tree.add(trunk);
+        const leaves1 = new THREE.Mesh(oakLeafGeo1, Math.random() > 0.5 ? oakLeafMat : oakLeafMatDark);
+        leaves1.position.y = 2.8 * scale;
+        leaves1.scale.setScalar(scale);
+        leaves1.castShadow = true;
+        tree.add(leaves1);
+        const leaves2 = new THREE.Mesh(oakLeafGeo2, Math.random() > 0.5 ? oakLeafMatDark : oakLeafMat);
+        leaves2.position.y = 3.8 * scale;
+        leaves2.scale.setScalar(scale);
+        leaves2.castShadow = true;
+        tree.add(leaves2);
+      }
 
       tree.position.set(tx, ty, tz);
       tree.rotation.y = Math.random() * Math.PI * 2;
@@ -539,10 +595,10 @@ export class GameEngine {
       this.rockColliders.push({ position: new THREE.Vector3(tx, ty, tz), radius: 0.4 });
     }
 
-    // Grass
+    // Grass - increased to 350
     const grassGeo = new THREE.PlaneGeometry(0.4, 0.6);
     const grassMat = new THREE.MeshLambertMaterial({ color: 0x33aa44, side: THREE.DoubleSide });
-    const grassCount = Math.floor(200 * (0.8 + rng() * 0.4));
+    const grassCount = Math.floor(350 * (0.8 + rng() * 0.4));
     for (let i = 0; i < grassCount; i++) {
       const gx = (Math.random() - 0.5) * ARENA.size * 0.9;
       const gz = (Math.random() - 0.5) * ARENA.size * 0.9;
@@ -555,7 +611,7 @@ export class GameEngine {
       this.environmentObjects.push(grass);
     }
 
-    // Mushrooms
+    // Mushrooms - increased to 50
     const mushroomCapGeo = new THREE.SphereGeometry(0.2, 6, 4, 0, Math.PI * 2, 0, Math.PI / 2);
     const mushroomStemGeo = new THREE.CylinderGeometry(0.06, 0.08, 0.2, 5);
     const mushroomMats = [
@@ -565,7 +621,7 @@ export class GameEngine {
     ];
     const stemMat = new THREE.MeshLambertMaterial({ color: 0xeeeecc });
 
-    const mushroomCount = Math.floor(30 * (0.8 + rng() * 0.4));
+    const mushroomCount = Math.floor(50 * (0.8 + rng() * 0.4));
     for (let i = 0; i < mushroomCount; i++) {
       const mx = (Math.random() - 0.5) * ARENA.size * 0.8;
       const mz = (Math.random() - 0.5) * ARENA.size * 0.8;
@@ -582,6 +638,87 @@ export class GameEngine {
       mushroom.position.set(mx, my, mz);
       this.scene.add(mushroom);
       this.environmentObjects.push(mushroom);
+    }
+
+    // Flower patches - 40 colorful flowers
+    const flowerColors = [0xff69b4, 0xffff44, 0xff4444, 0x9966ff];
+    const flowerGeo = new THREE.SphereGeometry(0.08, 4, 4);
+    const flowerStemGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.2, 4);
+    const flowerStemMat = new THREE.MeshLambertMaterial({ color: 0x228833 });
+    const flowerMats = flowerColors.map(c => new THREE.MeshLambertMaterial({ color: c }));
+
+    const flowerCount = Math.floor(40 * (0.8 + rng() * 0.4));
+    for (let i = 0; i < flowerCount; i++) {
+      const fx = (Math.random() - 0.5) * ARENA.size * 0.85;
+      const fz = (Math.random() - 0.5) * ARENA.size * 0.85;
+      const fy = this.getTerrainHeight(fx, fz);
+      const flower = new THREE.Group();
+      const fStem = new THREE.Mesh(flowerStemGeo, flowerStemMat);
+      fStem.position.y = 0.1;
+      flower.add(fStem);
+      const fHead = new THREE.Mesh(flowerGeo, flowerMats[Math.floor(Math.random() * flowerMats.length)]);
+      fHead.position.y = 0.22;
+      flower.add(fHead);
+      flower.position.set(fx, fy, fz);
+      this.scene.add(flower);
+      this.environmentObjects.push(flower);
+    }
+
+    // Fallen logs - 15 horizontal brown cylinders
+    const logGeo = new THREE.CylinderGeometry(0.3, 0.3, 4, 6);
+    const logMat = new THREE.MeshLambertMaterial({ color: 0x553311 });
+
+    const logCount = Math.floor(15 * (0.8 + rng() * 0.4));
+    for (let i = 0; i < logCount; i++) {
+      const lx = (Math.random() - 0.5) * ARENA.size * 0.8;
+      const lz = (Math.random() - 0.5) * ARENA.size * 0.8;
+      if (Math.abs(lx) < 5 && Math.abs(lz) < 5) continue;
+      const ly = this.getTerrainHeight(lx, lz) + 0.15;
+      const log = new THREE.Mesh(logGeo, logMat);
+      log.position.set(lx, ly, lz);
+      log.rotation.z = Math.PI / 2;
+      log.rotation.y = Math.random() * Math.PI;
+      log.scale.x = 0.8 + Math.random() * 0.5; // vary length
+      log.castShadow = true;
+      log.receiveShadow = true;
+      this.scene.add(log);
+      this.environmentObjects.push(log);
+      this.rockColliders.push({ position: new THREE.Vector3(lx, ly, lz), radius: 0.5 });
+    }
+
+    // Small ponds - 3-5 flat blue circles
+    const pondGeo = new THREE.CircleGeometry(1, 16);
+    const pondMat = new THREE.MeshLambertMaterial({ color: 0x3399ff, transparent: true, opacity: 0.4, side: THREE.DoubleSide });
+
+    const pondCount = 3 + Math.floor(rng() * 3);
+    for (let i = 0; i < pondCount; i++) {
+      const px = (Math.random() - 0.5) * ARENA.size * 0.7;
+      const pz = (Math.random() - 0.5) * ARENA.size * 0.7;
+      if (Math.abs(px) < 8 && Math.abs(pz) < 8) continue;
+      const py = this.getTerrainHeight(px, pz) + 0.05;
+      const pond = new THREE.Mesh(pondGeo, pondMat);
+      pond.position.set(px, py, pz);
+      pond.rotation.x = -Math.PI / 2;
+      const pondScale = 3 + Math.random() * 2;
+      pond.scale.setScalar(pondScale);
+      pond.receiveShadow = true;
+      this.scene.add(pond);
+      this.environmentObjects.push(pond);
+    }
+
+    // Firefly particles - 20 glowing spheres
+    const fireflyGeo = new THREE.SphereGeometry(0.06, 4, 4);
+    const fireflyMat = new THREE.MeshBasicMaterial({ color: 0xffff88 });
+    this.fireflyParticles = [];
+    for (let i = 0; i < 20; i++) {
+      const fx = (Math.random() - 0.5) * ARENA.size * 0.8;
+      const fz = (Math.random() - 0.5) * ARENA.size * 0.8;
+      const fy = this.getTerrainHeight(fx, fz) + 1.5 + Math.random() * 2;
+      const firefly = new THREE.Mesh(fireflyGeo, fireflyMat);
+      firefly.position.set(fx, fy, fz);
+      this.scene.add(firefly);
+      this.environmentObjects.push(firefly);
+      this.fireflyParticles.push({ mesh: firefly, baseY: fy, phase: Math.random() * Math.PI * 2 });
     }
   }
 
@@ -2114,6 +2251,12 @@ export class GameEngine {
     this.sandstormActive = false;
     this.sandstormWarning = false;
     if (this.sandstormParticles) { this.scene.remove(this.sandstormParticles); this.sandstormParticles = null; }
+    // Reset mist
+    this.mistTimer = 0;
+    this.mistActive = false;
+    this.mistWarning = false;
+    this.mistDuration = 10;
+    if (this.mistParticles) { this.scene.remove(this.mistParticles); this.mistParticles = null; }
 
     // Reset volcanic
     this.lavaPoolPositions = [];
@@ -2223,6 +2366,8 @@ export class GameEngine {
     this.updateHPRegen(cappedDt);
     this.updateChests(cappedDt);
     this.updateSandstorm(cappedDt);
+    this.updateMistWave(cappedDt);
+    this.updateFireflies(cappedDt);
     this.updateVolcanic(cappedDt);
     this.updateTimedRemovals();
     this.performanceCleanup();
@@ -2584,7 +2729,8 @@ export class GameEngine {
         }
       }
 
-      const effectiveSpeed = enemy.speed * (1 - enemy.slowAmount) * speedMult;
+      const mistSlow = this.mistActive ? 0.8 : 1;
+      const effectiveSpeed = enemy.speed * (1 - enemy.slowAmount) * speedMult * mistSlow;
 
       // Necromancer AI: keep distance, strafe, fire projectiles, summon
       if (enemy.type === "necromancer") {
@@ -5072,6 +5218,94 @@ export class GameEngine {
     const mat = new THREE.PointsMaterial({ color: 0xaa8855, size: 0.3, transparent: true, opacity: 0.6 });
     this.sandstormParticles = new THREE.Points(geo, mat);
     this.scene.add(this.sandstormParticles);
+  }
+
+  // ========== MIST WAVE (FOREST) ==========
+
+  private updateMistWave(dt: number) {
+    if (this.selectedMap !== "forest") return;
+
+    this.mistTimer += dt;
+    const warningStart = this.mistInterval - 5; // 5s before
+
+    if (this.mistTimer >= warningStart && !this.mistActive && !this.mistWarning) {
+      this.mistWarning = true;
+      this.onMistWarning?.(true);
+    }
+
+    if (this.mistTimer >= this.mistInterval && !this.mistActive) {
+      this.mistActive = true;
+      this.mistWarning = false;
+      this.mistTimer = 0;
+      this.onMistWarning?.(false);
+      this.onMistActive?.(true);
+      this.createMistParticles();
+      // Reduce visibility
+      if (this.scene.fog instanceof THREE.Fog) {
+        this.scene.fog.near = 15;
+        this.scene.fog.far = 50;
+        this.scene.fog.color.set(0x224433);
+      }
+    }
+
+    if (this.mistActive) {
+      this.mistDuration -= dt;
+      // Animate mist particles
+      if (this.mistParticles) {
+        const positions = this.mistParticles.geometry.getAttribute("position") as THREE.BufferAttribute;
+        for (let i = 0; i < positions.count; i++) {
+          positions.setX(i, positions.getX(i) + (Math.random() - 0.5) * dt * 3);
+          positions.setZ(i, positions.getZ(i) + (Math.random() - 0.5) * dt * 3);
+          positions.setY(i, positions.getY(i) + Math.sin(this.gameTime * 2 + i) * dt * 0.5);
+          if (positions.getY(i) > 3) positions.setY(i, 0.5);
+          if (positions.getY(i) < 0) positions.setY(i, 0.5);
+        }
+        positions.needsUpdate = true;
+      }
+      if (this.mistDuration <= 0) {
+        this.mistActive = false;
+        this.mistDuration = 10;
+        this.onMistActive?.(false);
+        // Restore fog
+        if (this.scene.fog instanceof THREE.Fog) {
+          this.scene.fog.near = this.originalFogNear;
+          this.scene.fog.far = this.originalFogFar;
+          this.scene.fog.color.set(0x112211);
+        }
+        if (this.mistParticles) {
+          this.scene.remove(this.mistParticles);
+          this.mistParticles = null;
+        }
+      }
+    }
+  }
+
+  private createMistParticles() {
+    if (this.mistParticles) { this.scene.remove(this.mistParticles); }
+    const count = 50;
+    const geo = new THREE.BufferGeometry();
+    const positions = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      positions[i * 3] = (Math.random() - 0.5) * ARENA.size * 0.8;
+      positions[i * 3 + 1] = Math.random() * 2 + 0.3;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * ARENA.size * 0.8;
+    }
+    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    const mat = new THREE.PointsMaterial({ color: 0xaaddaa, size: 1.5, transparent: true, opacity: 0.3 });
+    this.mistParticles = new THREE.Points(geo, mat);
+    this.scene.add(this.mistParticles);
+  }
+
+  // ========== FIREFLIES (FOREST) ==========
+
+  private updateFireflies(dt: number) {
+    if (this.selectedMap !== "forest" || this.fireflyParticles.length === 0) return;
+    for (const f of this.fireflyParticles) {
+      f.phase += dt * 1.5;
+      f.mesh.position.y = f.baseY + Math.sin(f.phase) * 0.5;
+      f.mesh.position.x += Math.sin(f.phase * 0.7) * dt * 0.3;
+      f.mesh.position.z += Math.cos(f.phase * 0.5) * dt * 0.3;
+    }
   }
 
   // ========== HELPERS ==========

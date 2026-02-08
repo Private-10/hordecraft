@@ -25,8 +25,8 @@ export const CAMERA = {
 };
 
 export const ARENA = {
-  size: 120,
-  halfSize: 60,
+  size: 160,
+  halfSize: 80,
 };
 
 export const ENEMIES = {
@@ -146,7 +146,7 @@ export const MAPS = {
     unlockCondition: null as string | null,
     unlockConditiontr: null as string | null,
     unlockCost: 0,
-    arenaSize: 120,
+    arenaSize: 160,
     groundColor: 0x1a2a1a,
     groundLineColor: 0x2a3a2a,
     skyColor: 0x0a0a1a,
