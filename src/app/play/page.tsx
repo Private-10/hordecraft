@@ -1435,7 +1435,7 @@ export default function PlayPage() {
               display: "flex", position: "absolute", top: 0, left: "50%",
               animation: chestSpinResult
                 ? "none"
-                : "chestSpin 0.3s linear infinite",
+                : "chestSpin 0.8s linear infinite",
               transform: chestSpinResult
                 ? `translateX(calc(-${chestSpinOptions.indexOf(chestSpinResult) * 100}px - 50px))`
                 : undefined,

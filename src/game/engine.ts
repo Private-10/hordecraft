@@ -5461,6 +5461,20 @@ export class GameEngine {
       }
     }
 
+    // Add bonus rewards (gold, XP, HP restore) for variety
+    const bonusRewards: typeof options = [
+      { icon: "💰", name: t("upgrade.gold") || "+50 Gold", type: 'passive' as const, id: "_gold" },
+      { icon: "✨", name: t("upgrade.xp_bonus") || "+XP Boost", type: 'passive' as const, id: "_xp_burst" },
+      { icon: "❤️‍🩹", name: t("upgrade.heal") || "HP Restore", type: 'passive' as const, id: "_heal" },
+      { icon: "💰💰", name: t("upgrade.gold_big") || "+100 Gold", type: 'passive' as const, id: "_gold_big" },
+    ];
+    // Always add 2-3 bonus rewards to the pool
+    const bonusCount = 2 + Math.floor(Math.random() * 2);
+    const shuffledBonuses = [...bonusRewards].sort(() => Math.random() - 0.5);
+    for (let i = 0; i < bonusCount && i < shuffledBonuses.length; i++) {
+      options.push(shuffledBonuses[i]);
+    }
+
     if (options.length === 0) {
       // Fallback: give XP like before
       const amount = Math.floor(50 + Math.random() * 100 * (1 + this.gameTime / 120));
@@ -5512,8 +5526,20 @@ export class GameEngine {
         cooldown: () => { this.player.cooldownReduction = Math.min(0.5, this.player.cooldownReduction + 0.05); },
         regen: () => { this.player.hpRegen += 1; },
       };
-      passiveApply[id]?.();
-      this.passiveUpgrades[id] = (this.passiveUpgrades[id] || 0) + 1;
+      // Handle bonus rewards
+      if (id === "_gold") {
+        this.stats.gold += 50;
+      } else if (id === "_gold_big") {
+        this.stats.gold += 100;
+      } else if (id === "_xp_burst") {
+        const xpAmount = Math.floor(80 + this.player.level * 10);
+        this.player.xp += Math.floor(xpAmount * this.player.xpMultiplier);
+      } else if (id === "_heal") {
+        this.player.hp = Math.min(this.player.maxHp, this.player.hp + Math.floor(this.player.maxHp * 0.5));
+      } else {
+        passiveApply[id]?.();
+        this.passiveUpgrades[id] = (this.passiveUpgrades[id] || 0) + 1;
+      }
     }
 
     // Resume game
