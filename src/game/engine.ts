@@ -2655,11 +2655,11 @@ export class GameEngine {
     }
 
     // Level scaling: more enemies per group based on player level
-    const levelBonus = Math.floor(this.player.level / 8); // +1 per 8 levels (gentler)
-    const finalGroupSize = Math.min(groupSize + levelBonus, 8); // cap at 8
+    const levelBonus = Math.floor(this.player.level / 5); // +1 per 5 levels
+    const finalGroupSize = Math.min(groupSize + levelBonus, 10); // cap at 10
 
     // Level also speeds up spawn rate slightly
-    const levelSpeedFactor = Math.max(0.7, 1 - this.player.level * 0.005); // up to 30% faster (was 50%)
+    const levelSpeedFactor = Math.max(0.6, 1 - this.player.level * 0.008); // up to 40% faster
 
     for (let i = 0; i < finalGroupSize; i++) {
       const type = types[Math.floor(Math.random() * types.length)];
@@ -2669,8 +2669,8 @@ export class GameEngine {
     this.spawnTimer = spawnInterval * levelSpeedFactor;
 
     // Cap enemies (scales with level)
-    const maxEnemies = Math.min(100, 60 + this.player.level * 2);
-    const trimTarget = Math.min(80, 50 + this.player.level * 2);
+    const maxEnemies = Math.min(150, 80 + this.player.level * 3);
+    const trimTarget = Math.min(120, 60 + this.player.level * 3);
     this.cleanupDead();
     if (this.enemies.length > maxEnemies) {
       // Remove farthest non-boss enemies that are far from player
@@ -2795,11 +2795,7 @@ export class GameEngine {
       this.disposeMesh(f.mesh as unknown as THREE.Object3D);
     }
 
-    // Cap XP gems at 60 (remove oldest)
-    while (this.xpGems.length > 60) {
-      const g = this.xpGems.shift()!;
-      this.disposeMesh(g.mesh);
-    }
+    // Don't cap XP gems — player should collect them, not lose them
 
     // Cap damage numbers at 20
     while (this.damageNumbers.length > 20) {
@@ -2820,7 +2816,7 @@ export class GameEngine {
     }
 
     // Reduce max enemies more aggressively at late game
-    const maxEnemyHard = Math.min(80, 50 + this.player.level * 2);
+    const maxEnemyHard = Math.min(120, 70 + this.player.level * 2);
     const bossTypes = new Set(Object.keys(BOSSES));
     if (this.enemies.length > maxEnemyHard) {
       const removable = this.enemies
