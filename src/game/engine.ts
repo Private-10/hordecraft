@@ -5463,10 +5463,10 @@ export class GameEngine {
 
     // Add bonus rewards (gold, XP, HP restore) for variety
     const bonusRewards: typeof options = [
-      { icon: "💰", name: t("upgrade.gold") || "+50 Gold", type: 'passive' as const, id: "_gold" },
-      { icon: "✨", name: t("upgrade.xp_bonus") || "+XP Boost", type: 'passive' as const, id: "_xp_burst" },
-      { icon: "❤️‍🩹", name: t("upgrade.heal") || "HP Restore", type: 'passive' as const, id: "_heal" },
-      { icon: "💰💰", name: t("upgrade.gold_big") || "+100 Gold", type: 'passive' as const, id: "_gold_big" },
+      { icon: "💰", name: "+50 Gold", type: 'passive' as const, id: "_gold" },
+      { icon: "✨", name: "+XP Boost", type: 'passive' as const, id: "_xp_burst" },
+      { icon: "💚", name: "HP Restore", type: 'passive' as const, id: "_heal" },
+      { icon: "💰", name: "+100 Gold", type: 'passive' as const, id: "_gold_big" },
     ];
     // Always add 2-3 bonus rewards to the pool
     const bonusCount = 2 + Math.floor(Math.random() * 2);
