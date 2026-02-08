@@ -26,9 +26,9 @@ const CHARACTER_NAMES_TR: Record<string, string> = {
 const CHARACTER_NAMES_EN: Record<string, string> = {
   knight: "Knight", mage: "Mage", rogue: "Rogue", priest: "Priest", berserker: "Berserker", necromancer: "Necromancer",
 };
-const MAP_NAMES_TR: Record<string, string> = { forest: "Büyülü Orman", desert: "Kavurucu Çöl" };
-const MAP_NAMES_EN: Record<string, string> = { forest: "Enchanted Forest", desert: "Scorched Desert" };
-const MAP_ICONS: Record<string, string> = { forest: "🌲", desert: "🏜️" };
+const MAP_NAMES_TR: Record<string, string> = { forest: "Büyülü Orman", desert: "Kavurucu Çöl", volcanic: "Volkanik Derinlik" };
+const MAP_NAMES_EN: Record<string, string> = { forest: "Enchanted Forest", desert: "Scorched Desert", volcanic: "Volcanic Depths" };
+const MAP_ICONS: Record<string, string> = { forest: "🌲", desert: "🏜️", volcanic: "🌋" };
 
 function formatTime(seconds: number) {
   const m = Math.floor(seconds / 60);
