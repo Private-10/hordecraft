@@ -15,7 +15,7 @@ service cloud.firestore {
     // Scores: anyone can read, anyone can create (no edit/delete)
     match /scores/{scoreId} {
       allow read: if true;
-      allow create: if request.resource.data.keys().hasAll(['nickname', 'score', 'kills', 'survivalTime', 'level', 'maxCombo', 'date'])
+      allow create: if request.resource.data.nickname is string
                     && request.resource.data.score is number;
       allow update, delete: if false;
     }

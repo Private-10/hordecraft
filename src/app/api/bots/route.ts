@@ -38,17 +38,20 @@ export async function GET(req: NextRequest) {
       promises.push(addDoc(collection(db, "scores"), score));
     }
 
-    // Ensure named bots have nicknames claimed
+    // Ensure named bots have nicknames claimed (best-effort, skip on error)
     for (const name of NAMED_BOTS) {
-      const normId = name.trim().toLowerCase().replace(/\s+/g, "_");
-      const snap = await getDocs(query(collection(db, "nicknames"), where("nickname", "==", name), limit(1)));
-      if (snap.empty) {
-        promises.push(setDoc(doc(db, "nicknames", normId), {
-          nickname: name,
-          pin: String(Math.floor(1000 + Math.random() * 9000)),
-          claimedAt: new Date().toISOString(),
-        }));
-      }
+      try {
+        const normId = name.trim().toLowerCase().replace(/\s+/g, "_");
+        const nickRef = doc(db, "nicknames", normId);
+        const nickSnap = await getDocs(query(collection(db, "nicknames"), where("nickname", "==", name), limit(1)));
+        if (nickSnap.empty) {
+          await setDoc(nickRef, {
+            nickname: name,
+            pin: String(Math.floor(1000 + Math.random() * 9000)),
+            claimedAt: new Date().toISOString(),
+          });
+        }
+      } catch {} // skip nickname claim errors
     }
 
     // Write presence docs for 5-15 "online" bots
@@ -84,7 +87,7 @@ export async function GET(req: NextRequest) {
       }));
     }
 
-    await Promise.all(promises);
+    await Promise.allSettled(promises);
 
     return NextResponse.json({
       success: true,
