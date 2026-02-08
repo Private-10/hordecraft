@@ -5,6 +5,7 @@ import { GameEngine, Audio } from "@/game/engine";
 import type { GameState, UpgradeOption } from "@/game/types";
 import { t, getLang, setLang, type Lang } from "@/game/i18n";
 import { CHARACTERS, type CharacterDef } from "@/game/characters";
+import { CharacterPreview } from "@/game/character-preview";
 import { MAPS } from "@/game/constants";
 import type { MetaState } from "@/game/types";
 import { getActiveNickname, registerNickname, claimNickname, isNicknameClaimed, logoutNickname } from "@/game/nickname";
@@ -17,6 +18,8 @@ import { getSkinsForCharacter, type Skin } from "@/game/cosmetics";
 
 export default function PlayPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
+  const previewRef = useRef<CharacterPreview | null>(null);
   const engineRef = useRef<GameEngine | null>(null);
 
   const [gameState, setGameState] = useState<GameState>("menu");
@@ -602,6 +605,44 @@ export default function PlayPage() {
 
   const selectedCharData = CHARACTERS.find(c => c.id === selectedChar);
 
+  // 3D Character Preview
+  useEffect(() => {
+    if (!showCharSelect) {
+      // Dispose when panel closed
+      if (previewRef.current) {
+        previewRef.current.dispose();
+        previewRef.current = null;
+      }
+      return;
+    }
+    // Small delay to let the canvas mount
+    const timer = setTimeout(() => {
+      if (!previewCanvasRef.current) return;
+      if (!previewRef.current) {
+        try {
+          previewRef.current = new CharacterPreview(previewCanvasRef.current);
+        } catch (e) {
+          console.warn("Preview init failed:", e);
+          return;
+        }
+      }
+      const skinId = metaState?.selectedSkins?.[selectedChar] || null;
+      previewRef.current.setCharacter(selectedChar, skinId);
+      previewRef.current.resize();
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [showCharSelect, selectedChar, metaState?.selectedSkins]);
+
+  // Cleanup preview on unmount
+  useEffect(() => {
+    return () => {
+      if (previewRef.current) {
+        previewRef.current.dispose();
+        previewRef.current = null;
+      }
+    };
+  }, []);
+
   return (
     <>
       {/* Canvas: hidden behind menu via visibility+zIndex, fully active during gameplay */}
@@ -690,97 +731,110 @@ export default function PlayPage() {
                 <span className="char-toggle-arrow">{showCharSelect ? "▲" : "▼"}</span>
               </button>
 
-              {showCharSelect && (
-                <div className="char-grid">
-                  {CHARACTERS.map(ch => {
-                    const unlocked = isCharUnlocked(ch);
-                    const condMet = isConditionMet(ch);
-                    const canAfford = (metaState?.gold ?? 0) >= ch.unlock.unlockCost;
-                    const isSelected = selectedChar === ch.id && unlocked;
-                    const weaponNames: Record<string, Record<string, string>> = {
-                      orbitBlade: { tr: "🗡️ Dönen Kılıç", en: "🗡️ Orbit Blade" },
-                      lightningArc: { tr: "⚡ Yıldırım", en: "⚡ Lightning Arc" },
-                      boneToss: { tr: "🦴 Kemik Fırlatma", en: "🦴 Bone Toss" },
-                      shockWave: { tr: "💥 Şok Dalgası", en: "💥 Shock Wave" },
-                      fireTrail: { tr: "🔥 Ateş İzi", en: "🔥 Fire Trail" },
-                    };
-                    const passiveDesc: Record<string, Record<string, string>> = {
-                      knight: { tr: "🛡️ +2 Zırh", en: "🛡️ +2 Armor" },
-                      mage: { tr: "📚 +%15 XP, -%15 Bekleme", en: "📚 +15% XP, -15% Cooldown" },
-                      rogue: { tr: "🎯 %20 Kritik Şans", en: "🎯 20% Crit Chance" },
-                      priest: { tr: "🧲 Geniş Mıknatıs, +%30 XP", en: "🧲 Wide Magnet, +30% XP" },
-                      berserker: { tr: "💪 +%50 HP, +%40 Hasar", en: "💪 +50% HP, +40% Damage" },
-                      necromancer: { tr: "⏱️ -%20 Bekleme", en: "⏱️ -20% Cooldown" },
-                    };
-                    const StatBar = ({ label, value, max, color }: { label: string; value: number; max: number; color: string }) => (
-                      <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, width: "100%" }}>
-                        <span style={{ width: 28, textAlign: "right", color: "rgba(255,255,255,0.6)" }}>{label}</span>
-                        <div style={{ flex: 1, height: 6, background: "rgba(255,255,255,0.1)", borderRadius: 3, overflow: "hidden" }}>
-                          <div style={{ width: `${Math.min(100, (value / max) * 100)}%`, height: "100%", background: color, borderRadius: 3 }} />
-                        </div>
+              {showCharSelect && (() => {
+                const weaponNames: Record<string, Record<string, string>> = {
+                  orbitBlade: { tr: "🗡️ Dönen Kılıç", en: "🗡️ Orbit Blade" },
+                  lightningArc: { tr: "⚡ Yıldırım", en: "⚡ Lightning Arc" },
+                  boneToss: { tr: "🦴 Kemik Fırlatma", en: "🦴 Bone Toss" },
+                  shockWave: { tr: "💥 Şok Dalgası", en: "💥 Shock Wave" },
+                  fireTrail: { tr: "🔥 Ateş İzi", en: "🔥 Fire Trail" },
+                };
+                const passiveDesc: Record<string, Record<string, string>> = {
+                  knight: { tr: "🛡️ +2 Zırh", en: "🛡️ +2 Armor" },
+                  mage: { tr: "📚 +%15 XP, -%15 Bekleme", en: "📚 +15% XP, -15% Cooldown" },
+                  rogue: { tr: "🎯 %20 Kritik Şans", en: "🎯 20% Crit Chance" },
+                  priest: { tr: "🧲 Geniş Mıknatıs, +%30 XP", en: "🧲 Wide Magnet, +30% XP" },
+                  berserker: { tr: "💪 +%50 HP, +%40 Hasar", en: "💪 +50% HP, +40% Damage" },
+                  necromancer: { tr: "⏱️ -%20 Bekleme", en: "⏱️ -20% Cooldown" },
+                };
+                const StatBar = ({ label, value, max, color }: { label: string; value: number; max: number; color: string }) => (
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, width: "100%" }}>
+                    <span style={{ width: 28, textAlign: "right", color: "rgba(255,255,255,0.6)" }}>{label}</span>
+                    <div style={{ flex: 1, height: 7, background: "rgba(255,255,255,0.1)", borderRadius: 3, overflow: "hidden" }}>
+                      <div style={{ width: `${Math.min(100, (value / max) * 100)}%`, height: "100%", background: color, borderRadius: 3 }} />
+                    </div>
+                  </div>
+                );
+                const ch = CHARACTERS.find(c => c.id === selectedChar) || CHARACTERS[0];
+                const unlocked = isCharUnlocked(ch);
+                const condMet = isConditionMet(ch);
+                const canAfford = (metaState?.gold ?? 0) >= ch.unlock.unlockCost;
+
+                return (
+                  <div className="char-select-new">
+                    {/* 3D Preview */}
+                    <div className="char-preview-container">
+                      <canvas ref={previewCanvasRef} style={{ width: "100%", height: "100%", borderRadius: 12 }} />
+                    </div>
+
+                    {/* Horizontal Character Strip */}
+                    <div className="char-strip">
+                      {CHARACTERS.map(c => {
+                        const isUnlocked = isCharUnlocked(c);
+                        const isSel = selectedChar === c.id;
+                        return (
+                          <button
+                            key={c.id}
+                            className={`char-strip-item ${isSel ? "selected" : ""} ${!isUnlocked ? "locked" : ""}`}
+                            onClick={() => { if (isUnlocked) { setSelectedChar(c.id); Audio.playSelect(); } }}
+                          >
+                            <span className="char-strip-icon">{isUnlocked ? c.icon : "🔒"}</span>
+                            <span className="char-strip-name">{c.name()}</span>
+                            {isSel && <span className="char-strip-dot" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Info Panel */}
+                    <div className="char-info-panel">
+                      <div className="char-info-header">
+                        <span className="char-info-name">{ch.name()} {ch.icon}</span>
                       </div>
-                    );
-                    return (
-                      <button
-                        key={ch.id}
-                        onClick={() => { if (unlocked) { setSelectedChar(ch.id); Audio.playSelect(); } }}
-                        className={`char-card ${isSelected ? "selected" : ""} ${!unlocked ? "locked" : ""}`}
-                        style={{
-                          cursor: unlocked ? "pointer" : "default",
-                          border: isSelected ? "2px solid #ff8c42" : undefined,
-                          boxShadow: isSelected ? "0 0 12px rgba(255,140,66,0.4)" : undefined,
-                        }}
-                      >
-                        <span className="char-card-icon" style={{ fontSize: 32 }}>{unlocked ? ch.icon : "🔒"}</span>
-                        <span className="char-card-name">{ch.name()}</span>
-                        {unlocked ? (
-                          <>
-                            <span className="char-card-desc" style={{ fontSize: 10, marginBottom: 4 }}>{ch.description()}</span>
-                            <div style={{ fontSize: 10, color: "rgba(255,200,100,0.8)", marginBottom: 2 }}>
-                              {weaponNames[ch.startWeapon]?.[lang] || ch.startWeapon}
-                            </div>
-                            <div style={{ fontSize: 9, color: "rgba(150,220,255,0.7)", marginBottom: 6 }}>
-                              {passiveDesc[ch.id]?.[lang] || ""}
-                            </div>
-                            <div style={{ display: "flex", flexDirection: "column", gap: 3, width: "100%" }}>
-                              <StatBar label="❤️" value={ch.hpMult} max={1.6} color="#ff4444" />
-                              <StatBar label="⚡" value={ch.speedMult} max={1.3} color="#44aaff" />
-                              <StatBar label="⚔️" value={ch.damageMult} max={1.5} color="#ffaa44" />
-                            </div>
+                      {unlocked ? (
+                        <>
+                          <p className="char-info-desc">{ch.description()}</p>
+                          <div className="char-info-abilities">
+                            <span className="char-info-weapon">{weaponNames[ch.startWeapon]?.[lang] || ch.startWeapon}</span>
+                            <span className="char-info-passive">{passiveDesc[ch.id]?.[lang] || ""}</span>
+                          </div>
+                          <div className="char-info-stats">
+                            <StatBar label="❤️" value={ch.hpMult} max={1.6} color="#ff4444" />
+                            <StatBar label="⚡" value={ch.speedMult} max={1.3} color="#44aaff" />
+                            <StatBar label="⚔️" value={ch.damageMult} max={1.5} color="#ffaa44" />
+                          </div>
+                          <button
+                            className="char-info-skin-btn"
+                            onClick={() => setShowSkinSelect(showSkinSelect === ch.id ? null : ch.id)}
+                          >
+                            🎨 {lang === "tr" ? "Kostüm Seç" : "Select Skin"}
+                          </button>
+                        </>
+                      ) : (
+                        <div className="char-info-locked">
+                          <span className="char-card-lock">{t(ch.unlock.unlockCondition as never)}</span>
+                          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", margin: "6px 0" }}>
+                            💰 {ch.unlock.unlockCost}G
+                          </div>
+                          {condMet ? (
                             <button
-                              onClick={(e) => { e.stopPropagation(); setShowSkinSelect(showSkinSelect === ch.id ? null : ch.id); }}
-                              style={{
-                                marginTop: 4, padding: "2px 8px", fontSize: 12, background: "rgba(255,255,255,0.1)",
-                                border: "1px solid rgba(255,255,255,0.2)", borderRadius: 4, cursor: "pointer", color: "#fff",
-                              }}
-                            >🎨</button>
-                          </>
-                        ) : (
-                          <>
-                            <span className="char-card-lock">{t(ch.unlock.unlockCondition as never)}</span>
-                            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginBottom: 4 }}>
-                              💰 {ch.unlock.unlockCost}G
-                            </div>
-                            {condMet ? (
-                              <button
-                                className="char-unlock-btn"
-                                disabled={!canAfford}
-                                onClick={(e) => { e.stopPropagation(); handleUnlockCharacter(ch.id); }}
-                              >
-                                {t("unlock.btn")} ({ch.unlock.unlockCost}G)
-                              </button>
-                            ) : (
-                              <span className="char-card-lock" style={{ color: "rgba(255,100,100,0.5)", fontSize: 9 }}>
-                                {t("unlock.condition_not_met")}
-                              </span>
-                            )}
-                          </>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+                              className="char-unlock-btn"
+                              disabled={!canAfford}
+                              onClick={() => handleUnlockCharacter(ch.id)}
+                            >
+                              {t("unlock.btn")} ({ch.unlock.unlockCost}G)
+                            </button>
+                          ) : (
+                            <span className="char-card-lock" style={{ color: "rgba(255,100,100,0.5)", fontSize: 10 }}>
+                              {t("unlock.condition_not_met")}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Skin Selector Popup */}
