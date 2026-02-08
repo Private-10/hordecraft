@@ -40,12 +40,13 @@ export async function GET(req: NextRequest) {
 
     // Ensure named bots have nicknames claimed
     for (const name of NAMED_BOTS) {
+      const normId = name.trim().toLowerCase().replace(/\s+/g, "_");
       const snap = await getDocs(query(collection(db, "nicknames"), where("nickname", "==", name), limit(1)));
       if (snap.empty) {
-        promises.push(addDoc(collection(db, "nicknames"), {
+        promises.push(setDoc(doc(db, "nicknames", normId), {
           nickname: name,
           pin: String(Math.floor(1000 + Math.random() * 9000)),
-          claimedAt: Date.now(),
+          claimedAt: new Date().toISOString(),
         }));
       }
     }
