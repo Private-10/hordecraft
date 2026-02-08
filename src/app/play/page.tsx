@@ -44,7 +44,9 @@ export default function PlayPage() {
   const [submitting, setSubmitting] = useState(false);
   const [lastScoreDocId, setLastScoreDocId] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
-  const [selectedChar, setSelectedChar] = useState("knight");
+  const [selectedChar, setSelectedCharState] = useState("knight");
+  const selectedCharRef = useRef("knight");
+  const setSelectedChar = (v: string) => { setSelectedCharState(v); selectedCharRef.current = v; };
   const [showCharSelect, setShowCharSelect] = useState(false);
   const [dps, setDps] = useState(0);
   const [isMobileDevice, setIsMobileDevice] = useState(false);
@@ -53,7 +55,9 @@ export default function PlayPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [invertY, setInvertY] = useState(false);
   const [metaState, setMetaState] = useState<MetaState | null>(null);
-  const [selectedMap, setSelectedMap] = useState("forest");
+  const [selectedMap, setSelectedMapState] = useState("forest");
+  const selectedMapRef = useRef("forest");
+  const setSelectedMap = (v: string) => { setSelectedMapState(v); selectedMapRef.current = v; };
   const [showMapSelect, setShowMapSelect] = useState(false);
   const [sandstormWarning, setSandstormWarning] = useState(false);
   const [sandstormActive, setSandstormActive] = useState(false);
@@ -213,8 +217,8 @@ export default function PlayPage() {
                   survivalTime: engine.stats.survivalTime,
                   level: engine.player.level,
                   maxCombo: engine.stats.maxCombo,
-                  character: selectedChar,
-                  map: selectedMap,
+                  character: selectedCharRef.current,
+                  map: selectedMapRef.current,
                   bossKills: engine.stats.bossKills,
                   integrity,
                 }),
@@ -235,8 +239,8 @@ export default function PlayPage() {
                 survivalTime: engine.stats.survivalTime,
                 level: engine.player.level,
                 maxCombo: engine.stats.maxCombo,
-                character: selectedChar,
-                map: selectedMap,
+                character: selectedCharRef.current,
+                map: selectedMapRef.current,
                 verified: false,
               });
               if (docId) setLastScoreDocId(docId);
