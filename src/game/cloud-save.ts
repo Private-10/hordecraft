@@ -41,6 +41,8 @@ export async function loadMetaFromCloud(nickname: string): Promise<MetaState | n
       unlockedMaps: data.unlockedMaps ?? ["forest"],
       totalRuns: data.totalRuns ?? 0,
       achievements: data.achievements ?? { maxKills: 0, maxSurvivalTime: 0, maxLevel: 0, totalRuns: 0 },
+      unlockedSkins: data.unlockedSkins ?? [],
+      selectedSkins: data.selectedSkins ?? {},
     };
   } catch (e) {
     console.warn("Cloud load failed:", e);
@@ -75,5 +77,7 @@ export function mergeMetaStates(local: MetaState, cloud: MetaState): MetaState {
     unlockedMaps: mergedMaps,
     totalRuns: Math.max(local.totalRuns, cloud.totalRuns),
     achievements: mergedAchievements,
+    unlockedSkins: [...new Set([...(local.unlockedSkins || []), ...(cloud.unlockedSkins || [])])],
+    selectedSkins: { ...(local.selectedSkins || {}), ...(cloud.selectedSkins || {}) },
   };
 }

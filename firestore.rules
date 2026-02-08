@@ -33,6 +33,13 @@ service cloud.firestore {
       allow create, update, delete: if true;
     }
 
+    // Analytics: anyone can create (write-only, no read for clients)
+    match /analytics/{eventId} {
+      allow read: if false;
+      allow create: if true;
+      allow update, delete: if false;
+    }
+
     // Chat: anyone can read, anyone can create (no edit/delete)
     match /chat/{msgId} {
       allow read: if true;

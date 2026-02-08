@@ -12,6 +12,8 @@ import { loadMetaFromCloud, mergeMetaStates } from "@/game/cloud-save";
 import { secureSet, secureGet } from "@/game/storage";
 import { collection, addDoc, query, orderBy, limit as fbLimit, onSnapshot, doc, setDoc, deleteDoc, getDocs } from "firebase/firestore";
 import { db } from "@/game/firebase";
+import { trackEvent } from "@/game/analytics";
+import { getSkinsForCharacter, type Skin } from "@/game/cosmetics";
 
 export default function PlayPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -67,6 +69,9 @@ export default function PlayPage() {
   const [eruptionWarning, setEruptionWarning] = useState(false);
   const [eruptionActive, setEruptionActive] = useState(false);
   const [graphicsQuality, setGraphicsQuality] = useState("medium");
+  const [blizzardWarning, setBlizzardWarning] = useState(false);
+  const [blizzardActive, setBlizzardActive] = useState(false);
+  const [showSkinSelect, setShowSkinSelect] = useState<string | null>(null); // characterId or null
   const [showChat, setShowChat] = useState(true);
   const [chatMessages, setChatMessages] = useState<{nickname:string;text:string;color:string}[]>([]);
   const [chatInput, setChatInput] = useState("");
@@ -76,6 +81,9 @@ export default function PlayPage() {
   const presenceIdRef = useRef<string>("");
   const [playerRank, setPlayerRank] = useState<number | null>(null);
   const topScoresRef = useRef<number[]>([]);
+  const [chestSpinOptions, setChestSpinOptions] = useState<{icon: string, name: string, type: 'weapon' | 'passive', id: string}[]>([]);
+  const [showChestSpin, setShowChestSpin] = useState(false);
+  const [chestSpinResult, setChestSpinResult] = useState<{icon: string, name: string, type: 'weapon' | 'passive', id: string} | null>(null);
 
   const submitScore = async (data: Record<string, unknown>): Promise<string | null> => {
     try {
@@ -197,6 +205,12 @@ export default function PlayPage() {
         });
         setScoreSubmitted(false);
         setSubmitting(false);
+        trackEvent("game_end", {
+          score: engine.stats.score, kills: engine.stats.kills,
+          survivalTime: engine.stats.survivalTime, level: engine.player.level,
+          character: selectedCharRef.current, map: selectedMapRef.current,
+          maxCombo: engine.stats.maxCombo, gold: engine.stats.gold,
+        });
         const saved = getActiveNickname();
         const randomAnon = () => {
           const adj = ["Brave","Swift","Shadow","Fierce","Silent","Wild","Dark","Iron","Storm","Frost"];
@@ -282,6 +296,27 @@ export default function PlayPage() {
       setUpgradeOptions(options);
     };
 
+    engine.onChestOpen = (options) => {
+      setChestSpinOptions(options);
+      setChestSpinResult(null);
+      setShowChestSpin(true);
+
+      // Pick random winner
+      const winnerIdx = Math.floor(Math.random() * options.length);
+      const winner = options[winnerIdx];
+
+      // After 3s animation, show result and apply
+      setTimeout(() => {
+        setChestSpinResult(winner);
+        setTimeout(() => {
+          engineRef.current?.applyChestReward(winner.id, winner.type);
+          setShowChestSpin(false);
+          setChestSpinOptions([]);
+          setChestSpinResult(null);
+        }, 1200);
+      }, 3000);
+    };
+
     engine.onDamage = () => {
       setDamageFlash(true);
       setTimeout(() => setDamageFlash(false), 150);
@@ -299,6 +334,8 @@ export default function PlayPage() {
       setEruptionWarning(warning);
       setEruptionActive(active);
     };
+    engine.onBlizzardWarning = (active: boolean) => setBlizzardWarning(active);
+    engine.onBlizzardActive = (active: boolean) => setBlizzardActive(active);
 
     const origStatsUpdate = engine.onStatsUpdate;
     engine.onStatsUpdate = () => {
@@ -364,11 +401,14 @@ export default function PlayPage() {
       setMistActive(false);
       setEruptionWarning(false);
       setEruptionActive(false);
+      setBlizzardWarning(false);
+      setBlizzardActive(false);
       if (!engineRef.current) {
         alert("Oyun motoru yüklenemedi. Sayfayı yenile!");
         return;
       }
       engineRef.current.startGame(selectedChar, selectedMap);
+      trackEvent("game_start", { character: selectedChar, map: selectedMap, permanentUpgrades: engineRef.current.getMetaState().permanentUpgrades });
     } catch (e) {
       alert("Hata: " + (e as Error).message);
     }
@@ -377,6 +417,7 @@ export default function PlayPage() {
   const selectUpgrade = useCallback((option: UpgradeOption) => {
     Audio.playSelect();
     engineRef.current?.applyUpgrade(option);
+    trackEvent("level_up", { level: engineRef.current?.player.level ?? 0, chosenUpgrade: option.id });
     setUpgradeOptions([]);
   }, []);
 
@@ -706,6 +747,13 @@ export default function PlayPage() {
                               <StatBar label="⚡" value={ch.speedMult} max={1.3} color="#44aaff" />
                               <StatBar label="⚔️" value={ch.damageMult} max={1.5} color="#ffaa44" />
                             </div>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setShowSkinSelect(showSkinSelect === ch.id ? null : ch.id); }}
+                              style={{
+                                marginTop: 4, padding: "2px 8px", fontSize: 12, background: "rgba(255,255,255,0.1)",
+                                border: "1px solid rgba(255,255,255,0.2)", borderRadius: 4, cursor: "pointer", color: "#fff",
+                              }}
+                            >🎨</button>
                           </>
                         ) : (
                           <>
@@ -754,9 +802,11 @@ export default function PlayPage() {
                       ? engineRef.current?.isDesertUnlockConditionMet() ?? false
                       : mapId === "volcanic"
                       ? engineRef.current?.isVolcanicUnlockConditionMet() ?? false
+                      : mapId === "frozen"
+                      ? engineRef.current?.isFrozenUnlockConditionMet() ?? false
                       : true;
                     const canAfford = (metaState?.gold ?? 0) >= mapDef.unlockCost;
-                    const descKey = `map.${mapId}_desc` as "map.forest_desc" | "map.desert_desc" | "map.volcanic_desc";
+                    const descKey = `map.${mapId}_desc` as "map.forest_desc" | "map.desert_desc" | "map.volcanic_desc" | "map.frozen_desc";
                     return (
                       <button
                         key={mapId}
@@ -804,7 +854,7 @@ export default function PlayPage() {
                   <button className="btn-play" onClick={handleStartGame}>
                     {lang === "tr" ? "⚔️ SAVAŞA GİR" : "⚔️ ENTER BATTLE"}
                   </button>
-                  <button onClick={() => { logoutNickname(); setNickLoggedIn(false); setNicknameState(""); setPin(""); if (engineRef.current) { engineRef.current.setMetaState({ gold: 0, permanentUpgrades: {}, unlockedCharacters: ["knight"], unlockedMaps: ["forest"], totalRuns: 0, achievements: { maxKills: 0, maxSurvivalTime: 0, maxLevel: 0, totalRuns: 0 } }); } }} className="auth-logout">
+                  <button onClick={() => { logoutNickname(); setNickLoggedIn(false); setNicknameState(""); setPin(""); if (engineRef.current) { engineRef.current.setMetaState({ gold: 0, permanentUpgrades: {}, unlockedCharacters: ["knight"], unlockedMaps: ["forest"], totalRuns: 0, achievements: { maxKills: 0, maxSurvivalTime: 0, maxLevel: 0, totalRuns: 0 }, unlockedSkins: [], selectedSkins: {} }); } }} className="auth-logout">
                     {lang === "tr" ? "Çıkış yap" : "Logout"}
                   </button>
                 </div>
@@ -927,7 +977,7 @@ export default function PlayPage() {
                   </div>
 
                   {/* Guest play */}
-                  <button className="btn-guest" onClick={() => { logoutNickname(); setNicknameState(""); if (engineRef.current) { engineRef.current.setMetaState({ gold: 0, permanentUpgrades: {}, unlockedCharacters: ["knight"], unlockedMaps: ["forest"], totalRuns: 0, achievements: { maxKills: 0, maxSurvivalTime: 0, maxLevel: 0, totalRuns: 0 } }); } handleStartGame(); }}>
+                  <button className="btn-guest" onClick={() => { logoutNickname(); setNicknameState(""); if (engineRef.current) { engineRef.current.setMetaState({ gold: 0, permanentUpgrades: {}, unlockedCharacters: ["knight"], unlockedMaps: ["forest"], totalRuns: 0, achievements: { maxKills: 0, maxSurvivalTime: 0, maxLevel: 0, totalRuns: 0 }, unlockedSkins: [], selectedSkins: {} }); } handleStartGame(); }}>
                     👤 {lang === "tr" ? "Misafir Oyna" : "Play as Guest"}
                   </button>
                   <div className="auth-hint" style={{ marginTop: 4 }}>
@@ -1192,6 +1242,68 @@ export default function PlayPage() {
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Chest Spin Wheel */}
+      {showChestSpin && mounted && (
+        <div style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 200,
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        }}>
+          <div style={{ color: "#ffcc00", fontSize: "24px", fontWeight: "bold", marginBottom: "20px", textShadow: "0 0 10px #ffcc00" }}>
+            🎁 {t("levelup.title") || "CHEST REWARD"}
+          </div>
+          <div style={{
+            width: "min(90vw, 500px)", height: "100px", overflow: "hidden", position: "relative",
+            border: "3px solid #ffcc00", borderRadius: "12px", background: "rgba(0,0,0,0.9)",
+            boxShadow: "0 0 30px rgba(255,204,0,0.3)",
+          }}>
+            {/* Center indicator */}
+            <div style={{
+              position: "absolute", left: "50%", top: 0, bottom: 0, width: "4px",
+              background: "#ffcc00", transform: "translateX(-50%)", zIndex: 10,
+              boxShadow: "0 0 10px #ffcc00",
+            }} />
+            {/* Scrolling strip */}
+            <div style={{
+              display: "flex", position: "absolute", top: 0, left: "50%",
+              animation: chestSpinResult
+                ? "none"
+                : "chestSpin 0.3s linear infinite",
+              transform: chestSpinResult
+                ? `translateX(calc(-${chestSpinOptions.indexOf(chestSpinResult) * 100}px - 50px))`
+                : undefined,
+              transition: chestSpinResult ? "transform 1.5s cubic-bezier(0.2, 0.8, 0.3, 1)" : undefined,
+            }}>
+              {/* Repeat options 5 times for seamless scroll */}
+              {Array.from({ length: 5 }).flatMap((_, rep) =>
+                chestSpinOptions.map((opt, i) => (
+                  <div key={`${rep}-${i}`} style={{
+                    width: "100px", height: "100px", flexShrink: 0,
+                    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                    borderRight: "1px solid rgba(255,204,0,0.2)",
+                    background: chestSpinResult && opt.id === chestSpinResult.id && rep === 2
+                      ? "rgba(255,204,0,0.2)" : "transparent",
+                  }}>
+                    <span style={{ fontSize: "32px" }}>{opt.icon}</span>
+                    <span style={{ fontSize: "10px", color: "#fff", marginTop: "4px", textAlign: "center" }}>{opt.name}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+          {chestSpinResult && (
+            <div style={{
+              marginTop: "20px", color: "#fff", fontSize: "20px", textAlign: "center",
+              animation: "fadeIn 0.3s ease-in",
+            }}>
+              <span style={{ fontSize: "40px" }}>{chestSpinResult.icon}</span>
+              <div style={{ color: "#ffcc00", fontWeight: "bold", textShadow: "0 0 15px #ffcc00" }}>
+                {chestSpinResult.name} +1
+              </div>
+            </div>
+          )}
         </div>
       )}
 

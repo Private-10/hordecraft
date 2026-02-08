@@ -118,6 +118,8 @@ export interface MetaState {
   unlockedMaps: string[];
   totalRuns: number;
   achievements: MetaAchievements;
+  unlockedSkins: string[];
+  selectedSkins: Record<string, string>; // characterId -> skinId
 }
 
 export interface ChestInstance {

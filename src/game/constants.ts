@@ -178,6 +178,19 @@ export const MAPS = {
     skyColor: 0x1a0500,
     fogColor: 0x2a0a00,
   },
+  frozen: {
+    name: "Frozen Tundra",
+    nametr: "Donmuş Tundra",
+    icon: "❄️",
+    unlockCondition: "Survive 15 min in Volcanic Depths",
+    unlockConditiontr: "Volkanik Derinlik'te 15dk hayatta kal",
+    unlockCost: 800,
+    arenaSize: 150,
+    groundColor: 0xddeeff,
+    groundLineColor: 0xbbccdd,
+    skyColor: 0x223344,
+    fogColor: 0x889bcc,
+  },
 };
 
 export const COLORS = {

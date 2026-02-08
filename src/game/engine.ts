@@ -6,6 +6,7 @@ import * as Audio from "./audio";
 import { getCharacter, type CharacterDef } from "./characters";
 export { Audio };
 import { t } from "./i18n";
+import { getSkin } from "./cosmetics";
 import { getActiveNickname } from "./nickname";
 import { saveMetaToCloud } from "./cloud-save";
 import { secureSet, secureGet } from "./storage";
@@ -186,6 +187,11 @@ export class GameEngine {
   private bossSlamTimers: Map<number, number> = new Map();
   private bossSlamEffects: { mesh: THREE.Mesh; timer: number }[] = [];
 
+  // Boss animations
+  private bossSpawnScale: Map<number, number> = new Map(); // id -> spawn progress (0-1)
+  private bossSlamAnim: Map<number, { phase: 'up' | 'down' | 'done'; timer: number }> = new Map();
+  private bossParticles: { mesh: THREE.Mesh; velocity: THREE.Vector3; life: number; maxLife: number }[] = [];
+
   // Boss callbacks
   onBossSpawn?: (name: string) => void;
   onBossDeath?: (name: string) => void;
@@ -238,6 +244,16 @@ export class GameEngine {
   private meteorsFalling: { position: THREE.Vector3; mesh: THREE.Mesh; targetY: number; speed: number; damage: number }[] = [];
   private emberParticles: THREE.Points | null = null;
   onEruption?: (warning: boolean, active: boolean) => void;
+
+  // Blizzard (frozen tundra)
+  private blizzardTimer = 0;
+  private blizzardActive = false;
+  private blizzardWarning = false;
+  private blizzardDuration = 12;
+  private blizzardInterval = 120;
+  private blizzardParticles: THREE.Points | null = null;
+  onBlizzardWarning?: (active: boolean) => void;
+  onBlizzardActive?: (active: boolean) => void;
 
   // Slow-motion death
   private slowMoTimer = 0;
@@ -429,6 +445,13 @@ export class GameEngine {
       if (this.ambientLight) { this.ambientLight.color.set(0x554433); this.ambientLight.intensity = 0.9; }
       if (this.sunLight) { this.sunLight.color.set(0xffcc88); this.sunLight.intensity = 1.4; }
       if (this.hemiLight) { this.hemiLight.color.set(0xaa8866); (this.hemiLight as THREE.HemisphereLight).groundColor.set(0x443322); }
+    } else if (mapId === "frozen") {
+      if (this.ambientLight) { this.ambientLight.color.set(0x4466aa); this.ambientLight.intensity = 1.0; }
+      if (this.sunLight) { this.sunLight.color.set(0xccddff); this.sunLight.intensity = 1.0; }
+      if (this.hemiLight) { this.hemiLight.color.set(0x6688bb); (this.hemiLight as THREE.HemisphereLight).groundColor.set(0x334466); }
+      this.scene.fog = new THREE.Fog(0x889bcc, 30, 70);
+      this.originalFogNear = 30;
+      this.originalFogFar = 70;
     } else {
       // Forest - enhanced lighting
       if (this.ambientLight) { this.ambientLight.color.set(0x556644); this.ambientLight.intensity = 1.2; }
@@ -455,6 +478,8 @@ export class GameEngine {
         ? Math.sin(x * 0.15) * Math.cos(y * 0.12) * 2.5 + Math.abs(Math.sin(x * 0.08 + y * 0.06)) * 1.5
         : mapId === "desert"
         ? Math.sin(x * 0.08) * Math.cos(y * 0.06) * 3 + Math.sin(x * 0.15) * 1.5 + Math.cos(y * 0.12) * 2
+        : mapId === "frozen"
+        ? Math.sin(x * 0.08) * Math.cos(y * 0.1) * 2 + Math.sin(x * 0.04 + 2) * 1.5
         : Math.sin(x * 0.1) * Math.cos(y * 0.1) * 1.5 + Math.sin(x * 0.05 + 1) * Math.cos(y * 0.07) * 2) * terrainVar;
       posAttr.setZ(i, height);
     }
@@ -492,6 +517,8 @@ export class GameEngine {
       this.setupVolcanicObjects();
     } else if (mapId === "desert") {
       this.setupDesertObjects();
+    } else if (mapId === "frozen") {
+      this.setupFrozenObjects();
     } else {
       this.setupForestObjects();
     }
@@ -1096,6 +1123,20 @@ export class GameEngine {
       case "necromancer":
         torsoColor = 0x224422; chestColor = 0x336633; headgearColor = 0x113311; bootColor = 0x222222; legColor = 0x1a1a1a; armColor = 0x224422;
         break;
+    }
+
+    // Apply skin colors if one is selected
+    const selectedSkinId = this.metaState.selectedSkins?.[charId];
+    if (selectedSkinId) {
+      const skinDef = getSkin(selectedSkinId);
+      if (skinDef && (skinDef.characterId === charId || skinDef.characterId === "all")) {
+        torsoColor = skinDef.colors.primary;
+        chestColor = skinDef.colors.secondary;
+        armColor = skinDef.colors.primary;
+        bootColor = skinDef.colors.boots;
+        headgearColor = skinDef.colors.accessory;
+        legColor = skinDef.colors.secondary;
+      }
     }
 
     // === BASE BODY (same structure, different colors) ===
@@ -2221,6 +2262,10 @@ export class GameEngine {
     this.bossSlamTimers.clear();
     this.bossSlamEffects.forEach(e => { if (e.mesh.parent) this.scene.remove(e.mesh); });
     this.bossSlamEffects = [];
+    this.bossSpawnScale.clear();
+    this.bossSlamAnim.clear();
+    this.bossParticles.forEach(p => { if (p.mesh.parent) this.scene.remove(p.mesh); });
+    this.bossParticles = [];
 
     // Clear all entities
     this.enemies.forEach(e => { if (e.mesh.parent) this.scene.remove(e.mesh); });
@@ -2277,6 +2322,13 @@ export class GameEngine {
     if (this.emberParticles) { this.scene.remove(this.emberParticles); this.emberParticles = null; }
     this.slowMoActive = false;
     this.slowMoTimer = 0;
+
+    // Reset blizzard
+    this.blizzardTimer = 0;
+    this.blizzardActive = false;
+    this.blizzardWarning = false;
+    this.blizzardDuration = 12;
+    if (this.blizzardParticles) { this.scene.remove(this.blizzardParticles); this.blizzardParticles = null; }
 
     const startY = this.getTerrainHeight(0, 0);
     this.playerMesh.position.set(0, startY - 2, 0);
@@ -2376,6 +2428,7 @@ export class GameEngine {
     this.updateMistWave(cappedDt);
     this.updateFireflies(cappedDt);
     this.updateVolcanic(cappedDt);
+    this.updateBlizzard(cappedDt);
     this.updateTimedRemovals();
     this.performanceCleanup();
 
@@ -2441,7 +2494,8 @@ export class GameEngine {
       }
     }
 
-    const speed = p.speed * (p.isSliding ? PLAYER.sprintMultiplier : 1);
+    let speed = p.speed * (p.isSliding ? PLAYER.sprintMultiplier : 1);
+    if (this.blizzardActive) speed *= 0.75; // Blizzard slows player by 25%
     const control = p.isGrounded ? 1 : PLAYER.airControl;
 
     p.velocity.x = moveDir.x * speed * control;
@@ -3673,7 +3727,15 @@ export class GameEngine {
         // Summon 3 skeletons every 10s
         if (boss.phaseTimer >= 10) {
           boss.phaseTimer = 0;
-          this.triggerShake(0.3, 0.2);
+          this.triggerShake(0.5, 0.3);
+          // Purple teleport flash
+          const flash = new THREE.Mesh(
+            new THREE.SphereGeometry(3, 8, 6),
+            new THREE.MeshBasicMaterial({ color: 0xaa00ff, transparent: true, opacity: 0.6 })
+          );
+          flash.position.copy(boss.position);
+          this.scene.add(flash);
+          this.bossSlamEffects.push({ mesh: flash, timer: 0.4 });
           for (let s = 0; s < 3; s++) {
             this.spawnEnemyAtPosition("skeleton",
               boss.position.x + (Math.random() - 0.5) * 4,
@@ -3686,13 +3748,31 @@ export class GameEngine {
         // Summon 5 skeletons every 8s + teleport
         if (boss.phaseTimer >= 8) {
           boss.phaseTimer = 0;
+          // Purple flash at old position
+          const flashOld = new THREE.Mesh(
+            new THREE.SphereGeometry(3, 8, 6),
+            new THREE.MeshBasicMaterial({ color: 0xaa00ff, transparent: true, opacity: 0.6 })
+          );
+          flashOld.position.copy(boss.position);
+          this.scene.add(flashOld);
+          this.bossSlamEffects.push({ mesh: flashOld, timer: 0.4 });
+
           const angle = Math.random() * Math.PI * 2;
           const tdist = 8 + Math.random() * 5;
           boss.position.x = Math.max(-ARENA.halfSize + 5, Math.min(ARENA.halfSize - 5, this.player.position.x + Math.cos(angle) * tdist));
           boss.position.z = Math.max(-ARENA.halfSize + 5, Math.min(ARENA.halfSize - 5, this.player.position.z + Math.sin(angle) * tdist));
           boss.position.y = this.getTerrainHeight(boss.position.x, boss.position.z) + 0.5;
           boss.mesh.position.copy(boss.position);
-          this.triggerShake(0.4, 0.3);
+          this.triggerShake(0.6, 0.4);
+
+          // Purple flash at new position
+          const flashNew = new THREE.Mesh(
+            new THREE.SphereGeometry(3, 8, 6),
+            new THREE.MeshBasicMaterial({ color: 0xaa00ff, transparent: true, opacity: 0.6 })
+          );
+          flashNew.position.copy(boss.position);
+          this.scene.add(flashNew);
+          this.bossSlamEffects.push({ mesh: flashNew, timer: 0.4 });
           for (let s = 0; s < 5; s++) {
             this.spawnEnemyAtPosition("skeleton",
               boss.position.x + (Math.random() - 0.5) * 5,
@@ -3712,6 +3792,105 @@ export class GameEngine {
           timer = slamInterval;
         }
         this.bossSlamTimers.set(boss.id, timer);
+      }
+    }
+
+    // Boss spawn scale animation
+    for (const [id, progress] of this.bossSpawnScale.entries()) {
+      if (progress >= 1) { this.bossSpawnScale.delete(id); continue; }
+      const newProgress = Math.min(1, progress + dt);
+      this.bossSpawnScale.set(id, newProgress);
+      const enemy = this.enemies.find(e => e.id === id);
+      if (enemy && enemy.mesh) {
+        const s = newProgress;
+        // Boss meshes have their own base scale (1.3-1.5), so we scale relative
+        const baseScale = enemy.type === "stoneGolem" ? 1.5 : enemy.type === "fireWraith" ? 1.3 : 1.4;
+        enemy.mesh.scale.set(baseScale * s, baseScale * s, baseScale * s);
+      }
+    }
+
+    // Boss idle animations & particles
+    const bossTypes = new Set(Object.keys(BOSSES));
+    for (const enemy of this.enemies) {
+      if (!enemy.isAlive || !bossTypes.has(enemy.type)) continue;
+
+      // Idle bob (Stone Golem)
+      if (enemy.type === "stoneGolem") {
+        const bob = Math.sin(this.gameTime * 2) * 0.1;
+        const baseY = this.getTerrainHeight(enemy.position.x, enemy.position.z);
+        enemy.mesh.position.y = baseY + bob;
+      }
+
+      // Fire Wraith: flame particles + pulsing glow
+      if (enemy.type === "fireWraith") {
+        // Pulsing aura
+        const aura = (enemy.mesh as THREE.Group).children.find(c => {
+          const mat = (c as THREE.Mesh).material;
+          return mat && (mat as THREE.MeshBasicMaterial).color?.getHex() === 0xff4400;
+        });
+        if (aura) {
+          const pulse = 0.6 + Math.sin(this.gameTime * 4) * 0.2;
+          ((aura as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = pulse;
+        }
+        // Flame particles (limit to 3 per frame for performance)
+        if (this.bossParticles.length < 40) {
+          for (let i = 0; i < 3; i++) {
+            const colors = [0xff4400, 0xff6600, 0xffaa00];
+            const spark = new THREE.Mesh(
+              new THREE.SphereGeometry(0.06, 4, 4),
+              new THREE.MeshBasicMaterial({ color: colors[i % 3], transparent: true, opacity: 0.8 })
+            );
+            spark.position.set(
+              enemy.position.x + (Math.random() - 0.5) * 1.5,
+              enemy.position.y + 1 + Math.random() * 2,
+              enemy.position.z + (Math.random() - 0.5) * 1.5
+            );
+            this.scene.add(spark);
+            this.bossParticles.push({
+              mesh: spark,
+              velocity: new THREE.Vector3((Math.random() - 0.5) * 0.5, 2 + Math.random(), (Math.random() - 0.5) * 0.5),
+              life: 0, maxLife: 0.5,
+            });
+          }
+        }
+      }
+
+      // Shadow Lord: orbiting purple particles
+      if (enemy.type === "shadowLord") {
+        if (this.bossParticles.length < 40) {
+          for (let i = 0; i < 2; i++) {
+            const a = this.gameTime * 3 + i * Math.PI;
+            const spark = new THREE.Mesh(
+              new THREE.SphereGeometry(0.05, 4, 4),
+              new THREE.MeshBasicMaterial({ color: 0xaa00ff, transparent: true, opacity: 0.7 })
+            );
+            spark.position.set(
+              enemy.position.x + Math.cos(a) * 2,
+              enemy.position.y + 1.5 + Math.sin(this.gameTime * 2) * 0.3,
+              enemy.position.z + Math.sin(a) * 2
+            );
+            this.scene.add(spark);
+            this.bossParticles.push({
+              mesh: spark,
+              velocity: new THREE.Vector3(0, 0.5, 0),
+              life: 0, maxLife: 0.6,
+            });
+          }
+        }
+      }
+    }
+
+    // Update boss particles
+    for (let i = this.bossParticles.length - 1; i >= 0; i--) {
+      const p = this.bossParticles[i];
+      p.life += dt;
+      if (p.life >= p.maxLife) {
+        this.scene.remove(p.mesh);
+        this.bossParticles.splice(i, 1);
+      } else {
+        p.mesh.position.add(p.velocity.clone().multiplyScalar(dt));
+        const mat = p.mesh.material as THREE.MeshBasicMaterial;
+        mat.opacity = 1 - p.life / p.maxLife;
       }
     }
 
@@ -3788,6 +3967,8 @@ export class GameEngine {
     this.enemies.push(boss);
     this.activeBoss = boss;
     this.bossSlamTimers.set(boss.id, BOSSES[type as keyof typeof BOSSES]?.slamInterval || 4);
+    this.bossSpawnScale.set(boss.id, 0); // start spawn animation
+    mesh.scale.set(0, 0, 0);
     this.onBossSpawn?.(type);
     Audio.playBossSpawn();
   }
@@ -3824,6 +4005,8 @@ export class GameEngine {
     this.enemies.push(boss);
     this.activeBoss = boss;
     this.bossSlamTimers.set(boss.id, BOSSES[type as keyof typeof BOSSES]?.slamInterval || 4);
+    this.bossSpawnScale.set(boss.id, 0);
+    mesh.scale.set(0, 0, 0);
     this.onBossSpawn?.(type);
     Audio.playBossSpawn();
   }
@@ -3860,12 +4043,32 @@ export class GameEngine {
     this.enemies.push(boss);
     // Don't override activeBoss - this is the second boss, tracked as regular enemy with boss stats
     this.bossSlamTimers.set(boss.id, BOSSES[type as keyof typeof BOSSES]?.slamInterval || 4);
+    this.bossSpawnScale.set(boss.id, 0);
+    mesh.scale.set(0, 0, 0);
     Audio.playBossSpawn();
   }
 
   private bossSlam(boss: EnemyInstance, radius: number, damage: number) {
-    // Strong screen shake for boss slam
-    this.triggerShake(0.8, 0.3);
+    // Extra strong screen shake for boss slam
+    this.triggerShake(1.5, 0.5);
+
+    // Dust particles on slam impact
+    for (let i = 0; i < 15; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 2 + Math.random() * 3;
+      const color = boss.type === "fireWraith" ? 0xff4400 : boss.type === "shadowLord" ? 0x6600cc : 0x886644;
+      const dust = new THREE.Mesh(
+        new THREE.SphereGeometry(0.08, 4, 4),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8 })
+      );
+      dust.position.set(boss.position.x, boss.position.y + 0.2, boss.position.z);
+      this.scene.add(dust);
+      this.particles.push({
+        mesh: dust,
+        velocity: new THREE.Vector3(Math.cos(angle) * speed, 1 + Math.random() * 2, Math.sin(angle) * speed),
+        life: 0, maxLife: 0.8,
+      });
+    }
 
     // AoE damage around boss
     const bsdx = boss.position.x - this.player.position.x;
@@ -5216,28 +5419,9 @@ export class GameEngine {
     chest.isAlive = false;
     Audio.playLevelUp();
 
-    let amount = 0;
-    if (chest.type === "xp") {
-      amount = Math.floor(50 + Math.random() * 100 * (1 + this.gameTime / 120));
-      this.player.xp += Math.floor(amount * this.player.xpMultiplier);
-    } else if (chest.type === "gold") {
-      amount = Math.floor(10 + Math.random() * 20);
-      this.stats.gold += amount;
-    } else {
-      amount = Math.floor(15 + Math.random() * 10);
-      this.player.hp = Math.min(this.player.maxHp, this.player.hp + amount);
-    }
-
-    // Floating text using existing damage number system
-    this.createChestText(
-      chest.position.clone().add(new THREE.Vector3(0, 1.5, 0)),
-      chest.type === "xp" ? `+${amount} XP` : chest.type === "gold" ? `+${amount} G` : `+${amount} HP`,
-      chest.type === "xp" ? "#00d4ff" : chest.type === "gold" ? "#ffcc00" : "#ff3366"
-    );
-
     // Burst particles
     for (let i = 0; i < 8; i++) {
-      const color = chest.type === "gold" ? 0xffcc00 : chest.type === "xp" ? 0x00d4ff : 0xff3366;
+      const color = 0xffcc00;
       const spark = new THREE.Mesh(new THREE.OctahedronGeometry(0.08), new THREE.MeshBasicMaterial({ color, transparent: true }));
       spark.position.copy(chest.position).add(new THREE.Vector3(0, 0.5, 0));
       this.scene.add(spark);
@@ -5248,7 +5432,100 @@ export class GameEngine {
         maxLife: 0.6,
       });
     }
-    this.onChestCollect?.(chest.type, amount);
+
+    // Build spin options from upgradable weapons + passives
+    const options: {icon: string, name: string, type: 'weapon' | 'passive', id: string}[] = [];
+
+    // Existing weapon upgrades (not max level 5)
+    for (const w of this.weapons) {
+      if (w.level < 5) {
+        options.push({ icon: w.icon, name: w.name, type: 'weapon', id: w.id });
+      }
+    }
+
+    // Passive upgrades (not max level 5)
+    const passiveList = [
+      { id: "speed", name: t("upgrade.speed"), icon: "👟" },
+      { id: "hp", name: t("upgrade.hp"), icon: "❤️" },
+      { id: "damage", name: t("upgrade.damage"), icon: "💪" },
+      { id: "magnet", name: t("upgrade.magnet"), icon: "🧲" },
+      { id: "crit", name: t("upgrade.crit"), icon: "🎯" },
+      { id: "armor", name: t("upgrade.armor"), icon: "🛡️" },
+      { id: "xp", name: t("upgrade.xp"), icon: "📚" },
+      { id: "cooldown", name: t("upgrade.cooldown"), icon: "⏱️" },
+      { id: "regen", name: t("upgrade.regen"), icon: "💚" },
+    ];
+    for (const p of passiveList) {
+      if ((this.passiveUpgrades[p.id] || 0) < 5) {
+        options.push({ icon: p.icon, name: p.name, type: 'passive', id: p.id });
+      }
+    }
+
+    if (options.length === 0) {
+      // Fallback: give XP like before
+      const amount = Math.floor(50 + Math.random() * 100 * (1 + this.gameTime / 120));
+      this.player.xp += Math.floor(amount * this.player.xpMultiplier);
+      this.createChestText(chest.position.clone().add(new THREE.Vector3(0, 1.5, 0)), `+${amount} XP`, "#00d4ff");
+      this.onChestCollect?.(chest.type, amount);
+      return;
+    }
+
+    // Shuffle and pick 8-12 options (repeat if needed)
+    const spinOptions: typeof options = [];
+    const targetCount = Math.min(12, Math.max(8, options.length));
+    while (spinOptions.length < targetCount) {
+      const shuffled = [...options].sort(() => Math.random() - 0.5);
+      for (const o of shuffled) {
+        if (spinOptions.length >= targetCount) break;
+        spinOptions.push(o);
+      }
+    }
+
+    // Pause game and trigger UI
+    this.state = "chest_spin";
+    if (this.isMobile) {
+      this.mobileInput.setActive(false);
+      this.mobileInput.setVisible(false);
+    }
+    if (document.pointerLockElement) {
+      document.exitPointerLock();
+    }
+    this.onStateChange?.(this.state);
+    this.onChestOpen?.(spinOptions);
+  }
+
+  applyChestReward(id: string, type: 'weapon' | 'passive') {
+    if (type === 'weapon') {
+      const weapon = this.weapons.find(w => w.id === id);
+      if (weapon && weapon.level < 5) {
+        weapon.level++;
+      }
+    } else {
+      const passiveApply: Record<string, () => void> = {
+        speed: () => { this.player.speed *= 1.08; },
+        hp: () => { this.player.maxHp += 15; this.player.hp += 15; },
+        damage: () => { this.player.damageMultiplier *= 1.10; },
+        magnet: () => { this.player.magnetRange *= 1.20; },
+        crit: () => { this.player.critChance += 0.03; },
+        armor: () => { this.player.armor += 3; },
+        xp: () => { this.player.xpMultiplier *= 1.10; },
+        cooldown: () => { this.player.cooldownReduction = Math.min(0.5, this.player.cooldownReduction + 0.05); },
+        regen: () => { this.player.hpRegen += 1; },
+      };
+      passiveApply[id]?.();
+      this.passiveUpgrades[id] = (this.passiveUpgrades[id] || 0) + 1;
+    }
+
+    // Resume game
+    this.state = "playing";
+    this.onStateChange?.(this.state);
+    if (this.isMobile) {
+      this.mobileInput.setVisible(true);
+      this.mobileInput.setActive(true);
+    } else {
+      const canvas = this.renderer.domElement;
+      setTimeout(() => { canvas.requestPointerLock(); }, 100);
+    }
   }
 
   // ========== SANDSTORM ==========
@@ -5415,6 +5692,172 @@ export class GameEngine {
     }
   }
 
+  // ========== BLIZZARD (FROZEN TUNDRA) ==========
+
+  private updateBlizzard(dt: number) {
+    if (this.selectedMap !== "frozen") return;
+
+    this.blizzardTimer += dt;
+    const warningStart = this.blizzardInterval - 5; // 5s before
+
+    if (this.blizzardTimer >= warningStart && !this.blizzardActive && !this.blizzardWarning) {
+      this.blizzardWarning = true;
+      this.onBlizzardWarning?.(true);
+    }
+
+    if (this.blizzardTimer >= this.blizzardInterval && !this.blizzardActive) {
+      this.blizzardActive = true;
+      this.blizzardWarning = false;
+      this.blizzardTimer = 0;
+      this.onBlizzardWarning?.(false);
+      this.onBlizzardActive?.(true);
+      this.createBlizzardParticles();
+      // Reduce visibility
+      if (this.scene.fog instanceof THREE.Fog) {
+        this.scene.fog.near = 5;
+        this.scene.fog.far = 25;
+      }
+    }
+
+    if (this.blizzardActive) {
+      this.blizzardDuration -= dt;
+      // Animate snow particles blowing horizontally
+      if (this.blizzardParticles) {
+        const positions = this.blizzardParticles.geometry.getAttribute("position") as THREE.BufferAttribute;
+        for (let i = 0; i < positions.count; i++) {
+          positions.setX(i, positions.getX(i) + dt * 12); // blow right
+          positions.setZ(i, positions.getZ(i) + (Math.random() - 0.5) * dt * 3);
+          positions.setY(i, positions.getY(i) + (Math.random() - 0.5) * dt * 2);
+          if (positions.getX(i) > ARENA.halfSize) positions.setX(i, -ARENA.halfSize);
+        }
+        positions.needsUpdate = true;
+      }
+      if (this.blizzardDuration <= 0) {
+        this.blizzardActive = false;
+        this.blizzardDuration = 12;
+        this.onBlizzardActive?.(false);
+        if (this.scene.fog instanceof THREE.Fog) {
+          this.scene.fog.near = this.originalFogNear;
+          this.scene.fog.far = this.originalFogFar;
+        }
+        if (this.blizzardParticles) {
+          this.scene.remove(this.blizzardParticles);
+          this.blizzardParticles = null;
+        }
+      }
+    }
+  }
+
+  private createBlizzardParticles() {
+    if (this.blizzardParticles) { this.scene.remove(this.blizzardParticles); }
+    const count = 100;
+    const geo = new THREE.BufferGeometry();
+    const positions = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      positions[i * 3] = (Math.random() - 0.5) * ARENA.size;
+      positions[i * 3 + 1] = Math.random() * 8 + 1;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * ARENA.size;
+    }
+    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    const mat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.4, transparent: true, opacity: 0.7 });
+    this.blizzardParticles = new THREE.Points(geo, mat);
+    this.scene.add(this.blizzardParticles);
+  }
+
+  // ========== FROZEN TUNDRA SETUP ==========
+
+  private setupFrozenObjects() {
+    this.rockColliders = [];
+    const rng = this.seededRandom(this.mapSeed + 1);
+    const half = ARENA.halfSize;
+
+    // Ice pillars: 30 transparent blue cylinders
+    const pillarMat = new THREE.MeshLambertMaterial({ color: 0x88bbdd, transparent: true, opacity: 0.7 });
+    const pillarCount = Math.floor(30 * (0.8 + rng() * 0.4));
+    for (let i = 0; i < pillarCount; i++) {
+      const px = (Math.random() - 0.5) * ARENA.size * 0.85;
+      const pz = (Math.random() - 0.5) * ARENA.size * 0.85;
+      if (Math.abs(px) < 6 && Math.abs(pz) < 6) continue;
+      const h = 3 + Math.random() * 5;
+      const r = 0.3 + Math.random() * 0.4;
+      const pillarGeo = new THREE.CylinderGeometry(r * 0.7, r, h, 8);
+      const pillar = new THREE.Mesh(pillarGeo, pillarMat);
+      const py = this.getTerrainHeight(px, pz);
+      pillar.position.set(px, py + h / 2, pz);
+      pillar.castShadow = true;
+      this.scene.add(pillar);
+      this.environmentObjects.push(pillar);
+      this.rockColliders.push({ position: new THREE.Vector3(px, py, pz), radius: r * 1.2 });
+    }
+
+    // Snow mounds: 40 white half-spheres
+    const snowMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const moundCount = Math.floor(40 * (0.8 + rng() * 0.4));
+    for (let i = 0; i < moundCount; i++) {
+      const mx = (Math.random() - 0.5) * ARENA.size * 0.85;
+      const mz = (Math.random() - 0.5) * ARENA.size * 0.85;
+      if (Math.abs(mx) < 5 && Math.abs(mz) < 5) continue;
+      const mr = 0.8 + Math.random() * 1.5;
+      const moundGeo = new THREE.SphereGeometry(mr, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2);
+      const mound = new THREE.Mesh(moundGeo, snowMat);
+      const my = this.getTerrainHeight(mx, mz);
+      mound.position.set(mx, my, mz);
+      mound.receiveShadow = true;
+      this.scene.add(mound);
+      this.environmentObjects.push(mound);
+      this.rockColliders.push({ position: new THREE.Vector3(mx, my, mz), radius: mr * 0.7 });
+    }
+
+    // Frozen trees: 25 dead trees (bare branches)
+    const trunkMat = new THREE.MeshLambertMaterial({ color: 0x4a3728 });
+    const branchMat = new THREE.MeshLambertMaterial({ color: 0x5a4838 });
+    const treeCount = Math.floor(25 * (0.8 + rng() * 0.4));
+    for (let i = 0; i < treeCount; i++) {
+      const tx = (Math.random() - 0.5) * ARENA.size * 0.85;
+      const tz = (Math.random() - 0.5) * ARENA.size * 0.85;
+      if (Math.abs(tx) < 8 && Math.abs(tz) < 8) continue;
+      const ty = this.getTerrainHeight(tx, tz);
+      const tree = new THREE.Group();
+      // Trunk
+      const trunkH = 2 + Math.random() * 1.5;
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.15, trunkH, 6), trunkMat);
+      trunk.position.y = trunkH / 2;
+      trunk.castShadow = true;
+      tree.add(trunk);
+      // Bare branches (3-5 thin cylinders)
+      const branchCount = 3 + Math.floor(Math.random() * 3);
+      for (let b = 0; b < branchCount; b++) {
+        const bLen = 0.8 + Math.random() * 1.2;
+        const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.04, bLen, 4), branchMat);
+        branch.position.y = trunkH * (0.5 + Math.random() * 0.4);
+        branch.rotation.z = (Math.random() - 0.5) * 1.2;
+        branch.rotation.y = Math.random() * Math.PI * 2;
+        branch.position.x = Math.sin(branch.rotation.y) * 0.3;
+        branch.position.z = Math.cos(branch.rotation.y) * 0.3;
+        tree.add(branch);
+      }
+      tree.position.set(tx, ty, tz);
+      this.scene.add(tree);
+      this.environmentObjects.push(tree);
+    }
+
+    // Ice crystals: 20 octahedrons with emissive glow
+    const crystalMat = new THREE.MeshStandardMaterial({ color: 0x44aaff, emissive: 0x2266cc, emissiveIntensity: 0.5, transparent: true, opacity: 0.8 });
+    const crystalCount = Math.floor(20 * (0.8 + rng() * 0.4));
+    for (let i = 0; i < crystalCount; i++) {
+      const cx = (Math.random() - 0.5) * ARENA.size * 0.85;
+      const cz = (Math.random() - 0.5) * ARENA.size * 0.85;
+      if (Math.abs(cx) < 5 && Math.abs(cz) < 5) continue;
+      const cs = 0.3 + Math.random() * 0.5;
+      const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(cs), crystalMat);
+      const cy = this.getTerrainHeight(cx, cz) + cs;
+      crystal.position.set(cx, cy, cz);
+      crystal.rotation.set(Math.random(), Math.random(), Math.random());
+      this.scene.add(crystal);
+      this.environmentObjects.push(crystal);
+    }
+  }
+
   // ========== HELPERS ==========
 
   private getTerrainHeight(x: number, z: number): number {
@@ -5424,6 +5867,9 @@ export class GameEngine {
     }
     if (this.selectedMap === "desert") {
       return (Math.sin(x * 0.08) * Math.cos(z * 0.06) * 3 + Math.sin(x * 0.15) * 1.5 + Math.cos(z * 0.12) * 2) * v;
+    }
+    if (this.selectedMap === "frozen") {
+      return (Math.sin(x * 0.08) * Math.cos(z * 0.1) * 2 + Math.sin(x * 0.04 + 2) * 1.5) * v;
     }
     return (Math.sin(x * 0.1) * Math.cos(z * 0.1) * 1.5
       + Math.sin(x * 0.05 + 1) * Math.cos(z * 0.07) * 2) * v;
@@ -5788,10 +6234,12 @@ export class GameEngine {
         const parsed = JSON.parse(raw);
         if (!parsed.achievements) parsed.achievements = { maxKills: 0, maxSurvivalTime: 0, maxLevel: 0, totalRuns: parsed.totalRuns || 0 };
         if (!parsed.unlockedMaps) parsed.unlockedMaps = ["forest"];
+        if (!parsed.unlockedSkins) parsed.unlockedSkins = [];
+        if (!parsed.selectedSkins) parsed.selectedSkins = {};
         return parsed;
       }
     } catch {}
-    return { gold: 0, permanentUpgrades: {}, unlockedCharacters: ["knight"], unlockedMaps: ["forest"], totalRuns: 0, achievements: { maxKills: 0, maxSurvivalTime: 0, maxLevel: 0, totalRuns: 0 } };
+    return { gold: 0, permanentUpgrades: {}, unlockedCharacters: ["knight"], unlockedMaps: ["forest"], totalRuns: 0, achievements: { maxKills: 0, maxSurvivalTime: 0, maxLevel: 0, totalRuns: 0 }, unlockedSkins: [], selectedSkins: {} };
   }
 
   private saveMetaState() {
@@ -5859,6 +6307,31 @@ export class GameEngine {
   isVolcanicUnlockConditionMet(): boolean {
     return this.metaState.unlockedMaps.includes("desert") &&
       this.metaState.achievements.maxSurvivalTime >= 900; // 15 minutes on desert
+  }
+
+  isFrozenUnlockConditionMet(): boolean {
+    return this.metaState.achievements.maxSurvivalTime >= 900; // 15 minutes survival
+  }
+
+  unlockSkin(skinId: string): boolean {
+    if (this.metaState.unlockedSkins.includes(skinId)) return false;
+    const skinDef = getSkin(skinId);
+    if (!skinDef) return false;
+    if (this.metaState.gold < skinDef.unlockCost) return false;
+    this.metaState.gold -= skinDef.unlockCost;
+    this.metaState.unlockedSkins.push(skinId);
+    this.saveMetaState();
+    return true;
+  }
+
+  selectSkin(charId: string, skinId: string | null): void {
+    if (!this.metaState.selectedSkins) this.metaState.selectedSkins = {};
+    if (skinId === null) {
+      delete this.metaState.selectedSkins[charId];
+    } else {
+      this.metaState.selectedSkins[charId] = skinId;
+    }
+    this.saveMetaState();
   }
 
   // Settings
