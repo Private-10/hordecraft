@@ -154,7 +154,12 @@ export default function PlayPage() {
         setScoreSubmitted(false);
         setSubmitting(false);
         const saved = getActiveNickname();
-        const name = (saved && saved.trim().length >= 2) ? saved.trim() : "Anonim";
+        const randomAnon = () => {
+          const adj = ["Brave","Swift","Shadow","Fierce","Silent","Wild","Dark","Iron","Storm","Frost"];
+          const noun = ["Wolf","Hawk","Bear","Fox","Raven","Dragon","Knight","Hunter","Blade","Ghost"];
+          return `${adj[Math.floor(Math.random()*adj.length)]}${noun[Math.floor(Math.random()*noun.length)]}${Math.floor(Math.random()*1000)}`;
+        };
+        const name = (saved && saved.trim().length >= 2) ? saved.trim() : randomAnon();
         setTimeout(async () => {
           try {
             setSubmitting(true);
