@@ -265,7 +265,7 @@ export default function LeaderboardPage() {
         </div>
 
         {/* Filters */}
-        <div style={{
+        {!showTournament && <div style={{
           background: "rgba(255,255,255,0.03)", borderRadius: 14, padding: "16px 16px 12px",
           border: "1px solid rgba(255,255,255,0.06)", marginBottom: 24,
           display: "flex", flexDirection: "column", gap: 10,
@@ -299,7 +299,7 @@ export default function LeaderboardPage() {
               </button>
             ))}
           </div>
-        </div>
+        </div>}
 
         {/* Tournament Toggle */}
         <div style={{ display: "flex", justifyContent: "center", gap: 12, marginBottom: 20 }}>
@@ -378,7 +378,7 @@ export default function LeaderboardPage() {
         )}
 
         {/* Content */}
-        {!showTournament && loading ? (
+        {!showTournament && (loading ? (
           <div style={{ textAlign: "center", padding: 60, color: "rgba(255,255,255,0.4)", fontSize: 18 }}>
             ⏳ {tr ? "Yükleniyor..." : "Loading..."}
           </div>
@@ -426,6 +426,9 @@ export default function LeaderboardPage() {
                     <span style={{ fontWeight: 700 }}>{medal}</span>
                     <span style={{ fontWeight: 600, color: isTop3 ? "#ffd700" : "white" }}>
                       {s.nickname || (tr ? "Anonim" : "Anonymous")}
+                      {lastWeekWinners.has((s.nickname || "Anonymous").toLowerCase()) && (
+                        <span title={tr ? "Geçen hafta Top 10" : "Last week Top 10"} style={{ marginLeft: 4, fontSize: 11 }}>🏅</span>
+                      )}
                     </span>
                     <span style={{ textAlign: "right", fontWeight: 700, color: "#ff6b35" }}>
                       {s.score.toLocaleString()}
@@ -440,7 +443,7 @@ export default function LeaderboardPage() {
               })}
             </div>
           </div>
-        )}
+        ))}
 
         <div style={{ textAlign: "center", marginTop: 32, color: "rgba(255,255,255,0.2)", fontSize: 12 }}>
           HordeCraft © 2026

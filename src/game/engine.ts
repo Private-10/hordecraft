@@ -474,9 +474,11 @@ export class GameEngine {
 
   private setupForestObjects() {
     this.rockColliders = [];
+    const rng = this.seededRandom(this.mapSeed + 1);
 
-    // Rocks
-    for (let i = 0; i < 35; i++) {
+    // Rocks (±20% count variation)
+    const rockCount = Math.floor(35 * (0.8 + rng() * 0.4));
+    for (let i = 0; i < rockCount; i++) {
       const rockRadius = Math.random() * 2.5 + 0.5;
       const rockGeo = new THREE.DodecahedronGeometry(rockRadius, 0);
       const rockMat = new THREE.MeshLambertMaterial({ color: 0x445544 });
@@ -502,7 +504,8 @@ export class GameEngine {
     const leafMat = new THREE.MeshLambertMaterial({ color: 0x227733 });
     const leafMatDark = new THREE.MeshLambertMaterial({ color: 0x1a5c28 });
 
-    for (let i = 0; i < 60; i++) {
+    const treeCount = Math.floor(60 * (0.8 + rng() * 0.4));
+    for (let i = 0; i < treeCount; i++) {
       const tx = (Math.random() - 0.5) * ARENA.size * 0.85;
       const tz = (Math.random() - 0.5) * ARENA.size * 0.85;
       const ty = this.getTerrainHeight(tx, tz);
@@ -537,7 +540,8 @@ export class GameEngine {
     // Grass
     const grassGeo = new THREE.PlaneGeometry(0.4, 0.6);
     const grassMat = new THREE.MeshLambertMaterial({ color: 0x33aa44, side: THREE.DoubleSide });
-    for (let i = 0; i < 200; i++) {
+    const grassCount = Math.floor(200 * (0.8 + rng() * 0.4));
+    for (let i = 0; i < grassCount; i++) {
       const gx = (Math.random() - 0.5) * ARENA.size * 0.9;
       const gz = (Math.random() - 0.5) * ARENA.size * 0.9;
       const gy = this.getTerrainHeight(gx, gz);
@@ -559,7 +563,8 @@ export class GameEngine {
     ];
     const stemMat = new THREE.MeshLambertMaterial({ color: 0xeeeecc });
 
-    for (let i = 0; i < 30; i++) {
+    const mushroomCount = Math.floor(30 * (0.8 + rng() * 0.4));
+    for (let i = 0; i < mushroomCount; i++) {
       const mx = (Math.random() - 0.5) * ARENA.size * 0.8;
       const mz = (Math.random() - 0.5) * ARENA.size * 0.8;
       const my = this.getTerrainHeight(mx, mz);
@@ -580,10 +585,12 @@ export class GameEngine {
 
   private setupDesertObjects() {
     this.rockColliders = [];
+    const rng = this.seededRandom(this.mapSeed + 2);
 
     // Rock pillars (instead of trees)
     const pillarMat = new THREE.MeshLambertMaterial({ color: 0x997744 });
-    for (let i = 0; i < 40; i++) {
+    const pillarCount = Math.floor(40 * (0.8 + rng() * 0.4));
+    for (let i = 0; i < pillarCount; i++) {
       const px = (Math.random() - 0.5) * ARENA.size * 0.85;
       const pz = (Math.random() - 0.5) * ARENA.size * 0.85;
       if (Math.abs(px) < 8 && Math.abs(pz) < 8) continue;
@@ -610,7 +617,8 @@ export class GameEngine {
 
     // Sand boulders (instead of rocks)
     const boulderMat = new THREE.MeshLambertMaterial({ color: 0xaa8855 });
-    for (let i = 0; i < 30; i++) {
+    const boulderCount = Math.floor(30 * (0.8 + rng() * 0.4));
+    for (let i = 0; i < boulderCount; i++) {
       const bx = (Math.random() - 0.5) * ARENA.size * 0.85;
       const bz = (Math.random() - 0.5) * ARENA.size * 0.85;
       if (Math.abs(bx) < 5 && Math.abs(bz) < 5) continue;
@@ -628,7 +636,8 @@ export class GameEngine {
 
     // Dead bushes (instead of grass)
     const bushMat = new THREE.MeshLambertMaterial({ color: 0x665533 });
-    for (let i = 0; i < 100; i++) {
+    const bushCount = Math.floor(100 * (0.8 + rng() * 0.4));
+    for (let i = 0; i < bushCount; i++) {
       const dx = (Math.random() - 0.5) * ARENA.size * 0.9;
       const dz = (Math.random() - 0.5) * ARENA.size * 0.9;
       const dy = this.getTerrainHeight(dx, dz);
@@ -648,7 +657,8 @@ export class GameEngine {
 
     // Cacti (instead of mushrooms)
     const cactusMat = new THREE.MeshLambertMaterial({ color: 0x336633 });
-    for (let i = 0; i < 20; i++) {
+    const cactusCount = Math.floor(20 * (0.8 + rng() * 0.4));
+    for (let i = 0; i < cactusCount; i++) {
       const cx = (Math.random() - 0.5) * ARENA.size * 0.8;
       const cz = (Math.random() - 0.5) * ARENA.size * 0.8;
       if (Math.abs(cx) < 5 && Math.abs(cz) < 5) continue;
@@ -684,10 +694,12 @@ export class GameEngine {
     this.rockColliders = [];
     this.lavaPoolPositions = [];
     this.lavaPoolMeshes = [];
+    const rng = this.seededRandom(this.mapSeed + 3);
 
-    // Lava pools (15-20)
+    // Lava pools (±20%)
     const lavaPoolGeo = new THREE.CircleGeometry(2.5, 16);
-    for (let i = 0; i < 18; i++) {
+    const lavaCount = Math.floor(18 * (0.8 + rng() * 0.4));
+    for (let i = 0; i < lavaCount; i++) {
       const lx = (Math.random() - 0.5) * ARENA.size * 0.8;
       const lz = (Math.random() - 0.5) * ARENA.size * 0.8;
       if (Math.abs(lx) < 8 && Math.abs(lz) < 8) continue;
@@ -703,9 +715,10 @@ export class GameEngine {
       this.lavaPoolPositions.push({ x: lx, z: lz, radius });
     }
 
-    // Obsidian pillars (20-25)
+    // Obsidian pillars (±20%)
     const obsidianMat = new THREE.MeshLambertMaterial({ color: 0x1a1a2e });
-    for (let i = 0; i < 23; i++) {
+    const obsidianCount = Math.floor(23 * (0.8 + rng() * 0.4));
+    for (let i = 0; i < obsidianCount; i++) {
       const px = (Math.random() - 0.5) * ARENA.size * 0.85;
       const pz = (Math.random() - 0.5) * ARENA.size * 0.85;
       if (Math.abs(px) < 8 && Math.abs(pz) < 8) continue;
@@ -727,9 +740,10 @@ export class GameEngine {
       this.rockColliders.push({ position: new THREE.Vector3(px, py, pz), radius: r });
     }
 
-    // Volcanic rocks (30)
+    // Volcanic rocks (±20%)
     const volcanicRockMat = new THREE.MeshLambertMaterial({ color: 0x2d1b1b });
-    for (let i = 0; i < 30; i++) {
+    const volcanicRockCount = Math.floor(30 * (0.8 + rng() * 0.4));
+    for (let i = 0; i < volcanicRockCount; i++) {
       const rx = (Math.random() - 0.5) * ARENA.size * 0.85;
       const rz = (Math.random() - 0.5) * ARENA.size * 0.85;
       if (Math.abs(rx) < 5 && Math.abs(rz) < 5) continue;
