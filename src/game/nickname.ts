@@ -1,5 +1,6 @@
 import { db } from "./firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
+import { secureSet, secureGet, secureRemove } from "./storage";
 
 const ACTIVE_KEY = "hordecraft_nickname";
 const ACTIVE_PIN_KEY = "hordecraft_nickname_pin";
@@ -36,8 +37,8 @@ export async function registerNickname(nickname: string, pin: string): Promise<s
     claimedAt: new Date().toISOString(),
   });
 
-  localStorage.setItem(ACTIVE_KEY, n);
-  localStorage.setItem(ACTIVE_PIN_KEY, pin);
+  secureSet(ACTIVE_KEY, n);
+  secureSet(ACTIVE_PIN_KEY, pin);
 
   return null;
 }
@@ -58,8 +59,8 @@ export async function claimNickname(nickname: string, pin: string): Promise<stri
     return "wrong_pin";
   }
 
-  localStorage.setItem(ACTIVE_KEY, data.nickname);
-  localStorage.setItem(ACTIVE_PIN_KEY, pin);
+  secureSet(ACTIVE_KEY, data.nickname);
+  secureSet(ACTIVE_PIN_KEY, pin);
 
   return null;
 }
@@ -67,7 +68,7 @@ export async function claimNickname(nickname: string, pin: string): Promise<stri
 /** Get currently active nickname (local) */
 export function getActiveNickname(): string {
   try {
-    return localStorage.getItem(ACTIVE_KEY) || "";
+    return secureGet(ACTIVE_KEY) || "";
   } catch {
     return "";
   }
@@ -75,6 +76,6 @@ export function getActiveNickname(): string {
 
 /** Clear active nickname (logout) */
 export function logoutNickname() {
-  localStorage.removeItem(ACTIVE_KEY);
-  localStorage.removeItem(ACTIVE_PIN_KEY);
+  secureRemove(ACTIVE_KEY);
+  secureRemove(ACTIVE_PIN_KEY);
 }

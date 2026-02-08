@@ -23,7 +23,19 @@ export default function RootLayout({
         <meta name="theme-color" content="#0a0a1a" />
         <link rel="manifest" href="/manifest.json" />
       </head>
-      <body style={{ overscrollBehavior: "none" }}>{children}</body>
+      <body style={{ overscrollBehavior: "none" }}>
+        {children}
+        <script dangerouslySetInnerHTML={{ __html: `
+          // Block devtools shortcuts
+          document.addEventListener('keydown', function(e) {
+            if (e.key === 'F12') { e.preventDefault(); return false; }
+            if (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c')) { e.preventDefault(); return false; }
+            if (e.ctrlKey && (e.key === 'U' || e.key === 'u')) { e.preventDefault(); return false; }
+          });
+          // Block right-click context menu
+          document.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+        `}} />
+      </body>
     </html>
   );
 }

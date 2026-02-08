@@ -8,6 +8,7 @@ export { Audio };
 import { t } from "./i18n";
 import { getActiveNickname } from "./nickname";
 import { saveMetaToCloud } from "./cloud-save";
+import { secureSet, secureGet } from "./storage";
 import type {
   GameState, PlayerState, EnemyInstance, XPGem, Projectile,
   WeaponState, UpgradeOption, GameStats, ShockWaveEffect, LightningEffect, FireSegment,
@@ -4794,7 +4795,7 @@ export class GameEngine {
 
   private loadMetaState(): MetaState {
     try {
-      const raw = localStorage.getItem("hordecraft_meta");
+      const raw = secureGet("hordecraft_meta");
       if (raw) {
         const parsed = JSON.parse(raw);
         if (!parsed.achievements) parsed.achievements = { maxKills: 0, maxSurvivalTime: 0, maxLevel: 0, totalRuns: parsed.totalRuns || 0 };
@@ -4807,7 +4808,7 @@ export class GameEngine {
 
   private saveMetaState() {
     try {
-      localStorage.setItem("hordecraft_meta", JSON.stringify(this.metaState));
+      secureSet("hordecraft_meta", JSON.stringify(this.metaState));
     } catch {}
     // Fire-and-forget cloud save if logged in
     const nick = getActiveNickname();
@@ -4822,7 +4823,7 @@ export class GameEngine {
   setMetaState(meta: MetaState) {
     this.metaState = meta;
     // Save to localStorage only (not cloud) — used for logout/guest reset
-    try { localStorage.setItem("hordecraft_meta", JSON.stringify(meta)); } catch {}
+    try { secureSet("hordecraft_meta", JSON.stringify(meta)); } catch {}
   }
 
   getUpgradeCost(id: string, level: number): number {
@@ -4870,7 +4871,7 @@ export class GameEngine {
   // Settings
   private loadSettings(): { invertY: boolean; volume: number } {
     try {
-      const raw = localStorage.getItem("hordecraft_settings");
+      const raw = secureGet("hordecraft_settings");
       if (raw) return { invertY: false, volume: 1, ...JSON.parse(raw) };
     } catch {}
     return { invertY: false, volume: 1 };
@@ -4878,7 +4879,7 @@ export class GameEngine {
 
   saveSettings() {
     try {
-      localStorage.setItem("hordecraft_settings", JSON.stringify(this.settings));
+      secureSet("hordecraft_settings", JSON.stringify(this.settings));
     } catch {}
   }
 }

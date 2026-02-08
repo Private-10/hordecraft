@@ -9,6 +9,7 @@ import { MAPS } from "@/game/constants";
 import type { MetaState } from "@/game/types";
 import { getActiveNickname, registerNickname, claimNickname, isNicknameClaimed, logoutNickname } from "@/game/nickname";
 import { loadMetaFromCloud, mergeMetaStates } from "@/game/cloud-save";
+import { secureSet, secureGet } from "@/game/storage";
 import { collection, addDoc, query, orderBy, limit as fbLimit, onSnapshot } from "firebase/firestore";
 import { db } from "@/game/firebase";
 
@@ -72,9 +73,9 @@ export default function PlayPage() {
       console.error("Score submit failed:", e);
       try {
         const key = "hordecraft_scores";
-        const existing = JSON.parse(localStorage.getItem(key) || "[]");
+        const existing = JSON.parse(secureGet("hordecraft_scores") || "[]");
         existing.push({ ...data, date: new Date().toISOString() });
-        localStorage.setItem(key, JSON.stringify(existing));
+        secureSet("hordecraft_scores", JSON.stringify(existing));
       } catch {}
     }
   };
