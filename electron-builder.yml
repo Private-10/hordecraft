@@ -1,0 +1,27 @@
+appId: com.hordecraft.game
+productName: HordeCraft
+directories:
+  output: dist
+  buildResources: electron
+files:
+  - out/**/*
+  - electron/**/*
+  - package.json
+extraMetadata:
+  main: electron/main.cjs
+asar: true
+win:
+  target:
+    - nsis
+    - portable
+  icon: electron/icon.png
+mac:
+  target: dmg
+  icon: electron/icon.png
+linux:
+  target: AppImage
+  icon: electron/icon.png
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  installerIcon: electron/icon.png
