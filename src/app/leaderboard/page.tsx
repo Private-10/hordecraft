@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { db } from "@/game/firebase";
 import { collection, query, orderBy, limit, getDocs } from "firebase/firestore";
 
@@ -11,6 +11,8 @@ interface ScoreEntry {
   survivalTime: number;
   level: number;
   maxCombo: number;
+  character: string;
+  map: string;
   date: string;
 }
 
@@ -20,11 +22,36 @@ function formatTime(seconds: number) {
   return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 }
 
+const MAPS = [
+  { id: "all", tr: "Tümü", en: "All", icon: "🌍" },
+  { id: "forest", tr: "Orman", en: "Forest", icon: "🌲" },
+  { id: "desert", tr: "Çöl", en: "Desert", icon: "🏜️" },
+];
+
+const CHARACTERS = [
+  { id: "all", tr: "Tümü", en: "All", icon: "👥" },
+  { id: "knight", tr: "Şövalye", en: "Knight", icon: "🛡️" },
+  { id: "mage", tr: "Büyücü", en: "Mage", icon: "🧙" },
+  { id: "rogue", tr: "Hırsız", en: "Rogue", icon: "🗡️" },
+  { id: "priest", tr: "Rahip", en: "Priest", icon: "✝️" },
+  { id: "berserker", tr: "Berserker", en: "Berserker", icon: "🪓" },
+  { id: "necromancer", tr: "Nekromansır", en: "Necromancer", icon: "💀" },
+];
+
+const TIME_FILTERS = [
+  { id: "all", tr: "Tüm Zamanlar", en: "All Time" },
+  { id: "week", tr: "Bu Hafta", en: "This Week" },
+  { id: "today", tr: "Bugün", en: "Today" },
+];
+
 export default function LeaderboardPage() {
-  const [scores, setScores] = useState<ScoreEntry[]>([]);
+  const [allScores, setAllScores] = useState<ScoreEntry[]>([]);
   const [lang, setLang] = useState<"tr" | "en">("tr");
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [mapFilter, setMapFilter] = useState("all");
+  const [charFilter, setCharFilter] = useState("all");
+  const [timeFilter, setTimeFilter] = useState("all");
 
   useEffect(() => {
     setMounted(true);
@@ -33,10 +60,9 @@ export default function LeaderboardPage() {
       if (saved) setLang(saved);
     } catch {}
 
-    // Fetch from Firestore
     (async () => {
       try {
-        const q = query(collection(db, "scores"), orderBy("score", "desc"), limit(100));
+        const q = query(collection(db, "scores"), orderBy("score", "desc"), limit(500));
         const snap = await getDocs(q);
         const entries: ScoreEntry[] = [];
         snap.forEach((doc) => {
@@ -48,19 +74,12 @@ export default function LeaderboardPage() {
             survivalTime: d.survivalTime || 0,
             level: d.level || 1,
             maxCombo: d.maxCombo || 0,
+            character: d.character || "knight",
+            map: d.map || "forest",
             date: d.date || "",
           });
         });
-        // Keep only best score per nickname
-        const bestMap = new Map<string, ScoreEntry>();
-        for (const e of entries) {
-          const key = (e.nickname || "Anonymous").toLowerCase();
-          const existing = bestMap.get(key);
-          if (!existing || e.score > existing.score) {
-            bestMap.set(key, e);
-          }
-        }
-        setScores(Array.from(bestMap.values()).sort((a, b) => b.score - a.score));
+        setAllScores(entries);
       } catch (e) {
         console.error("Leaderboard fetch failed:", e);
       }
@@ -68,9 +87,57 @@ export default function LeaderboardPage() {
     })();
   }, []);
 
+  const scores = useMemo(() => {
+    let filtered = allScores;
+
+    // Map filter
+    if (mapFilter !== "all") {
+      filtered = filtered.filter(s => s.map === mapFilter);
+    }
+
+    // Character filter
+    if (charFilter !== "all") {
+      filtered = filtered.filter(s => s.character === charFilter);
+    }
+
+    // Time filter
+    if (timeFilter !== "all") {
+      const now = new Date();
+      let cutoff: Date;
+      if (timeFilter === "today") {
+        cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      } else {
+        // this week (last 7 days)
+        cutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      }
+      filtered = filtered.filter(s => {
+        if (!s.date) return false;
+        return new Date(s.date) >= cutoff;
+      });
+    }
+
+    // Best per nickname
+    const bestMap = new Map<string, ScoreEntry>();
+    for (const e of filtered) {
+      const key = (e.nickname || "Anonymous").toLowerCase();
+      const existing = bestMap.get(key);
+      if (!existing || e.score > existing.score) {
+        bestMap.set(key, e);
+      }
+    }
+    return Array.from(bestMap.values()).sort((a, b) => b.score - a.score);
+  }, [allScores, mapFilter, charFilter, timeFilter]);
+
   if (!mounted) return null;
 
   const tr = lang === "tr";
+
+  const filterBtnStyle = (active: boolean): React.CSSProperties => ({
+    padding: "6px 14px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600,
+    background: active ? "linear-gradient(135deg, #ff6b35, #ff8c42)" : "rgba(255,255,255,0.06)",
+    color: active ? "white" : "rgba(255,255,255,0.5)",
+    transition: "all 0.2s",
+  });
 
   return (
     <div style={{
@@ -82,7 +149,7 @@ export default function LeaderboardPage() {
     }}>
       <div style={{ maxWidth: 800, margin: "0 auto" }}>
         {/* Header */}
-        <div style={{ textAlign: "center", marginBottom: 32 }}>
+        <div style={{ textAlign: "center", marginBottom: 24 }}>
           <h1 style={{
             fontSize: 48, fontWeight: 900, margin: 0,
             background: "linear-gradient(135deg, #ff6b35, #ffd700)",
@@ -96,7 +163,7 @@ export default function LeaderboardPage() {
         </div>
 
         {/* Actions */}
-        <div style={{ display: "flex", justifyContent: "center", gap: 12, marginBottom: 24 }}>
+        <div style={{ display: "flex", justifyContent: "center", gap: 12, marginBottom: 20 }}>
           <button
             onClick={() => { window.location.href = "/play"; }}
             style={{
@@ -119,6 +186,43 @@ export default function LeaderboardPage() {
           </button>
         </div>
 
+        {/* Filters */}
+        <div style={{
+          background: "rgba(255,255,255,0.03)", borderRadius: 14, padding: "16px 16px 12px",
+          border: "1px solid rgba(255,255,255,0.06)", marginBottom: 24,
+          display: "flex", flexDirection: "column", gap: 10,
+        }}>
+          {/* Map filter */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", minWidth: 60 }}>{tr ? "Harita:" : "Map:"}</span>
+            {MAPS.map(m => (
+              <button key={m.id} onClick={() => setMapFilter(m.id)} style={filterBtnStyle(mapFilter === m.id)}>
+                {m.icon} {tr ? m.tr : m.en}
+              </button>
+            ))}
+          </div>
+
+          {/* Character filter */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", minWidth: 60 }}>{tr ? "Karakter:" : "Character:"}</span>
+            {CHARACTERS.map(c => (
+              <button key={c.id} onClick={() => setCharFilter(c.id)} style={filterBtnStyle(charFilter === c.id)}>
+                {c.icon} {tr ? c.tr : c.en}
+              </button>
+            ))}
+          </div>
+
+          {/* Time filter */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", minWidth: 60 }}>{tr ? "Zaman:" : "Time:"}</span>
+            {TIME_FILTERS.map(tf => (
+              <button key={tf.id} onClick={() => setTimeFilter(tf.id)} style={filterBtnStyle(timeFilter === tf.id)}>
+                {tr ? tf.tr : tf.en}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Content */}
         {loading ? (
           <div style={{ textAlign: "center", padding: 60, color: "rgba(255,255,255,0.4)", fontSize: 18 }}>
@@ -129,7 +233,7 @@ export default function LeaderboardPage() {
             textAlign: "center", padding: 60,
             color: "rgba(255,255,255,0.4)", fontSize: 18,
           }}>
-            {tr ? "Henüz skor yok. İlk sen ol! 🎮" : "No scores yet. Be the first! 🎮"}
+            {tr ? "Sonuç bulunamadı 🎮" : "No results found 🎮"}
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>

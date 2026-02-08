@@ -42,6 +42,8 @@ export default function PlayPage() {
   const [nickBusy, setNickBusy] = useState(false);
   const [scoreSubmitted, setScoreSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [lastScoreDocId, setLastScoreDocId] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [selectedChar, setSelectedChar] = useState("knight");
   const [showCharSelect, setShowCharSelect] = useState(false);
   const [dps, setDps] = useState(0);
@@ -63,22 +65,23 @@ export default function PlayPage() {
   const [onlineCount, setOnlineCount] = useState(0);
   const presenceIdRef = useRef<string>("");
 
-  const submitScore = async (data: Record<string, unknown>) => {
+  const submitScore = async (data: Record<string, unknown>): Promise<string | null> => {
     try {
       const { db } = await import("@/game/firebase");
       const { collection, addDoc } = await import("firebase/firestore");
-      await addDoc(collection(db, "scores"), {
+      const docRef = await addDoc(collection(db, "scores"), {
         ...data,
         date: new Date().toISOString(),
       });
+      return docRef.id;
     } catch (e) {
       console.error("Score submit failed:", e);
       try {
-        const key = "hordecraft_scores";
         const existing = JSON.parse(secureGet("hordecraft_scores") || "[]");
         existing.push({ ...data, date: new Date().toISOString() });
         secureSet("hordecraft_scores", JSON.stringify(existing));
       } catch {}
+      return null;
     }
   };
 
@@ -179,7 +182,9 @@ export default function PlayPage() {
         setTimeout(async () => {
           try {
             setSubmitting(true);
-            await submitScore({
+            setLastScoreDocId(null);
+            setLinkCopied(false);
+            const docId = await submitScore({
               nickname: name,
               score: engine.stats.score,
               kills: engine.stats.kills,
@@ -189,6 +194,7 @@ export default function PlayPage() {
               character: selectedChar,
               map: selectedMap,
             });
+            if (docId) setLastScoreDocId(docId);
             setScoreSubmitted(true);
           } catch (err) {
             console.error("Score submit failed:", err);
@@ -1068,6 +1074,39 @@ export default function PlayPage() {
                 ✅ {lang === "tr" ? `Skor kaydedildi! (${nickname || "Anonim"})` : `Score saved! (${nickname || "Anonymous"})`}
               </div>
             )}
+            {scoreSubmitted && lastScoreDocId && (() => {
+              const shareUrl = `https://hordecraft.online/score/${lastScoreDocId}`;
+              const shareText = lang === "tr"
+                ? `HordeCraft'ta ${stats.score.toLocaleString()} puan yaptım! 🎮⚔️`
+                : `I scored ${stats.score.toLocaleString()} on HordeCraft! 🎮⚔️`;
+              return (
+                <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 16, flexWrap: "wrap" }}>
+                  <a
+                    href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`}
+                    target="_blank" rel="noopener noreferrer"
+                    style={{
+                      padding: "8px 16px", borderRadius: 8, background: "#1DA1F2", color: "white",
+                      fontWeight: 700, fontSize: 13, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4,
+                    }}
+                  >𝕏 Twitter</a>
+                  <a
+                    href={`https://wa.me/?text=${encodeURIComponent(shareText + " " + shareUrl)}`}
+                    target="_blank" rel="noopener noreferrer"
+                    style={{
+                      padding: "8px 16px", borderRadius: 8, background: "#25D366", color: "white",
+                      fontWeight: 700, fontSize: 13, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4,
+                    }}
+                  >📱 WhatsApp</a>
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(shareUrl).then(() => { setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000); }).catch(() => {}); }}
+                    style={{
+                      padding: "8px 16px", borderRadius: 8, background: "rgba(255,255,255,0.15)", color: "white",
+                      fontWeight: 700, fontSize: 13, border: "none", cursor: "pointer",
+                    }}
+                  >{linkCopied ? "✅" : "🔗"} {linkCopied ? (lang === "tr" ? "Kopyalandı!" : "Copied!") : (lang === "tr" ? "Link Kopyala" : "Copy Link")}</button>
+                </div>
+              );
+            })()}
             <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
               <button className="btn btn-primary" onClick={startGame}>{t("gameover.retry")}</button>
               <button className="btn btn-secondary" onClick={() => setGameState("menu")}>{t("gameover.menu")}</button>
