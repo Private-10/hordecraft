@@ -783,6 +783,81 @@ export default function PlayPage() {
               )}
             </div>
 
+            {/* Skin Selector Popup */}
+            {showSkinSelect && metaState && (
+              <div style={{
+                background: "rgba(0,0,0,0.85)", borderRadius: 12, padding: 16, marginTop: 8,
+                border: "1px solid rgba(255,255,255,0.15)",
+              }}>
+                <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8, textAlign: "center" }}>
+                  🎨 {lang === "tr" ? "Kostüm Seç" : "Select Skin"}
+                  <button onClick={() => setShowSkinSelect(null)} style={{ float: "right", background: "none", border: "none", color: "#fff", cursor: "pointer" }}>✕</button>
+                </div>
+                {/* Default (no skin) option */}
+                <div
+                  onClick={() => { engineRef.current?.selectSkin(showSkinSelect, null); refreshMeta(); }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8, padding: 8, marginBottom: 4,
+                    background: !metaState.selectedSkins?.[showSkinSelect] ? "rgba(255,140,66,0.2)" : "rgba(255,255,255,0.05)",
+                    borderRadius: 8, cursor: "pointer",
+                    border: !metaState.selectedSkins?.[showSkinSelect] ? "1px solid #ff8c42" : "1px solid transparent",
+                  }}
+                >
+                  <span style={{ fontSize: 20 }}>🎭</span>
+                  <span style={{ fontSize: 12 }}>{lang === "tr" ? "Varsayılan" : "Default"}</span>
+                  {!metaState.selectedSkins?.[showSkinSelect] && <span style={{ marginLeft: "auto", fontSize: 10, color: "#ff8c42" }}>✓</span>}
+                </div>
+                {getSkinsForCharacter(showSkinSelect).map((skin: Skin) => {
+                  const owned = metaState.unlockedSkins?.includes(skin.id);
+                  const equipped = metaState.selectedSkins?.[showSkinSelect] === skin.id;
+                  const canAfford = (metaState.gold ?? 0) >= skin.unlockCost;
+                  const rarityColor = skin.rarity === "legendary" ? "#ffaa00" : skin.rarity === "epic" ? "#aa44ff" : skin.rarity === "rare" ? "#4488ff" : "#aaaaaa";
+                  return (
+                    <div
+                      key={skin.id}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 8, padding: 8, marginBottom: 4,
+                        background: equipped ? "rgba(255,140,66,0.2)" : "rgba(255,255,255,0.05)",
+                        borderRadius: 8, cursor: owned ? "pointer" : "default",
+                        border: equipped ? "1px solid #ff8c42" : `1px solid ${rarityColor}33`,
+                        opacity: owned ? 1 : 0.6,
+                      }}
+                      onClick={() => {
+                        if (owned) {
+                          engineRef.current?.selectSkin(showSkinSelect!, skin.id);
+                          refreshMeta();
+                        }
+                      }}
+                    >
+                      <span style={{ fontSize: 20 }}>{skin.icon}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: rarityColor }}>{skin.name()}</div>
+                        <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>{skin.description()}</div>
+                        {!owned && <div style={{ fontSize: 9, color: "rgba(255,255,255,0.3)" }}>{skin.unlockCondition}</div>}
+                      </div>
+                      {equipped && <span style={{ fontSize: 10, color: "#ff8c42" }}>✓</span>}
+                      {!owned && (
+                        <button
+                          disabled={!canAfford}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (engineRef.current?.unlockSkin(skin.id)) refreshMeta();
+                          }}
+                          style={{
+                            padding: "2px 8px", fontSize: 10, borderRadius: 4, cursor: canAfford ? "pointer" : "default",
+                            background: canAfford ? "rgba(255,200,0,0.3)" : "rgba(255,255,255,0.1)",
+                            border: "1px solid rgba(255,200,0,0.3)", color: canAfford ? "#ffcc00" : "#666",
+                          }}
+                        >
+                          💰 {skin.unlockCost}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             {/* Map Selection */}
             <div className="menu-section">
               <button onClick={() => setShowMapSelect(!showMapSelect)} className="char-toggle-btn">
@@ -1223,6 +1298,22 @@ export default function PlayPage() {
             animation: "pulse 0.5s ease-in-out infinite alternate",
           }}>
             {mistActive ? "🌫️ SİS" : "🌫️ Sis Geliyor!"}
+          </div>
+        </div>
+      )}
+
+      {/* Blizzard Warning */}
+      {(blizzardWarning || blizzardActive) && gameState === "playing" && (
+        <div style={{
+          position: "fixed", top: "40%", left: "50%", transform: "translate(-50%, -50%)",
+          zIndex: 25, textAlign: "center", pointerEvents: "none",
+        }}>
+          <div style={{
+            fontSize: 32, fontWeight: 900, color: blizzardActive ? "#88ccff" : "#aaddff",
+            textShadow: "0 0 20px rgba(136,204,255,0.8), 0 0 40px rgba(68,136,255,0.6)",
+            animation: "pulse 0.5s ease-in-out infinite alternate",
+          }}>
+            {blizzardActive ? (lang === "tr" ? "❄️ KAR FIRTINASI" : "❄️ BLIZZARD") : (lang === "tr" ? "❄️ Kar Fırtınası Geliyor!" : "❄️ Blizzard Incoming!")}
           </div>
         </div>
       )}
