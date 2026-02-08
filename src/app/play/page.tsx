@@ -643,27 +643,64 @@ export default function PlayPage() {
                     const unlocked = isCharUnlocked(ch);
                     const condMet = isConditionMet(ch);
                     const canAfford = (metaState?.gold ?? 0) >= ch.unlock.unlockCost;
+                    const isSelected = selectedChar === ch.id && unlocked;
+                    const weaponNames: Record<string, Record<string, string>> = {
+                      orbitBlade: { tr: "🗡️ Dönen Kılıç", en: "🗡️ Orbit Blade" },
+                      lightningArc: { tr: "⚡ Yıldırım", en: "⚡ Lightning Arc" },
+                      boneToss: { tr: "🦴 Kemik Fırlatma", en: "🦴 Bone Toss" },
+                      shockWave: { tr: "💥 Şok Dalgası", en: "💥 Shock Wave" },
+                      fireTrail: { tr: "🔥 Ateş İzi", en: "🔥 Fire Trail" },
+                    };
+                    const passiveDesc: Record<string, Record<string, string>> = {
+                      knight: { tr: "🛡️ +2 Zırh", en: "🛡️ +2 Armor" },
+                      mage: { tr: "📚 +%15 XP, -%15 Bekleme", en: "📚 +15% XP, -15% Cooldown" },
+                      rogue: { tr: "🎯 %20 Kritik Şans", en: "🎯 20% Crit Chance" },
+                      priest: { tr: "🧲 Geniş Mıknatıs, +%30 XP", en: "🧲 Wide Magnet, +30% XP" },
+                      berserker: { tr: "💪 +%50 HP, +%40 Hasar", en: "💪 +50% HP, +40% Damage" },
+                      necromancer: { tr: "⏱️ -%20 Bekleme", en: "⏱️ -20% Cooldown" },
+                    };
+                    const StatBar = ({ label, value, max, color }: { label: string; value: number; max: number; color: string }) => (
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, width: "100%" }}>
+                        <span style={{ width: 28, textAlign: "right", color: "rgba(255,255,255,0.6)" }}>{label}</span>
+                        <div style={{ flex: 1, height: 6, background: "rgba(255,255,255,0.1)", borderRadius: 3, overflow: "hidden" }}>
+                          <div style={{ width: `${Math.min(100, (value / max) * 100)}%`, height: "100%", background: color, borderRadius: 3 }} />
+                        </div>
+                      </div>
+                    );
                     return (
                       <button
                         key={ch.id}
                         onClick={() => { if (unlocked) { setSelectedChar(ch.id); Audio.playSelect(); } }}
-                        className={`char-card ${selectedChar === ch.id && unlocked ? "selected" : ""} ${!unlocked ? "locked" : ""}`}
-                        style={{ cursor: unlocked ? "pointer" : "default" }}
+                        className={`char-card ${isSelected ? "selected" : ""} ${!unlocked ? "locked" : ""}`}
+                        style={{
+                          cursor: unlocked ? "pointer" : "default",
+                          border: isSelected ? "2px solid #ff8c42" : undefined,
+                          boxShadow: isSelected ? "0 0 12px rgba(255,140,66,0.4)" : undefined,
+                        }}
                       >
-                        <span className="char-card-icon">{unlocked ? ch.icon : "🔒"}</span>
+                        <span className="char-card-icon" style={{ fontSize: 32 }}>{unlocked ? ch.icon : "🔒"}</span>
                         <span className="char-card-name">{ch.name()}</span>
                         {unlocked ? (
                           <>
-                            <span className="char-card-desc">{ch.description()}</span>
-                            <div className="char-card-stats">
-                              <span className="stat-hp">❤️{Math.round(ch.hpMult * 100)}%</span>
-                              <span className="stat-spd">⚡{Math.round(ch.speedMult * 100)}%</span>
-                              <span className="stat-dmg">⚔️{Math.round(ch.damageMult * 100)}%</span>
+                            <span className="char-card-desc" style={{ fontSize: 10, marginBottom: 4 }}>{ch.description()}</span>
+                            <div style={{ fontSize: 10, color: "rgba(255,200,100,0.8)", marginBottom: 2 }}>
+                              {weaponNames[ch.startWeapon]?.[lang] || ch.startWeapon}
+                            </div>
+                            <div style={{ fontSize: 9, color: "rgba(150,220,255,0.7)", marginBottom: 6 }}>
+                              {passiveDesc[ch.id]?.[lang] || ""}
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 3, width: "100%" }}>
+                              <StatBar label="❤️" value={ch.hpMult} max={1.6} color="#ff4444" />
+                              <StatBar label="⚡" value={ch.speedMult} max={1.3} color="#44aaff" />
+                              <StatBar label="⚔️" value={ch.damageMult} max={1.5} color="#ffaa44" />
                             </div>
                           </>
                         ) : (
                           <>
                             <span className="char-card-lock">{t(ch.unlock.unlockCondition as never)}</span>
+                            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginBottom: 4 }}>
+                              💰 {ch.unlock.unlockCost}G
+                            </div>
                             {condMet ? (
                               <button
                                 className="char-unlock-btn"
