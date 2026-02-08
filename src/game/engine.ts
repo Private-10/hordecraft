@@ -248,6 +248,10 @@ export class GameEngine {
 
   // Firefly particles (forest)
   private fireflyParticles: { mesh: THREE.Mesh; baseY: number; phase: number }[] = [];
+  // Leaf particles (forest)
+  private leafParticles: { mesh: THREE.Mesh; velocity: THREE.Vector3; life: number; maxLife: number; phase: number }[] = [];
+  private leafSpawnTimer = 0;
+  private forestPointLights: THREE.PointLight[] = [];
 
   // Lava platforms (volcanic)
   private lavaPlatforms: { mesh: THREE.Mesh; x: number; z: number; radius: number; visibleTimer: number; warningTimer: number; cooldownTimer: number; state: "visible" | "warning" | "hidden" }[] = [];
@@ -441,6 +445,10 @@ export class GameEngine {
     if (this.mistParticles) { this.scene.remove(this.mistParticles); this.mistParticles = null; }
     this.fireflyParticles.forEach(f => this.scene.remove(f.mesh));
     this.fireflyParticles = [];
+    this.leafParticles.forEach(lp => { this.scene.remove(lp.mesh); lp.mesh.geometry.dispose(); });
+    this.leafParticles = [];
+    this.forestPointLights.forEach(pl => this.scene.remove(pl));
+    this.forestPointLights = [];
     if (this.emberParticles) { this.scene.remove(this.emberParticles); this.emberParticles = null; }
     this.meteorWarnings.forEach(w => this.scene.remove(w.mesh));
     this.meteorWarnings = [];
@@ -479,11 +487,13 @@ export class GameEngine {
       this.originalFogFar = 70;
     } else {
       // Forest - enhanced lighting
-      if (this.ambientLight) { this.ambientLight.color.set(0x556644); this.ambientLight.intensity = 1.2; }
-      if (this.sunLight) { this.sunLight.color.set(0xffeedd); this.sunLight.intensity = 1.6; }
-      if (this.hemiLight) { this.hemiLight.color.set(0x4488aa); (this.hemiLight as THREE.HemisphereLight).groundColor.set(0x224422); }
+      if (this.ambientLight) { this.ambientLight.color.set(0x4a6a4a); this.ambientLight.intensity = 0.8; }
+      if (this.sunLight) { this.sunLight.color.set(0xffeedd); this.sunLight.intensity = 1.4; this.sunLight.position.set(50, 80, 30); }
+      if (this.hemiLight) { this.hemiLight.color.set(0x88bbff); (this.hemiLight as THREE.HemisphereLight).groundColor.set(0x2a4a2a); this.hemiLight.intensity = 0.6; }
       // Green-tinted fog for forest
-      this.scene.fog = new THREE.Fog(0x112211, 40, 80);
+      this.scene.fog = new THREE.Fog(0x112211, 30, 70);
+      this.originalFogNear = 30;
+      this.originalFogFar = 70;
     }
 
     // Refresh seed each run for procedural variation
@@ -552,230 +562,431 @@ export class GameEngine {
 
   private setupForestObjects() {
     this.rockColliders = [];
+    this.leafParticles = [];
+    this.leafSpawnTimer = 0;
+    this.forestPointLights = [];
     const rng = this.seededRandom(this.mapSeed + 1);
 
-    // Rocks (±20% count variation) - increased to 50
-    const rockCount = Math.floor(50 * (0.8 + rng() * 0.4));
-    const sharedRockMat = new THREE.MeshLambertMaterial({ color: 0x445544 });
-    for (let i = 0; i < rockCount; i++) {
-      const rockRadius = rng() * 2.5 + 0.5;
-      const rockGeo = new THREE.DodecahedronGeometry(rockRadius, 0);
-      const rock = new THREE.Mesh(rockGeo, sharedRockMat);
-      const rx = (rng() - 0.5) * ARENA.size * 0.85;
-      const rz = (rng() - 0.5) * ARENA.size * 0.85;
-      if (Math.abs(rx) < 5 && Math.abs(rz) < 5) continue;
-      const ry = this.getTerrainHeight(rx, rz) + rng() * 0.3;
-      rock.position.set(rx, ry, rz);
-      rock.rotation.set(rng() * 0.5, rng() * Math.PI * 2, rng() * 0.5);
-      rock.castShadow = true;
-      rock.receiveShadow = true;
-      this.scene.add(rock);
-      this.environmentObjects.push(rock);
-      this.rockColliders.push({ position: new THREE.Vector3(rx, ry, rz), radius: rockRadius * 0.8, mesh: rock });
+    // Helper: deform vertices for organic look
+    const deformGeo = (geo: THREE.BufferGeometry, amount: number) => {
+      const pos = geo.getAttribute("position");
+      for (let i = 0; i < pos.count; i++) {
+        pos.setX(i, pos.getX(i) + (rng() - 0.5) * amount);
+        pos.setY(i, pos.getY(i) + (rng() - 0.5) * amount);
+        pos.setZ(i, pos.getZ(i) + (rng() - 0.5) * amount);
+      }
+      pos.needsUpdate = true;
+      geo.computeVertexNormals();
+    };
+
+    // ===== ORGANIC ROCKS (25 big, 30 medium, 40 small) =====
+    const rockMats = [
+      new THREE.MeshLambertMaterial({ color: 0x556655 }),
+      new THREE.MeshLambertMaterial({ color: 0x667766 }),
+      new THREE.MeshLambertMaterial({ color: 0x445544 }),
+    ];
+    const mossMat = new THREE.MeshLambertMaterial({ color: 0x2a5a2a });
+    const rockConfigs = [
+      { count: 25, minR: 2, maxR: 3, deform: 0.3 },    // big
+      { count: 30, minR: 0.8, maxR: 1.5, deform: 0.2 }, // medium
+      { count: 40, minR: 0.3, maxR: 0.6, deform: 0.1 }, // small
+    ];
+    for (const cfg of rockConfigs) {
+      for (let i = 0; i < cfg.count; i++) {
+        const rockRadius = cfg.minR + rng() * (cfg.maxR - cfg.minR);
+        const rockGeo = new THREE.DodecahedronGeometry(rockRadius, 1);
+        deformGeo(rockGeo, cfg.deform);
+        const rock = new THREE.Mesh(rockGeo, rockMats[Math.floor(rng() * 3)]);
+        const rx = (rng() - 0.5) * ARENA.size * 0.85;
+        const rz = (rng() - 0.5) * ARENA.size * 0.85;
+        if (Math.abs(rx) < 5 && Math.abs(rz) < 5) continue;
+        const ry = this.getTerrainHeight(rx, rz) + rockRadius * 0.2;
+        rock.position.set(rx, ry, rz);
+        rock.rotation.set(rng() * 0.5, rng() * Math.PI * 2, rng() * 0.5);
+        rock.castShadow = true;
+        rock.receiveShadow = true;
+
+        const rockGroup = new THREE.Group();
+        rockGroup.add(rock);
+
+        // Add moss to some rocks
+        if (rng() > 0.5 && rockRadius > 0.6) {
+          const mossGeo = new THREE.SphereGeometry(rockRadius * 0.4, 5, 4);
+          const moss = new THREE.Mesh(mossGeo, mossMat);
+          moss.position.set(0, rockRadius * 0.6, 0);
+          moss.scale.y = 0.4;
+          rockGroup.add(moss);
+        }
+
+        rockGroup.position.set(rx, ry, rz);
+        rock.position.set(0, 0, 0);
+        this.scene.add(rockGroup);
+        this.environmentObjects.push(rockGroup);
+        this.rockColliders.push({ position: new THREE.Vector3(rx, ry, rz), radius: rockRadius * 0.8, mesh: rockGroup });
+      }
     }
 
-    // Shared tree geometries & materials
-    // Oak (original)
-    const oakTrunkGeo = new THREE.CylinderGeometry(0.15, 0.25, 2, 6);
-    const oakTrunkMat = new THREE.MeshLambertMaterial({ color: 0x664422 });
-    const oakLeafGeo1 = new THREE.ConeGeometry(1.2, 2.5, 6);
-    const oakLeafGeo2 = new THREE.ConeGeometry(0.9, 2, 6);
-    const oakLeafMat = new THREE.MeshLambertMaterial({ color: 0x227733 });
-    const oakLeafMatDark = new THREE.MeshLambertMaterial({ color: 0x1a5c28 });
-    // Pine
-    const pineTrunkGeo = new THREE.CylinderGeometry(0.1, 0.18, 2.5, 6);
-    const pineTrunkMat = new THREE.MeshLambertMaterial({ color: 0x553311 });
-    const pineLeafGeo = new THREE.ConeGeometry(1.0, 3.5, 6);
-    const pineLeafMat = new THREE.MeshLambertMaterial({ color: 0x1a5c1a });
-    // Birch
-    const birchTrunkGeo = new THREE.CylinderGeometry(0.08, 0.12, 2.2, 6);
-    const birchTrunkMat = new THREE.MeshLambertMaterial({ color: 0xeeeeee });
-    const birchLeafGeo = new THREE.SphereGeometry(0.8, 6, 5);
-    const birchLeafMat = new THREE.MeshLambertMaterial({ color: 0x44aa44 });
+    // ===== DETAILED TREES =====
+    // --- Shared materials ---
+    const oakTrunkMat = new THREE.MeshLambertMaterial({ color: 0x5c3a1e });
+    const oakLeafMats = [
+      new THREE.MeshLambertMaterial({ color: 0x2d8a4e }),
+      new THREE.MeshLambertMaterial({ color: 0x3aa85c }),
+      new THREE.MeshLambertMaterial({ color: 0x1d6b3a }),
+    ];
+    const pineTrunkMat = new THREE.MeshLambertMaterial({ color: 0x5c3a1e });
+    const pineLeafMats = [
+      new THREE.MeshLambertMaterial({ color: 0x1a5c2a }),
+      new THREE.MeshLambertMaterial({ color: 0x0d4420 }),
+    ];
+    const birchTrunkMat = new THREE.MeshLambertMaterial({ color: 0xddccaa });
+    const birchLeafMat = new THREE.MeshLambertMaterial({ color: 0x88cc44 });
 
-    // Trees - increased to 80
-    const treeCount = Math.floor(80 * (0.8 + rng() * 0.4));
-    for (let i = 0; i < treeCount; i++) {
+    // --- Shared geometries ---
+    const oakTrunkGeo = new THREE.CylinderGeometry(0.15, 0.35, 3, 7);
+    const oakBranchGeo = new THREE.CylinderGeometry(0.04, 0.08, 1.2, 5);
+    const oakLeafGeo = new THREE.IcosahedronGeometry(0.8, 1);
+    const pineTrunkGeo = new THREE.CylinderGeometry(0.08, 0.16, 3.5, 6);
+    const pineLeafGeos = [
+      new THREE.ConeGeometry(1.4, 1.8, 7),
+      new THREE.ConeGeometry(1.1, 1.5, 7),
+      new THREE.ConeGeometry(0.8, 1.2, 7),
+      new THREE.ConeGeometry(0.5, 1.0, 7),
+    ];
+    const birchTrunkGeo = new THREE.CylinderGeometry(0.06, 0.1, 2.8, 6);
+    const birchLeafGeo = new THREE.IcosahedronGeometry(0.5, 1);
+
+    const treePositions: THREE.Vector3[] = [];
+
+    // --- Oak Trees (40) ---
+    for (let i = 0; i < 40; i++) {
       const tx = (rng() - 0.5) * ARENA.size * 0.85;
       const tz = (rng() - 0.5) * ARENA.size * 0.85;
-      const ty = this.getTerrainHeight(tx, tz);
       if (Math.abs(tx) < 8 && Math.abs(tz) < 8) continue;
+      const ty = this.getTerrainHeight(tx, tz);
+      const scale = 0.8 + rng() * 0.5;
 
       const tree = new THREE.Group();
-      const treeType = rng();
-      const scale = 0.7 + rng() * 0.6;
+      // Trunk
+      const trunk = new THREE.Mesh(oakTrunkGeo, oakTrunkMat);
+      trunk.position.y = 1.5 * scale;
+      trunk.scale.setScalar(scale);
+      trunk.castShadow = true;
+      tree.add(trunk);
 
-      if (treeType < 0.33) {
-        // Pine tree
-        const trunk = new THREE.Mesh(pineTrunkGeo, pineTrunkMat);
-        trunk.position.y = 1.25;
-        trunk.castShadow = true;
-        tree.add(trunk);
-        const leaves = new THREE.Mesh(pineLeafGeo, pineLeafMat);
-        leaves.position.y = 3.5 * scale;
-        leaves.scale.setScalar(scale);
-        leaves.castShadow = true;
-        tree.add(leaves);
-      } else if (treeType < 0.66) {
-        // Birch tree
-        const trunk = new THREE.Mesh(birchTrunkGeo, birchTrunkMat);
-        trunk.position.y = 1.1;
-        trunk.castShadow = true;
-        tree.add(trunk);
-        const leaves = new THREE.Mesh(birchLeafGeo, birchLeafMat);
-        leaves.position.y = 2.5 * scale;
-        leaves.scale.setScalar(scale);
-        leaves.castShadow = true;
-        tree.add(leaves);
-      } else {
-        // Oak tree (original)
-        const trunk = new THREE.Mesh(oakTrunkGeo, oakTrunkMat);
-        trunk.position.y = 1;
-        trunk.castShadow = true;
-        tree.add(trunk);
-        const leaves1 = new THREE.Mesh(oakLeafGeo1, rng() > 0.5 ? oakLeafMat : oakLeafMatDark);
-        leaves1.position.y = 2.8 * scale;
-        leaves1.scale.setScalar(scale);
-        leaves1.castShadow = true;
-        tree.add(leaves1);
-        const leaves2 = new THREE.Mesh(oakLeafGeo2, rng() > 0.5 ? oakLeafMatDark : oakLeafMat);
-        leaves2.position.y = 3.8 * scale;
-        leaves2.scale.setScalar(scale);
-        leaves2.castShadow = true;
-        tree.add(leaves2);
+      // 2-3 branches with leaf clusters
+      const branchCount = 2 + Math.floor(rng() * 2);
+      for (let b = 0; b < branchCount; b++) {
+        const angle = (b / branchCount) * Math.PI * 2 + rng() * 0.5;
+        const branch = new THREE.Mesh(oakBranchGeo, oakTrunkMat);
+        const bh = 2.2 * scale + b * 0.4 * scale;
+        branch.position.set(Math.cos(angle) * 0.3 * scale, bh, Math.sin(angle) * 0.3 * scale);
+        branch.rotation.z = (rng() - 0.5) * 1.2;
+        branch.rotation.y = angle;
+        branch.scale.setScalar(scale);
+        branch.castShadow = true;
+        tree.add(branch);
+
+        // Leaf cluster at branch end
+        const leafSize = (0.6 + rng() * 0.5) * scale;
+        const leaf = new THREE.Mesh(oakLeafGeo, oakLeafMats[Math.floor(rng() * 3)]);
+        leaf.position.set(
+          Math.cos(angle) * 0.8 * scale,
+          bh + 0.5 * scale,
+          Math.sin(angle) * 0.8 * scale
+        );
+        leaf.scale.setScalar(leafSize);
+        leaf.castShadow = true;
+        tree.add(leaf);
+      }
+
+      // Top leaf cluster
+      const topLeaf = new THREE.Mesh(oakLeafGeo, oakLeafMats[Math.floor(rng() * 3)]);
+      topLeaf.position.y = 3.5 * scale;
+      topLeaf.scale.setScalar((0.8 + rng() * 0.4) * scale);
+      topLeaf.castShadow = true;
+      tree.add(topLeaf);
+
+      tree.position.set(tx, ty, tz);
+      tree.rotation.y = rng() * Math.PI * 2;
+      this.scene.add(tree);
+      this.environmentObjects.push(tree);
+      this.rockColliders.push({ position: new THREE.Vector3(tx, ty, tz), radius: 0.5, mesh: tree });
+      treePositions.push(new THREE.Vector3(tx, ty, tz));
+    }
+
+    // --- Pine Trees (20) ---
+    for (let i = 0; i < 20; i++) {
+      const tx = (rng() - 0.5) * ARENA.size * 0.85;
+      const tz = (rng() - 0.5) * ARENA.size * 0.85;
+      if (Math.abs(tx) < 8 && Math.abs(tz) < 8) continue;
+      const ty = this.getTerrainHeight(tx, tz);
+      const scale = 0.7 + rng() * 0.5;
+
+      const tree = new THREE.Group();
+      const trunk = new THREE.Mesh(pineTrunkGeo, pineTrunkMat);
+      trunk.position.y = 1.75 * scale;
+      trunk.scale.setScalar(scale);
+      trunk.castShadow = true;
+      tree.add(trunk);
+
+      // 3-4 layered cones
+      const layers = 3 + Math.floor(rng() * 2);
+      for (let l = 0; l < layers && l < pineLeafGeos.length; l++) {
+        const leaf = new THREE.Mesh(pineLeafGeos[l], pineLeafMats[Math.floor(rng() * 2)]);
+        leaf.position.y = (2.5 + l * 1.1) * scale;
+        leaf.scale.setScalar(scale);
+        leaf.castShadow = true;
+        tree.add(leaf);
       }
 
       tree.position.set(tx, ty, tz);
       tree.rotation.y = rng() * Math.PI * 2;
       this.scene.add(tree);
       this.environmentObjects.push(tree);
-      this.rockColliders.push({ position: new THREE.Vector3(tx, ty, tz), radius: 0.4, mesh: tree });
+      this.rockColliders.push({ position: new THREE.Vector3(tx, ty, tz), radius: 0.3, mesh: tree });
+      treePositions.push(new THREE.Vector3(tx, ty, tz));
     }
 
-    // Grass - increased to 350
-    const grassGeo = new THREE.PlaneGeometry(0.4, 0.6);
-    const grassMat = new THREE.MeshLambertMaterial({ color: 0x33aa44, side: THREE.DoubleSide });
-    const grassCount = Math.floor(350 * (0.8 + rng() * 0.4));
-    for (let i = 0; i < grassCount; i++) {
+    // --- Birch Trees (15) ---
+    for (let i = 0; i < 15; i++) {
+      const tx = (rng() - 0.5) * ARENA.size * 0.85;
+      const tz = (rng() - 0.5) * ARENA.size * 0.85;
+      if (Math.abs(tx) < 8 && Math.abs(tz) < 8) continue;
+      const ty = this.getTerrainHeight(tx, tz);
+      const scale = 0.7 + rng() * 0.4;
+
+      const tree = new THREE.Group();
+      const trunk = new THREE.Mesh(birchTrunkGeo, birchTrunkMat);
+      trunk.position.y = 1.4 * scale;
+      trunk.scale.setScalar(scale);
+      trunk.castShadow = true;
+      tree.add(trunk);
+
+      // 2-3 small leaf clusters
+      const clusterCount = 2 + Math.floor(rng() * 2);
+      for (let c = 0; c < clusterCount; c++) {
+        const leaf = new THREE.Mesh(birchLeafGeo, birchLeafMat);
+        leaf.position.set(
+          (rng() - 0.5) * 0.6 * scale,
+          (2.5 + c * 0.5) * scale,
+          (rng() - 0.5) * 0.6 * scale
+        );
+        leaf.scale.setScalar((0.5 + rng() * 0.3) * scale);
+        leaf.castShadow = true;
+        tree.add(leaf);
+      }
+
+      tree.position.set(tx, ty, tz);
+      tree.rotation.y = rng() * Math.PI * 2;
+      this.scene.add(tree);
+      this.environmentObjects.push(tree);
+      this.rockColliders.push({ position: new THREE.Vector3(tx, ty, tz), radius: 0.25, mesh: tree });
+      treePositions.push(new THREE.Vector3(tx, ty, tz));
+    }
+
+    // ===== GRASS TUFTS (400) =====
+    const grassMats = [
+      new THREE.MeshLambertMaterial({ color: 0x33aa44, side: THREE.DoubleSide }),
+      new THREE.MeshLambertMaterial({ color: 0x2d8a3e, side: THREE.DoubleSide }),
+      new THREE.MeshLambertMaterial({ color: 0x44bb55, side: THREE.DoubleSide }),
+    ];
+    const grassBladeGeo = new THREE.PlaneGeometry(0.05, 0.4);
+    for (let i = 0; i < 400; i++) {
       const gx = (rng() - 0.5) * ARENA.size * 0.9;
       const gz = (rng() - 0.5) * ARENA.size * 0.9;
       const gy = this.getTerrainHeight(gx, gz);
-      const grass = new THREE.Mesh(grassGeo, grassMat);
-      grass.position.set(gx, gy + 0.3, gz);
-      grass.rotation.y = rng() * Math.PI;
-      grass.rotation.x = -0.2;
-      this.scene.add(grass);
-      this.environmentObjects.push(grass);
+      const tuft = new THREE.Group();
+      const bladeCount = 3 + Math.floor(rng() * 3);
+      for (let b = 0; b < bladeCount; b++) {
+        const h = 0.3 + rng() * 0.2;
+        const blade = new THREE.Mesh(grassBladeGeo, grassMats[Math.floor(rng() * 3)]);
+        blade.position.set((rng() - 0.5) * 0.1, h * 0.5, (rng() - 0.5) * 0.1);
+        blade.rotation.y = rng() * Math.PI;
+        blade.rotation.x = (rng() - 0.5) * 0.4;
+        blade.scale.y = 0.7 + rng() * 0.6;
+        tuft.add(blade);
+      }
+      tuft.position.set(gx, gy, gz);
+      this.scene.add(tuft);
+      this.environmentObjects.push(tuft);
     }
 
-    // Mushrooms - increased to 50
-    const mushroomCapGeo = new THREE.SphereGeometry(0.2, 6, 4, 0, Math.PI * 2, 0, Math.PI / 2);
-    const mushroomStemGeo = new THREE.CylinderGeometry(0.06, 0.08, 0.2, 5);
-    const mushroomMats = [
-      new THREE.MeshLambertMaterial({ color: 0xcc3333 }),
-      new THREE.MeshLambertMaterial({ color: 0xddaa33 }),
-      new THREE.MeshLambertMaterial({ color: 0xaa66cc }),
-    ];
-    const stemMat = new THREE.MeshLambertMaterial({ color: 0xeeeecc });
-
-    const mushroomCount = Math.floor(50 * (0.8 + rng() * 0.4));
-    for (let i = 0; i < mushroomCount; i++) {
-      const mx = (rng() - 0.5) * ARENA.size * 0.8;
-      const mz = (rng() - 0.5) * ARENA.size * 0.8;
-      const my = this.getTerrainHeight(mx, mz);
-      const mushroom = new THREE.Group();
-      const stem = new THREE.Mesh(mushroomStemGeo, stemMat);
-      stem.position.y = 0.1;
-      mushroom.add(stem);
-      const cap = new THREE.Mesh(mushroomCapGeo, mushroomMats[i % 3]);
-      cap.position.y = 0.2;
-      mushroom.add(cap);
-      const s = 0.5 + rng() * 1;
-      mushroom.scale.setScalar(s);
-      mushroom.position.set(mx, my, mz);
-      this.scene.add(mushroom);
-      this.environmentObjects.push(mushroom);
-    }
-
-    // Flower patches - 40 colorful flowers
-    const flowerColors = [0xff69b4, 0xffff44, 0xff4444, 0x9966ff];
-    const flowerGeo = new THREE.SphereGeometry(0.08, 4, 4);
-    const flowerStemGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.2, 4);
+    // ===== FLOWERS (60) =====
+    const flowerHeadGeo = new THREE.SphereGeometry(0.06, 5, 4);
+    const flowerStemGeo = new THREE.CylinderGeometry(0.015, 0.02, 0.25, 4);
     const flowerStemMat = new THREE.MeshLambertMaterial({ color: 0x228833 });
-    const flowerMats = flowerColors.map(c => new THREE.MeshLambertMaterial({ color: c }));
-
-    const flowerCount = Math.floor(40 * (0.8 + rng() * 0.4));
-    for (let i = 0; i < flowerCount; i++) {
-      const fx = (Math.random() - 0.5) * ARENA.size * 0.85;
-      const fz = (Math.random() - 0.5) * ARENA.size * 0.85;
+    const flowerMats = [
+      new THREE.MeshLambertMaterial({ color: 0xffdd44 }),
+      new THREE.MeshLambertMaterial({ color: 0xffffff }),
+      new THREE.MeshLambertMaterial({ color: 0xaa44cc }),
+      new THREE.MeshLambertMaterial({ color: 0xff4444 }),
+    ];
+    for (let i = 0; i < 60; i++) {
+      const fx = (rng() - 0.5) * ARENA.size * 0.85;
+      const fz = (rng() - 0.5) * ARENA.size * 0.85;
       const fy = this.getTerrainHeight(fx, fz);
       const flower = new THREE.Group();
       const fStem = new THREE.Mesh(flowerStemGeo, flowerStemMat);
-      fStem.position.y = 0.1;
+      fStem.position.y = 0.125;
       flower.add(fStem);
-      const fHead = new THREE.Mesh(flowerGeo, flowerMats[Math.floor(Math.random() * flowerMats.length)]);
-      fHead.position.y = 0.22;
+      const headSize = 0.05 + rng() * 0.03;
+      const fHead = new THREE.Mesh(flowerHeadGeo, flowerMats[Math.floor(rng() * 4)]);
+      fHead.position.y = 0.27;
+      fHead.scale.setScalar(headSize / 0.06);
       flower.add(fHead);
       flower.position.set(fx, fy, fz);
       this.scene.add(flower);
       this.environmentObjects.push(flower);
     }
 
-    // Fallen logs - 15 horizontal brown cylinders
-    const logGeo = new THREE.CylinderGeometry(0.3, 0.3, 4, 6);
-    const logMat = new THREE.MeshLambertMaterial({ color: 0x553311 });
+    // ===== MUSHROOMS (30) =====
+    const mushroomCapGeo = new THREE.SphereGeometry(0.25, 7, 5, 0, Math.PI * 2, 0, Math.PI / 2);
+    const mushroomStemGeo = new THREE.CylinderGeometry(0.06, 0.1, 0.25, 6);
+    const stemMat = new THREE.MeshLambertMaterial({ color: 0xeeeecc });
+    const dotGeo = new THREE.SphereGeometry(0.03, 4, 3);
+    const dotMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const mushroomMats = [
+      new THREE.MeshLambertMaterial({ color: 0xff3333 }),
+      new THREE.MeshLambertMaterial({ color: 0xddaa33 }),
+      new THREE.MeshLambertMaterial({ color: 0xaa66cc }),
+    ];
+    for (let i = 0; i < 30; i++) {
+      const mx = (rng() - 0.5) * ARENA.size * 0.8;
+      const mz = (rng() - 0.5) * ARENA.size * 0.8;
+      const my = this.getTerrainHeight(mx, mz);
+      const mushroom = new THREE.Group();
+      const stem = new THREE.Mesh(mushroomStemGeo, stemMat);
+      stem.position.y = 0.125;
+      mushroom.add(stem);
+      const capMatIdx = Math.floor(rng() * 3);
+      const cap = new THREE.Mesh(mushroomCapGeo, mushroomMats[capMatIdx]);
+      cap.position.y = 0.25;
+      mushroom.add(cap);
+      // Red mushrooms get white dots
+      if (capMatIdx === 0) {
+        for (let d = 0; d < 4; d++) {
+          const da = (d / 4) * Math.PI * 2 + rng() * 0.5;
+          const dot = new THREE.Mesh(dotGeo, dotMat);
+          dot.position.set(Math.cos(da) * 0.15, 0.32, Math.sin(da) * 0.15);
+          mushroom.add(dot);
+        }
+      }
+      const s = 0.6 + rng() * 0.8;
+      mushroom.scale.setScalar(s);
+      mushroom.position.set(mx, my, mz);
+      this.scene.add(mushroom);
+      this.environmentObjects.push(mushroom);
+    }
 
-    const logCount = Math.floor(15 * (0.8 + rng() * 0.4));
-    for (let i = 0; i < logCount; i++) {
-      const lx = (Math.random() - 0.5) * ARENA.size * 0.8;
-      const lz = (Math.random() - 0.5) * ARENA.size * 0.8;
+    // ===== FALLEN LOGS (12) with moss & mushrooms =====
+    const logGeo = new THREE.CylinderGeometry(0.3, 0.35, 4, 7);
+    const logMat = new THREE.MeshLambertMaterial({ color: 0x553311 });
+    const logMossMat = new THREE.MeshLambertMaterial({ color: 0x2a5a2a });
+    for (let i = 0; i < 12; i++) {
+      const lx = (rng() - 0.5) * ARENA.size * 0.8;
+      const lz = (rng() - 0.5) * ARENA.size * 0.8;
       if (Math.abs(lx) < 5 && Math.abs(lz) < 5) continue;
       const ly = this.getTerrainHeight(lx, lz) + 0.15;
-      const log = new THREE.Mesh(logGeo, logMat);
-      log.position.set(lx, ly, lz);
-      log.rotation.z = Math.PI / 2;
-      log.rotation.y = Math.random() * Math.PI;
-      log.scale.x = 0.8 + Math.random() * 0.5; // vary length
-      log.castShadow = true;
-      log.receiveShadow = true;
-      this.scene.add(log);
-      this.environmentObjects.push(log);
+      const logGroup = new THREE.Group();
+      const logMesh = new THREE.Mesh(logGeo, logMat);
+      logMesh.rotation.z = Math.PI / 2;
+      logMesh.castShadow = true;
+      logMesh.receiveShadow = true;
+      logGroup.add(logMesh);
+
+      // Moss patches on log
+      for (let m = 0; m < 2 + Math.floor(rng() * 2); m++) {
+        const mossGeo = new THREE.SphereGeometry(0.15 + rng() * 0.1, 4, 3);
+        const mPatch = new THREE.Mesh(mossGeo, logMossMat);
+        mPatch.position.set((rng() - 0.5) * 1.5, 0.25, (rng() - 0.5) * 0.2);
+        mPatch.scale.y = 0.4;
+        logGroup.add(mPatch);
+      }
+      // Small mushrooms on log
+      for (let m = 0; m < 1 + Math.floor(rng() * 2); m++) {
+        const tinyMush = new THREE.Group();
+        const ts = new THREE.Mesh(mushroomStemGeo, stemMat);
+        ts.position.y = 0.05;
+        ts.scale.setScalar(0.4);
+        tinyMush.add(ts);
+        const tc = new THREE.Mesh(mushroomCapGeo, mushroomMats[Math.floor(rng() * 3)]);
+        tc.position.y = 0.12;
+        tc.scale.setScalar(0.4);
+        tinyMush.add(tc);
+        tinyMush.position.set((rng() - 0.5) * 1.2, 0.3, (rng() - 0.5) * 0.15);
+        logGroup.add(tinyMush);
+      }
+
+      logGroup.position.set(lx, ly, lz);
+      logGroup.rotation.y = rng() * Math.PI;
+      logGroup.scale.x = 0.8 + rng() * 0.5;
+      this.scene.add(logGroup);
+      this.environmentObjects.push(logGroup);
       this.rockColliders.push({ position: new THREE.Vector3(lx, ly, lz), radius: 0.5 });
     }
 
-    // Small ponds - 3-5 flat blue circles
-    const pondGeo = new THREE.CircleGeometry(1, 16);
-    const pondMat = new THREE.MeshLambertMaterial({ color: 0x3399ff, transparent: true, opacity: 0.4, side: THREE.DoubleSide });
-
+    // ===== PONDS (4) with stone borders =====
+    const pondGeo = new THREE.CircleGeometry(1, 24);
+    const pondMat = new THREE.MeshPhysicalMaterial({
+      color: 0x2244aa, transparent: true, opacity: 0.6,
+      roughness: 0.1, metalness: 0.3, side: THREE.DoubleSide,
+    });
+    const pondStoneMat = new THREE.MeshLambertMaterial({ color: 0x667766 });
     const pondCount = 3 + Math.floor(rng() * 3);
     for (let i = 0; i < pondCount; i++) {
-      const px = (Math.random() - 0.5) * ARENA.size * 0.7;
-      const pz = (Math.random() - 0.5) * ARENA.size * 0.7;
+      const px = (rng() - 0.5) * ARENA.size * 0.7;
+      const pz = (rng() - 0.5) * ARENA.size * 0.7;
       if (Math.abs(px) < 8 && Math.abs(pz) < 8) continue;
-      const py = this.getTerrainHeight(px, pz) + 0.05;
+      const py = this.getTerrainHeight(px, pz) + 0.02;
+      const pondScale = 3 + rng() * 2.5;
+
+      const pondGroup = new THREE.Group();
       const pond = new THREE.Mesh(pondGeo, pondMat);
-      pond.position.set(px, py, pz);
       pond.rotation.x = -Math.PI / 2;
-      const pondScale = 3 + Math.random() * 2;
       pond.scale.setScalar(pondScale);
       pond.receiveShadow = true;
-      this.scene.add(pond);
-      this.environmentObjects.push(pond);
+      pondGroup.add(pond);
+
+      // Stone border
+      const stoneCount = 8 + Math.floor(rng() * 5);
+      for (let s = 0; s < stoneCount; s++) {
+        const sa = (s / stoneCount) * Math.PI * 2;
+        const sr = pondScale * (0.9 + rng() * 0.2);
+        const stoneGeo = new THREE.DodecahedronGeometry(0.2 + rng() * 0.15, 0);
+        const stone = new THREE.Mesh(stoneGeo, pondStoneMat);
+        stone.position.set(Math.cos(sa) * sr, rng() * 0.1, Math.sin(sa) * sr);
+        stone.rotation.set(rng(), rng(), rng());
+        pondGroup.add(stone);
+      }
+
+      pondGroup.position.set(px, py, pz);
+      this.scene.add(pondGroup);
+      this.environmentObjects.push(pondGroup);
     }
 
-    // Firefly particles - 20 glowing spheres
-    const fireflyGeo = new THREE.SphereGeometry(0.06, 4, 4);
+    // ===== POINT LIGHTS (torch feel near tree clusters) =====
+    const lightPositions = treePositions.filter(() => rng() > 0.9).slice(0, 5);
+    for (const lp of lightPositions) {
+      const pl = new THREE.PointLight(0xffaa44, 0.5, 15);
+      pl.position.set(lp.x + (rng() - 0.5) * 2, lp.y + 2, lp.z + (rng() - 0.5) * 2);
+      this.scene.add(pl);
+      this.forestPointLights.push(pl);
+    }
+
+    // ===== FIREFLIES (30) =====
+    const fireflyGeo = new THREE.SphereGeometry(0.05, 4, 4);
     const fireflyMat = new THREE.MeshBasicMaterial({ color: 0xffff88 });
     this.fireflyParticles = [];
-    for (let i = 0; i < 20; i++) {
-      const fx = (Math.random() - 0.5) * ARENA.size * 0.8;
-      const fz = (Math.random() - 0.5) * ARENA.size * 0.8;
-      const fy = this.getTerrainHeight(fx, fz) + 1.5 + Math.random() * 2;
+    for (let i = 0; i < 30; i++) {
+      const fx = (rng() - 0.5) * ARENA.size * 0.8;
+      const fz = (rng() - 0.5) * ARENA.size * 0.8;
+      const fy = this.getTerrainHeight(fx, fz) + 1.5 + rng() * 2;
       const firefly = new THREE.Mesh(fireflyGeo, fireflyMat);
       firefly.position.set(fx, fy, fz);
       this.scene.add(firefly);
       this.environmentObjects.push(firefly);
-      this.fireflyParticles.push({ mesh: firefly, baseY: fy, phase: Math.random() * Math.PI * 2 });
+      this.fireflyParticles.push({ mesh: firefly, baseY: fy, phase: rng() * Math.PI * 2 });
     }
   }
 
@@ -2785,6 +2996,7 @@ export class GameEngine {
     this.updateSandstorm(cappedDt);
     this.updateMistWave(cappedDt);
     this.updateFireflies(cappedDt);
+    this.updateLeafParticles(cappedDt);
     this.updateVolcanic(cappedDt);
     this.updateLavaPlatforms(cappedDt);
     this.updateDesertSlide(cappedDt);
@@ -6904,6 +7116,54 @@ export class GameEngine {
       f.mesh.position.y = f.baseY + Math.sin(f.phase) * 0.5;
       f.mesh.position.x += Math.sin(f.phase * 0.7) * dt * 0.3;
       f.mesh.position.z += Math.cos(f.phase * 0.5) * dt * 0.3;
+    }
+  }
+
+  // ========== LEAF PARTICLES (FOREST) ==========
+
+  private updateLeafParticles(dt: number) {
+    if (this.selectedMap !== "forest") return;
+
+    // Spawn new leaf every 2-3 seconds
+    this.leafSpawnTimer += dt;
+    if (this.leafSpawnTimer > 2 + Math.random()) {
+      this.leafSpawnTimer = 0;
+      if (this.leafParticles.length < 15) {
+        const leafGeo = new THREE.PlaneGeometry(0.12, 0.08);
+        const leafColor = Math.random() > 0.5 ? 0x44aa33 : 0xaaaa22;
+        const leafMat = new THREE.MeshBasicMaterial({ color: leafColor, side: THREE.DoubleSide, transparent: true, opacity: 0.8 });
+        const leaf = new THREE.Mesh(leafGeo, leafMat);
+        const lx = (Math.random() - 0.5) * ARENA.size * 0.6;
+        const lz = (Math.random() - 0.5) * ARENA.size * 0.6;
+        const ly = this.getTerrainHeight(lx, lz) + 5 + Math.random() * 3;
+        leaf.position.set(lx, ly, lz);
+        this.scene.add(leaf);
+        this.leafParticles.push({
+          mesh: leaf,
+          velocity: new THREE.Vector3((Math.random() - 0.5) * 0.5, -0.4 - Math.random() * 0.3, (Math.random() - 0.5) * 0.5),
+          life: 0,
+          maxLife: 3 + Math.random() * 2,
+          phase: Math.random() * Math.PI * 2,
+        });
+      }
+    }
+
+    // Update existing leaves
+    for (let i = this.leafParticles.length - 1; i >= 0; i--) {
+      const lp = this.leafParticles[i];
+      lp.life += dt;
+      if (lp.life >= lp.maxLife) {
+        this.scene.remove(lp.mesh);
+        lp.mesh.geometry.dispose();
+        this.leafParticles.splice(i, 1);
+        continue;
+      }
+      lp.phase += dt * 2;
+      lp.mesh.position.x += lp.velocity.x * dt + Math.sin(lp.phase) * dt * 0.3;
+      lp.mesh.position.y += lp.velocity.y * dt;
+      lp.mesh.position.z += lp.velocity.z * dt + Math.cos(lp.phase * 0.7) * dt * 0.2;
+      lp.mesh.rotation.x += dt * 1.5;
+      lp.mesh.rotation.z += dt * 0.8;
     }
   }
 
