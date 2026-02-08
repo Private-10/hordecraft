@@ -95,7 +95,7 @@ export class GameEngine {
   private enemyMaterials: Record<string, THREE.MeshLambertMaterial> = {};
 
   // Rock colliders
-  private rockColliders: { position: THREE.Vector3; radius: number }[] = [];
+  private rockColliders: { position: THREE.Vector3; radius: number; mesh?: THREE.Object3D }[] = [];
 
   // Callbacks
   onStateChange?: (state: GameState) => void;
@@ -569,7 +569,7 @@ export class GameEngine {
       rock.receiveShadow = true;
       this.scene.add(rock);
       this.environmentObjects.push(rock);
-      this.rockColliders.push({ position: new THREE.Vector3(rx, ry, rz), radius: rockRadius * 0.8 });
+      this.rockColliders.push({ position: new THREE.Vector3(rx, ry, rz), radius: rockRadius * 0.8, mesh: rock });
     }
 
     // Shared tree geometries & materials
@@ -647,7 +647,7 @@ export class GameEngine {
       tree.rotation.y = rng() * Math.PI * 2;
       this.scene.add(tree);
       this.environmentObjects.push(tree);
-      this.rockColliders.push({ position: new THREE.Vector3(tx, ty, tz), radius: 0.4 });
+      this.rockColliders.push({ position: new THREE.Vector3(tx, ty, tz), radius: 0.4, mesh: tree });
     }
 
     // Grass - increased to 350
@@ -3087,40 +3087,11 @@ export class GameEngine {
     let camY = p.y + Math.sin(this.cameraPitch) * dist;
     let camZ = p.z + Math.cos(this.cameraYaw) * Math.cos(this.cameraPitch) * dist;
 
-    // Camera wall collision: prevent clipping through rocks
+    // Camera collision: make rocks/trees semi-transparent instead of zoom
+    // Just ensure camera stays above terrain — no zoom snapping
     {
-      const dirX = camX - p.x;
-      const dirY = camY - p.y;
-      const dirZ = camZ - p.z;
-      const camDist = Math.sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ);
-      if (camDist > 0.1) {
-        const ndx = dirX / camDist;
-        const ndy = dirY / camDist;
-        const ndz = dirZ / camDist;
-        let closestT = 1.0;
-        for (const rock of this.rockColliders) {
-          // Ray-sphere intersection: line from player to camera vs rock sphere
-          const ox = p.x - rock.position.x;
-          const oz = p.z - rock.position.z;
-          const a = ndx * ndx + ndz * ndz;
-          const b = 2 * (ox * ndx + oz * ndz);
-          const r = rock.radius + 0.5; // padding
-          const c = ox * ox + oz * oz - r * r;
-          const disc = b * b - 4 * a * c;
-          if (disc >= 0 && a > 0) {
-            const t = (-b - Math.sqrt(disc)) / (2 * a * camDist);
-            if (t > 0.05 && t < closestT) closestT = t;
-          }
-        }
-        if (closestT < 1.0) {
-          camX = p.x + dirX * closestT;
-          camY = p.y + dirY * closestT;
-          camZ = p.z + dirZ * closestT;
-        }
-      }
-      // Ensure camera stays above terrain
       const terrainAtCam = this.getTerrainHeight(camX, camZ);
-      if (camY < terrainAtCam + 1) camY = terrainAtCam + 1;
+      if (camY < terrainAtCam + 1.5) camY = terrainAtCam + 1.5;
     }
 
     // Apply screen shake
@@ -3133,6 +3104,31 @@ export class GameEngine {
 
     this.camera.position.lerp(this._tmpPos.set(camX, camY, camZ), CAMERA.smoothing);
     this.camera.lookAt(p.x, p.y + 1, p.z);
+
+    // Fade environment objects between camera and player
+    const camPos = this.camera.position;
+    const toCamX = camPos.x - p.x;
+    const toCamZ = camPos.z - p.z;
+    const camDistSq = toCamX * toCamX + toCamZ * toCamZ;
+    for (const obj of this.environmentObjects) {
+      const toObjX = obj.position.x - p.x;
+      const toObjZ = obj.position.z - p.z;
+      const dot = (toObjX * toCamX + toObjZ * toCamZ) / (camDistSq || 1);
+      const isInBetween = dot > 0.05 && dot < 0.95;
+      const projX = p.x + toCamX * dot;
+      const projZ = p.z + toCamZ * dot;
+      const perpDistSq = (obj.position.x - projX) ** 2 + (obj.position.z - projZ) ** 2;
+      const shouldFade = isInBetween && perpDistSq < 4; // within 2 units of camera line
+
+      const targetOpacity = shouldFade ? 0.15 : 1.0;
+      obj.traverse((child: THREE.Object3D) => {
+        if (child instanceof THREE.Mesh && child.material) {
+          const mat = child.material as THREE.MeshStandardMaterial | THREE.MeshBasicMaterial;
+          if (!mat.transparent) mat.transparent = true;
+          mat.opacity += (targetOpacity - mat.opacity) * 0.08;
+        }
+      });
+    }
   }
 
   // ========== ENEMY SYSTEM ==========
