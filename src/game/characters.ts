@@ -58,7 +58,7 @@ export const CHARACTERS: CharacterDef[] = [
     critChance: 0.1,
     armor: 0,
     magnetRange: 4,
-    startWeapon: "arcaneOrb",
+    startWeapon: "lightningArc",
     unlock: { isDefault: false, unlockCondition: "unlock.mage", unlockCost: 500, checkUnlocked: (a) => a.maxKills >= 100 },
   },
   {

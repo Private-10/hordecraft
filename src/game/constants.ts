@@ -154,11 +154,11 @@ export const WEAPONS = {
   arcaneOrb: {
     name: "Arcane Orb",
     icon: "🔮",
-    baseDamage: 6,
-    fireRate: 0.2,
-    speed: 3,
-    range: 3,
-    duration: 5000,
+    baseDamage: 15,
+    fireRate: 0.25,
+    speed: 4,
+    range: 4.5,
+    duration: 6000,
   },
 };
 
