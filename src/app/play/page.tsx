@@ -10,7 +10,7 @@ import type { MetaState } from "@/game/types";
 import { getActiveNickname, registerNickname, claimNickname, isNicknameClaimed, logoutNickname } from "@/game/nickname";
 import { loadMetaFromCloud, mergeMetaStates } from "@/game/cloud-save";
 import { secureSet, secureGet } from "@/game/storage";
-import { collection, addDoc, query, orderBy, limit as fbLimit, onSnapshot } from "firebase/firestore";
+import { collection, addDoc, query, orderBy, limit as fbLimit, onSnapshot, doc, setDoc, deleteDoc, where, getDocs } from "firebase/firestore";
 import { db } from "@/game/firebase";
 
 export default function PlayPage() {
@@ -60,6 +60,8 @@ export default function PlayPage() {
   const [chatInput, setChatInput] = useState("");
   const [chatCooldown, setChatCooldown] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const [onlineCount, setOnlineCount] = useState(0);
+  const presenceIdRef = useRef<string>("");
 
   const submitScore = async (data: Record<string, unknown>) => {
     try {
@@ -352,6 +354,46 @@ export default function PlayPage() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages, showChat]);
 
+  // Presence tracking + online count
+  useEffect(() => {
+    // Generate session ID
+    const sessionId = `user_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    presenceIdRef.current = sessionId;
+    const presenceRef = doc(db, "presence", sessionId);
+
+    // Write presence
+    const writePresence = () => {
+      setDoc(presenceRef, { timestamp: Date.now() }).catch(() => {});
+    };
+    writePresence();
+    const presenceInterval = setInterval(writePresence, 30000);
+
+    // Query online count
+    const fetchOnlineCount = async () => {
+      try {
+        const cutoff = Date.now() - 120000;
+        const q = query(collection(db, "presence"), where("timestamp", ">", cutoff));
+        const snap = await getDocs(q);
+        setOnlineCount(snap.size);
+      } catch {}
+    };
+    fetchOnlineCount();
+    const countInterval = setInterval(fetchOnlineCount, 15000);
+
+    // Cleanup on unload
+    const cleanup = () => {
+      deleteDoc(presenceRef).catch(() => {});
+    };
+    window.addEventListener("beforeunload", cleanup);
+
+    return () => {
+      clearInterval(presenceInterval);
+      clearInterval(countInterval);
+      window.removeEventListener("beforeunload", cleanup);
+      cleanup();
+    };
+  }, []);
+
   const nickColor = (name: string) => {
     let h = 0;
     for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
@@ -468,6 +510,25 @@ export default function PlayPage() {
             <div className="menu-hero">
               <h1 className="menu-title">HORDECRAFT</h1>
               <p className="menu-subtitle">{t("menu.subtitle")}</p>
+              {onlineCount > 0 && (
+                <div style={{
+                  marginTop: 8,
+                  fontSize: 13,
+                  color: "rgba(255,255,255,0.6)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                }}>
+                  <span style={{
+                    width: 8, height: 8, borderRadius: "50%",
+                    background: "#44ff44",
+                    boxShadow: "0 0 6px #44ff44",
+                    display: "inline-block",
+                  }} />
+                  {onlineCount} {lang === "tr" ? "oyuncu çevrimiçi" : "players online"}
+                </div>
+              )}
             </div>
 
             {/* Character Selection */}
