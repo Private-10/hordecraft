@@ -58,12 +58,39 @@ export async function GET(req: NextRequest) {
       promises.push(setDoc(doc(db, "presence", presId), { timestamp: Date.now() }));
     }
 
+    // Bot chat messages (2-5 messages)
+    const chatMessages = [
+      "gg", "bu oyun efsane", "boss çok zor", "necromancer op",
+      "kim 20dk geçti?", "lvl 30 geldim 💪", "slime'lar çok kolay",
+      "desert haritası zor", "knight en iyi karakter", "combo x5 yaptım",
+      "yeni güncelleme süper", "sıralama kaçıncıyım", "berserker deneyin",
+      "fire trail op silah", "ilk boss'u yendim!",
+      "good game", "this game is addictive", "mage is underrated",
+      "just hit 1000 kills", "how do I unlock desert?",
+      "frost nova + orbit blade combo 🔥", "anyone beat shadow lord?",
+      "rogue speed is insane", "priest heal op", "nice game 👍",
+    ];
+    const chatCount = Math.floor(Math.random() * 4) + 2;
+    const chatNickColors = ["#ff6b6b","#4ecdc4","#ffe66d","#a8e6cf","#ff8a80","#82b1ff","#b388ff","#f48fb1"];
+    for (let i = 0; i < chatCount; i++) {
+      const chatNick = scores[i % scores.length]?.nickname || NAMED_BOTS[Math.floor(Math.random() * NAMED_BOTS.length)];
+      const msg = chatMessages[Math.floor(Math.random() * chatMessages.length)];
+      const color = chatNickColors[Math.floor(Math.random() * chatNickColors.length)];
+      promises.push(addDoc(collection(db, "chat"), {
+        nickname: chatNick,
+        text: msg,
+        timestamp: Date.now() - Math.floor(Math.random() * 60000),
+        color,
+      }));
+    }
+
     await Promise.all(promises);
 
     return NextResponse.json({
       success: true,
       scoresGenerated: scoreCount,
       presenceBots: presenceCount,
+      chatMessages: chatCount,
       scores: scores.map(s => ({ nickname: s.nickname, score: s.score })),
     });
   } catch (error) {

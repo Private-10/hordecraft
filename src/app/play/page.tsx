@@ -10,7 +10,7 @@ import type { MetaState } from "@/game/types";
 import { getActiveNickname, registerNickname, claimNickname, isNicknameClaimed, logoutNickname } from "@/game/nickname";
 import { loadMetaFromCloud, mergeMetaStates } from "@/game/cloud-save";
 import { secureSet, secureGet } from "@/game/storage";
-import { collection, addDoc, query, orderBy, limit as fbLimit, onSnapshot, doc, setDoc, deleteDoc, where, getDocs } from "firebase/firestore";
+import { collection, addDoc, query, orderBy, limit as fbLimit, onSnapshot, doc, setDoc, deleteDoc, getDocs } from "firebase/firestore";
 import { db } from "@/game/firebase";
 
 export default function PlayPage() {
@@ -368,14 +368,15 @@ export default function PlayPage() {
     writePresence();
     const presenceInterval = setInterval(writePresence, 30000);
 
-    // Query online count
+    // Query online count (fetch all, filter client-side to avoid index requirement)
     const fetchOnlineCount = async () => {
       try {
+        const snap = await getDocs(collection(db, "presence"));
         const cutoff = Date.now() - 120000;
-        const q = query(collection(db, "presence"), where("timestamp", ">", cutoff));
-        const snap = await getDocs(q);
-        setOnlineCount(snap.size);
-      } catch {}
+        let count = 0;
+        snap.forEach(d => { if (d.data().timestamp > cutoff) count++; });
+        setOnlineCount(Math.max(1, count)); // at least 1 (self)
+      } catch { setOnlineCount(1); }
     };
     fetchOnlineCount();
     const countInterval = setInterval(fetchOnlineCount, 15000);
@@ -510,7 +511,7 @@ export default function PlayPage() {
             <div className="menu-hero">
               <h1 className="menu-title">HORDECRAFT</h1>
               <p className="menu-subtitle">{t("menu.subtitle")}</p>
-              {onlineCount > 0 && (
+              {(
                 <div style={{
                   marginTop: 8,
                   fontSize: 13,
