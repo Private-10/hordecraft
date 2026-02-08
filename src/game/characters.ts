@@ -75,7 +75,7 @@ export const CHARACTERS: CharacterDef[] = [
     critChance: 0.2,
     armor: 0,
     magnetRange: 3,
-    startWeapon: "shadowDagger",
+    startWeapon: "shuriken",
     unlock: { isDefault: false, unlockCondition: "unlock.rogue", unlockCost: 200, checkUnlocked: (a) => a.totalRuns >= 1 },
   },
   {

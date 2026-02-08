@@ -4230,10 +4230,10 @@ export class GameEngine {
             weapon.timer = (1 / WEAPONS.holySmite.fireRate) * cdReduction;
           }
           break;
-        case "shadowDagger":
+        case "shuriken":
           if (weapon.timer <= 0) {
-            this.fireShadowDagger(weapon);
-            weapon.timer = (1 / WEAPONS.shadowDagger.fireRate) * cdReduction;
+            this.fireShuriken(weapon);
+            weapon.timer = (1 / WEAPONS.shuriken.fireRate) * cdReduction;
           }
           break;
         case "bloodAxe":
@@ -4748,11 +4748,25 @@ export class GameEngine {
     }
   }
 
-  private fireShadowDagger(weapon: WeaponState) {
-    const w = WEAPONS.shadowDagger;
+  private fireShuriken(weapon: WeaponState) {
+    const w = WEAPONS.shuriken;
     const evolved = weapon.level >= 6;
-    const count = evolved ? 3 : w.baseCount + Math.floor((weapon.level - 1) / 2);
-    const damage = w.baseDamage * (1 + (weapon.level - 1) * 0.2) * this.player.damageMultiplier;
+    const damage = w.baseDamage * (1 + (weapon.level - 1) * 0.25) * this.player.damageMultiplier;
+
+    if (evolved) {
+      // Max level / evolved: fire 8 shurikens in all directions
+      const count = 8;
+      for (let i = 0; i < count; i++) {
+        const angle = (i / count) * Math.PI * 2;
+        const fx = Math.sin(angle);
+        const fz = Math.cos(angle);
+        this.spawnShurikenProjectile(fx, fz, damage * 1.5, true, w);
+      }
+      return;
+    }
+
+    // Normal: fire at nearest enemy(s)
+    const count = w.baseCount + Math.floor((weapon.level - 1) / 2);
 
     // Find nearest enemy
     let nearest: EnemyInstance | null = null;
@@ -4766,43 +4780,56 @@ export class GameEngine {
 
     for (let c = 0; c < count; c++) {
       const dir = this._tmpDir.set(nearest.position.x - this.player.position.x, 0, nearest.position.z - this.player.position.z).normalize();
-      // Slight spread for multi-daggers
-      const spreadAngle = (c - (count - 1) / 2) * 0.15;
+      const spreadAngle = (c - (count - 1) / 2) * 0.2;
       const cos = Math.cos(spreadAngle), sin = Math.sin(spreadAngle);
       const fx = dir.x * cos - dir.z * sin;
       const fz = dir.x * sin + dir.z * cos;
-
-      const mesh = new THREE.Mesh(
-        new THREE.ConeGeometry(0.1, 0.6, 4),
-        new THREE.MeshBasicMaterial({ color: evolved ? 0x440066 : 0x333355, transparent: true, opacity: 0.8 })
-      );
-      mesh.position.copy(this.player.position);
-      mesh.position.y += 1;
-      mesh.lookAt(mesh.position.x + fx, mesh.position.y, mesh.position.z + fz);
-      this.scene.add(mesh);
-
-      // Check backstab: is enemy facing away from player?
-      const enemyFwd = this._tmpVec.set(Math.sin(nearest.mesh.rotation.y), 0, Math.cos(nearest.mesh.rotation.y));
-      const toEnemy = this._tmpVec2.set(fx, 0, fz).normalize();
-      const dot = enemyFwd.dot(toEnemy);
-      const isBackstab = dot > 0.3 || evolved; // same direction = backstab
-
-      const critRoll = Math.random() < (w.critChance + this.player.critChance) ? 2 : 1;
-      const backstabMul = isBackstab ? w.backstabMultiplier : 1;
-      const finalDmg = damage * critRoll * backstabMul;
-
-      this.projectiles.push({
-        id: this.nextProjId++,
-        position: mesh.position.clone(),
-        velocity: new THREE.Vector3(fx * w.speed, 0, fz * w.speed),
-        damage: finalDmg,
-        mesh,
-        isAlive: true,
-        lifetime: w.range / w.speed,
-        penetration: evolved ? 3 : 0,
-        hitEnemies: new Set(),
-      });
+      this.spawnShurikenProjectile(fx, fz, damage, false, w);
     }
+  }
+
+  private spawnShurikenProjectile(fx: number, fz: number, damage: number, evolved: boolean, w: typeof WEAPONS.shuriken) {
+    // Round shuriken: torus (ring shape)
+    const shurikenGroup = new THREE.Group();
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(evolved ? 0.5 : 0.4, 0.08, 6, 12),
+      new THREE.MeshBasicMaterial({ color: evolved ? 0x8800ff : 0x888899, transparent: true, opacity: 0.9 })
+    );
+    ring.rotation.x = Math.PI / 2; // flat horizontal
+    shurikenGroup.add(ring);
+
+    // Add 4 blade points
+    for (let i = 0; i < 4; i++) {
+      const bladeAngle = (i / 4) * Math.PI * 2;
+      const blade = new THREE.Mesh(
+        new THREE.ConeGeometry(0.06, evolved ? 0.35 : 0.25, 3),
+        new THREE.MeshBasicMaterial({ color: evolved ? 0xaa44ff : 0xaaaacc })
+      );
+      const r = evolved ? 0.5 : 0.4;
+      blade.position.set(Math.cos(bladeAngle) * r, 0, Math.sin(bladeAngle) * r);
+      blade.rotation.z = -bladeAngle + Math.PI / 2;
+      blade.rotation.x = Math.PI / 2;
+      shurikenGroup.add(blade);
+    }
+
+    shurikenGroup.position.copy(this.player.position);
+    shurikenGroup.position.y += 1;
+    this.scene.add(shurikenGroup);
+
+    const critRoll = Math.random() < (w.critChance + this.player.critChance) ? 2 : 1;
+
+    this.projectiles.push({
+      id: this.nextProjId++,
+      position: shurikenGroup.position.clone(),
+      velocity: new THREE.Vector3(fx * w.speed, 0, fz * w.speed),
+      damage: damage * critRoll,
+      mesh: shurikenGroup,
+      isAlive: true,
+      lifetime: w.range / w.speed,
+      penetration: evolved ? 5 : 1,
+      hitEnemies: new Set(),
+      spinSpeed: evolved ? 20 : 15,
+    } as any);
   }
 
   private fireBloodAxe(weapon: WeaponState) {
@@ -5053,8 +5080,13 @@ export class GameEngine {
       this._tmpVec.copy(proj.velocity).multiplyScalar(dt);
       proj.position.add(this._tmpVec);
       proj.mesh.position.copy(proj.position);
-      proj.mesh.rotation.x += dt * 10; // spin
-      proj.mesh.rotation.z += dt * 8;
+      // Shuriken spins flat (Y axis), others spin on X/Z
+      if ((proj as any).spinSpeed) {
+        proj.mesh.rotation.y += dt * (proj as any).spinSpeed;
+      } else {
+        proj.mesh.rotation.x += dt * 10; // spin
+        proj.mesh.rotation.z += dt * 8;
+      }
       proj.lifetime -= dt;
 
       // Trail particles for bone projectiles
@@ -5076,7 +5108,7 @@ export class GameEngine {
         const phdx = proj.position.x - enemy.position.x;
         const phdz = proj.position.z - enemy.position.z;
         const phdy = proj.position.y - enemy.position.y;
-        const phR = enemy.radius + 0.2;
+        const phR = enemy.radius + ((proj as any).spinSpeed ? 0.6 : 0.2);
         if (phdx * phdx + phdz * phdz + phdy * phdy < phR * phR) {
           this.damageEnemy(enemy, proj.damage);
           proj.hitEnemies.add(enemy.id);
@@ -5625,7 +5657,7 @@ export class GameEngine {
       const owned = new Set(this.weapons.map(w => w.id));
       const charId = this.selectedCharacter.id;
       const characterWeapons: Record<string, string> = {
-        priest: "holySmite", rogue: "shadowDagger", berserker: "bloodAxe",
+        priest: "holySmite", rogue: "shuriken", berserker: "bloodAxe",
         necromancer: "soulHarvest", mage: "arcaneOrb",
       };
       const allWeapons = [
@@ -5637,7 +5669,7 @@ export class GameEngine {
         { id: "voidVortex", ...WEAPONS.voidVortex },
         // Character-specific weapons only appear for their character
         ...(charId === "priest" ? [{ id: "holySmite", ...WEAPONS.holySmite }] : []),
-        ...(charId === "rogue" ? [{ id: "shadowDagger", ...WEAPONS.shadowDagger }] : []),
+        ...(charId === "rogue" ? [{ id: "shuriken", ...WEAPONS.shuriken }] : []),
         ...(charId === "berserker" ? [{ id: "bloodAxe", ...WEAPONS.bloodAxe }] : []),
         ...(charId === "necromancer" ? [{ id: "soulHarvest", ...WEAPONS.soulHarvest }] : []),
         ...(charId === "mage" ? [{ id: "arcaneOrb", ...WEAPONS.arcaneOrb }] : []),
@@ -5730,7 +5762,7 @@ export class GameEngine {
       case "frostNova": return "+çap, +yavaşlatma";
       case "voidVortex": return "+çap, +çekim gücü";
       case "holySmite": return "+çap, +iyileştirme";
-      case "shadowDagger": return "+hız, +kritik";
+      case "shuriken": return "+shuriken, +kritik";
       case "bloodAxe": return "+hasar, +can emme";
       case "soulHarvest": return "+patlama, +ruh çapı";
       case "arcaneOrb": return "+süre, +hasar";

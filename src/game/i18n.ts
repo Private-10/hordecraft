@@ -104,7 +104,7 @@ const translations = {
 
   // New character-specific weapons
   "upgrade.holySmite": { tr: "+çap, +iyileştirme", en: "+range, +healing" },
-  "upgrade.shadowDagger": { tr: "+hız, +kritik şans", en: "+speed, +crit chance" },
+  "upgrade.shuriken": { tr: "+shuriken, +kritik şans", en: "+shuriken, +crit chance" },
   "upgrade.bloodAxe": { tr: "+hasar, +can emme", en: "+damage, +lifesteal" },
   "upgrade.soulHarvest": { tr: "+ruh çapı, +patlama hasarı", en: "+soul radius, +blast damage" },
   "upgrade.arcaneOrb": { tr: "+süre, +hasar", en: "+duration, +damage" },
