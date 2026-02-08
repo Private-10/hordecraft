@@ -43,16 +43,65 @@ export const ENEMIES = {
   necromancer: { hp: 60, speed: 3, damage: 15, xp: 25, radius: 0.5, color: 0x663399 },
   troll: { hp: 200, speed: 2.5, damage: 35, xp: 35, radius: 0.8, color: 0x447744 },
   shaman: { hp: 40, speed: 3.5, damage: 8, xp: 30, radius: 0.4, color: 0xaa8833 },
-  // Bosses
+  // Bosses (legacy fallback)
   stoneGolem: { hp: 800, speed: 1.2, damage: 40, xp: 200, radius: 1.8, color: 0x888888 },
   fireWraith: { hp: 1200, speed: 1.5, damage: 50, xp: 350, radius: 1.5, color: 0xff4400 },
   shadowLord: { hp: 2000, speed: 1.8, damage: 65, xp: 500, radius: 1.6, color: 0x440066 },
+  // Map-specific bosses
+  treantGuardian: { hp: 400, speed: 1.5, damage: 20, xp: 100, radius: 1.2, color: 0x228833 },
+  ancientOak: { hp: 1200, speed: 1.0, damage: 45, xp: 300, radius: 2.0, color: 0x1a5c1a },
+  forestWarden: { hp: 2500, speed: 1.6, damage: 60, xp: 600, radius: 1.8, color: 0x33aa33 },
+  sandScorpion: { hp: 400, speed: 4.0, damage: 18, xp: 100, radius: 1.0, color: 0xaa8833 },
+  desertColossus: { hp: 1200, speed: 1.2, damage: 50, xp: 300, radius: 2.2, color: 0xbbaa77 },
+  sandstormDjinn: { hp: 2500, speed: 2.0, damage: 55, xp: 600, radius: 1.6, color: 0xccaa33 },
+  magmaSlime: { hp: 400, speed: 2.5, damage: 22, xp: 100, radius: 1.3, color: 0xff6600 },
+  obsidianGolem: { hp: 1200, speed: 1.2, damage: 48, xp: 300, radius: 2.0, color: 0x1a1a1a },
+  infernoDragon: { hp: 2500, speed: 1.8, damage: 65, xp: 600, radius: 2.0, color: 0xff2200 },
+  frostWolfAlpha: { hp: 400, speed: 4.5, damage: 20, xp: 100, radius: 1.0, color: 0xaaddff },
+  iceGolem: { hp: 1200, speed: 1.3, damage: 45, xp: 300, radius: 2.0, color: 0x88ccff },
+  blizzardTitan: { hp: 2500, speed: 1.5, damage: 60, xp: 600, radius: 2.2, color: 0xeeeeff },
 };
 
 export const BOSSES = {
   stoneGolem: { spawnMinute: 5, name: "Stone Golem", nametr: "Taş Golem", slamInterval: 4, slamRadius: 6, slamDamage: 30 },
   fireWraith: { spawnMinute: 10, name: "Fire Wraith", nametr: "Ateş Hayaleti", slamInterval: 3, slamRadius: 7, slamDamage: 40 },
   shadowLord: { spawnMinute: 15, name: "Shadow Lord", nametr: "Gölge Lordu", slamInterval: 2.5, slamRadius: 8, slamDamage: 55 },
+};
+
+// Map-specific boss schedules
+export const MAP_BOSSES: Record<string, { type: string; spawnMinute: number; isMini: boolean; name: string; nametr: string; slamInterval: number; slamRadius: number; slamDamage: number }[]> = {
+  forest: [
+    { type: "treantGuardian", spawnMinute: 3, isMini: true, name: "Treant Guardian", nametr: "Treant Muhafız", slamInterval: 4, slamRadius: 5, slamDamage: 20 },
+    { type: "ancientOak", spawnMinute: 7, isMini: false, name: "Ancient Oak", nametr: "Kadim Meşe", slamInterval: 3.5, slamRadius: 7, slamDamage: 35 },
+    { type: "treantGuardian", spawnMinute: 8, isMini: true, name: "Treant Guardian", nametr: "Treant Muhafız", slamInterval: 4, slamRadius: 5, slamDamage: 20 },
+    { type: "ancientOak", spawnMinute: 12, isMini: false, name: "Ancient Oak", nametr: "Kadim Meşe", slamInterval: 3.5, slamRadius: 7, slamDamage: 35 },
+    { type: "treantGuardian", spawnMinute: 13, isMini: true, name: "Treant Guardian", nametr: "Treant Muhafız", slamInterval: 4, slamRadius: 5, slamDamage: 20 },
+    { type: "forestWarden", spawnMinute: 15, isMini: false, name: "Forest Warden", nametr: "Orman Koruyucu", slamInterval: 3, slamRadius: 8, slamDamage: 50 },
+  ],
+  desert: [
+    { type: "sandScorpion", spawnMinute: 3, isMini: true, name: "Sand Scorpion", nametr: "Kum Akrebi", slamInterval: 3, slamRadius: 4, slamDamage: 18 },
+    { type: "desertColossus", spawnMinute: 7, isMini: false, name: "Desert Colossus", nametr: "Çöl Devi", slamInterval: 4, slamRadius: 7, slamDamage: 40 },
+    { type: "sandScorpion", spawnMinute: 8, isMini: true, name: "Sand Scorpion", nametr: "Kum Akrebi", slamInterval: 3, slamRadius: 4, slamDamage: 18 },
+    { type: "desertColossus", spawnMinute: 12, isMini: false, name: "Desert Colossus", nametr: "Çöl Devi", slamInterval: 4, slamRadius: 7, slamDamage: 40 },
+    { type: "sandScorpion", spawnMinute: 13, isMini: true, name: "Sand Scorpion", nametr: "Kum Akrebi", slamInterval: 3, slamRadius: 4, slamDamage: 18 },
+    { type: "sandstormDjinn", spawnMinute: 15, isMini: false, name: "Sandstorm Djinn", nametr: "Kum Fırtınası Cini", slamInterval: 2.5, slamRadius: 8, slamDamage: 50 },
+  ],
+  volcanic: [
+    { type: "magmaSlime", spawnMinute: 3, isMini: true, name: "Magma Slime", nametr: "Magma Balçığı", slamInterval: 3.5, slamRadius: 5, slamDamage: 22 },
+    { type: "obsidianGolem", spawnMinute: 7, isMini: false, name: "Obsidian Golem", nametr: "Obsidyen Golem", slamInterval: 4, slamRadius: 7, slamDamage: 40 },
+    { type: "magmaSlime", spawnMinute: 8, isMini: true, name: "Magma Slime", nametr: "Magma Balçığı", slamInterval: 3.5, slamRadius: 5, slamDamage: 22 },
+    { type: "obsidianGolem", spawnMinute: 12, isMini: false, name: "Obsidian Golem", nametr: "Obsidyen Golem", slamInterval: 4, slamRadius: 7, slamDamage: 40 },
+    { type: "magmaSlime", spawnMinute: 13, isMini: true, name: "Magma Slime", nametr: "Magma Balçığı", slamInterval: 3.5, slamRadius: 5, slamDamage: 22 },
+    { type: "infernoDragon", spawnMinute: 15, isMini: false, name: "Inferno Dragon", nametr: "Cehennem Ejderhası", slamInterval: 2.5, slamRadius: 9, slamDamage: 55 },
+  ],
+  frozen: [
+    { type: "frostWolfAlpha", spawnMinute: 3, isMini: true, name: "Frost Wolf Alpha", nametr: "Buz Kurdu Alfa", slamInterval: 3, slamRadius: 4, slamDamage: 20 },
+    { type: "iceGolem", spawnMinute: 7, isMini: false, name: "Ice Golem", nametr: "Buz Golem", slamInterval: 4, slamRadius: 7, slamDamage: 38 },
+    { type: "frostWolfAlpha", spawnMinute: 8, isMini: true, name: "Frost Wolf Alpha", nametr: "Buz Kurdu Alfa", slamInterval: 3, slamRadius: 4, slamDamage: 20 },
+    { type: "iceGolem", spawnMinute: 12, isMini: false, name: "Ice Golem", nametr: "Buz Golem", slamInterval: 4, slamRadius: 7, slamDamage: 38 },
+    { type: "frostWolfAlpha", spawnMinute: 13, isMini: true, name: "Frost Wolf Alpha", nametr: "Buz Kurdu Alfa", slamInterval: 3, slamRadius: 4, slamDamage: 20 },
+    { type: "blizzardTitan", spawnMinute: 15, isMini: false, name: "Blizzard Titan", nametr: "Kar Fırtınası Titanı", slamInterval: 2.5, slamRadius: 9, slamDamage: 55 },
+  ],
 };
 
 export const WEAPONS = {

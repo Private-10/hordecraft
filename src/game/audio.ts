@@ -308,20 +308,20 @@ export function startMusic() {
     const t = c.currentTime;
     const intensity = musicIntensity;
 
-    // Tempo scales with intensity: 4s (calm) → 1.5s (intense)
-    const measureDuration = 4 - intensity * 2.5;
-    const fadeOut = measureDuration * 0.1;
+    // Tempo: 4s (calm) → 2.2s (intense) — not too fast
+    const measureDuration = 4 - intensity * 1.8;
+    const fadeOut = measureDuration * 0.12;
 
     // Blend between calm and tense notes
     const bassFreq = calmBass[noteIdx] * (1 - intensity) + tenseBass[noteIdx] * intensity;
     const padFreq = calmPad[noteIdx] * (1 - intensity) + tensePad[noteIdx] * intensity;
 
-    // Bass — gets louder and more distorted with intensity
+    // Bass — always sine (no harsh sawtooth), slightly louder at low HP
     const bass = c.createOscillator();
     const bassG = c.createGain();
-    bass.type = intensity > 0.6 ? "sawtooth" : "sine";
+    bass.type = "sine";
     bass.frequency.value = bassFreq;
-    const bassVol = 0.12 + intensity * 0.12;
+    const bassVol = 0.10 + intensity * 0.06;
     bassG.gain.setValueAtTime(bassVol, t);
     bassG.gain.setValueAtTime(bassVol, t + measureDuration - fadeOut);
     bassG.gain.linearRampToValueAtTime(0, t + measureDuration);
@@ -331,24 +331,14 @@ export function startMusic() {
     bass.stop(t + measureDuration);
     musicOscillators.push(bass);
 
-    // Pad — higher intensity = tremolo effect
+    // Pad — gentle, no tremolo spam. Just shifts to minor at high intensity
     const pad = c.createOscillator();
     const padG = c.createGain();
     pad.type = "triangle";
     pad.frequency.value = padFreq;
-    const padVol = 0.04 + intensity * 0.06;
+    const padVol = 0.04 + intensity * 0.03;
     padG.gain.setValueAtTime(0, t);
-    padG.gain.linearRampToValueAtTime(padVol, t + measureDuration * 0.15);
-    if (intensity > 0.4) {
-      // Tremolo — pulsing volume
-      const tremoloRate = 4 + intensity * 12;
-      for (let ti = 0; ti < measureDuration; ti += 1 / tremoloRate) {
-        const tv = t + ti;
-        if (tv > t + measureDuration - fadeOut) break;
-        padG.gain.setValueAtTime(padVol, tv);
-        padG.gain.linearRampToValueAtTime(padVol * 0.3, tv + 0.5 / tremoloRate);
-      }
-    }
+    padG.gain.linearRampToValueAtTime(padVol, t + measureDuration * 0.2);
     padG.gain.setValueAtTime(padVol, t + measureDuration - fadeOut);
     padG.gain.linearRampToValueAtTime(0, t + measureDuration);
     pad.connect(padG);
@@ -357,12 +347,12 @@ export function startMusic() {
     pad.stop(t + measureDuration);
     musicOscillators.push(pad);
 
-    // Sub bass
+    // Sub bass — gentle rumble
     const sub = c.createOscillator();
     const subG = c.createGain();
     sub.type = "sine";
     sub.frequency.value = bassFreq / 2;
-    const subVol = 0.06 + intensity * 0.08;
+    const subVol = 0.05 + intensity * 0.04;
     subG.gain.setValueAtTime(subVol, t);
     subG.gain.setValueAtTime(subVol, t + measureDuration - fadeOut);
     subG.gain.linearRampToValueAtTime(0, t + measureDuration);
@@ -372,46 +362,52 @@ export function startMusic() {
     sub.stop(t + measureDuration);
     musicOscillators.push(sub);
 
-    // Heartbeat kick when HP < 30% (intensity > 0.7)
-    if (intensity > 0.7) {
-      const kickRate = intensity > 0.9 ? 0.3 : 0.5; // faster heartbeat near death
-      for (let ki = 0; ki < measureDuration - 0.2; ki += kickRate) {
-        const kick = c.createOscillator();
-        const kickG = c.createGain();
-        kick.type = "sine";
-        kick.frequency.setValueAtTime(80, t + ki);
-        kick.frequency.exponentialRampToValueAtTime(30, t + ki + 0.15);
-        kickG.gain.setValueAtTime(0.15 + intensity * 0.1, t + ki);
-        kickG.gain.exponentialRampToValueAtTime(0.001, t + ki + 0.2);
-        kick.connect(kickG);
-        kickG.connect(musicGain!);
-        kick.start(t + ki);
-        kick.stop(t + ki + 0.25);
-        musicOscillators.push(kick);
+    // Soft heartbeat at HP < 25% — double-beat like real heartbeat, not aggressive
+    if (intensity > 0.75) {
+      const heartbeatPairs = intensity > 0.9 ? 3 : 2;
+      const spacing = measureDuration / (heartbeatPairs + 1);
+      for (let h = 0; h < heartbeatPairs; h++) {
+        const beatStart = spacing * (h + 1);
+        // First beat (lub)
+        const lub = c.createOscillator();
+        const lubG = c.createGain();
+        lub.type = "sine";
+        lub.frequency.setValueAtTime(55, t + beatStart);
+        lub.frequency.exponentialRampToValueAtTime(30, t + beatStart + 0.12);
+        lubG.gain.setValueAtTime(0.08, t + beatStart);
+        lubG.gain.exponentialRampToValueAtTime(0.001, t + beatStart + 0.18);
+        lub.connect(lubG); lubG.connect(musicGain!);
+        lub.start(t + beatStart); lub.stop(t + beatStart + 0.2);
+        musicOscillators.push(lub);
+        // Second beat (dub) — slightly softer, 0.15s later
+        const dub = c.createOscillator();
+        const dubG = c.createGain();
+        dub.type = "sine";
+        dub.frequency.setValueAtTime(45, t + beatStart + 0.18);
+        dub.frequency.exponentialRampToValueAtTime(25, t + beatStart + 0.3);
+        dubG.gain.setValueAtTime(0.05, t + beatStart + 0.18);
+        dubG.gain.exponentialRampToValueAtTime(0.001, t + beatStart + 0.35);
+        dub.connect(dubG); dubG.connect(musicGain!);
+        dub.start(t + beatStart + 0.18); dub.stop(t + beatStart + 0.4);
+        musicOscillators.push(dub);
       }
     }
 
-    // Hi-hat percussion at medium+ intensity
-    if (intensity > 0.3) {
-      const hatInterval = intensity > 0.6 ? measureDuration / 8 : measureDuration / 4;
-      for (let hi = 0; hi < measureDuration - 0.1; hi += hatInterval) {
-        const bufSize = c.sampleRate * 0.03;
-        const buf = c.createBuffer(1, bufSize, c.sampleRate);
-        const data = buf.getChannelData(0);
-        for (let s = 0; s < bufSize; s++) data[s] = (Math.random() * 2 - 1) * (1 - s / bufSize);
-        const noise = c.createBufferSource();
-        noise.buffer = buf;
-        const hatG = c.createGain();
-        const hatF = c.createBiquadFilter();
-        hatF.type = "highpass";
-        hatF.frequency.value = 8000;
-        hatG.gain.setValueAtTime(0.03 + intensity * 0.04, t + hi);
-        hatG.gain.exponentialRampToValueAtTime(0.001, t + hi + 0.05);
-        noise.connect(hatF);
-        hatF.connect(hatG);
-        hatG.connect(musicGain!);
-        noise.start(t + hi);
-        musicOscillators.push(noise as unknown as OscillatorNode);
+    // Light ticking at medium intensity — subtle, not harsh hi-hat spam
+    if (intensity > 0.5) {
+      const ticks = intensity > 0.7 ? 4 : 2;
+      const tickSpacing = measureDuration / (ticks + 1);
+      for (let ti = 0; ti < ticks; ti++) {
+        const tickTime = tickSpacing * (ti + 1);
+        const tick = c.createOscillator();
+        const tickG = c.createGain();
+        tick.type = "sine";
+        tick.frequency.value = 1200 + intensity * 400;
+        tickG.gain.setValueAtTime(0.015, t + tickTime);
+        tickG.gain.exponentialRampToValueAtTime(0.001, t + tickTime + 0.04);
+        tick.connect(tickG); tickG.connect(musicGain!);
+        tick.start(t + tickTime); tick.stop(t + tickTime + 0.06);
+        musicOscillators.push(tick);
       }
     }
 

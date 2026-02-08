@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { InputManager } from "./input";
 import { MobileInputManager } from "./mobile-input";
-import { PLAYER, CAMERA, ARENA, ENEMIES, WEAPONS, XP_TABLE, SCORE, COLORS, BOSSES, EVOLUTIONS, MAPS } from "./constants";
+import { PLAYER, CAMERA, ARENA, ENEMIES, WEAPONS, XP_TABLE, SCORE, COLORS, BOSSES, EVOLUTIONS, MAPS, MAP_BOSSES } from "./constants";
 import * as Audio from "./audio";
 import { getCharacter, type CharacterDef } from "./characters";
 export { Audio };
@@ -241,6 +241,17 @@ export class GameEngine {
 
   // Firefly particles (forest)
   private fireflyParticles: { mesh: THREE.Mesh; baseY: number; phase: number }[] = [];
+
+  // Lava platforms (volcanic)
+  private lavaPlatforms: { mesh: THREE.Mesh; x: number; z: number; radius: number; visibleTimer: number; warningTimer: number; cooldownTimer: number; state: "visible" | "warning" | "hidden" }[] = [];
+
+  // Desert slide boost
+  private previousTerrainHeight = 0;
+  private desertSlideBoost = 0;
+
+  // Map-specific boss system
+  private mapBossSpawned: Set<string> = new Set(); // "type_minute" keys
+  private mapBossRound = 0;
 
   // Volcanic system
   private lavaPoolPositions: { x: number; z: number; radius: number }[] = [];
@@ -970,19 +981,22 @@ export class GameEngine {
       );
     }
 
-    // Lava damage (5 DPS)
+    // Lava damage (5 DPS) — skip if on a lava platform
     this.lavaDamageTimer -= dt;
     if (this.lavaDamageTimer <= 0) {
       this.lavaDamageTimer = 0.2; // check 5x/sec
-      for (const pool of this.lavaPoolPositions) {
-        const dx = this.player.position.x - pool.x;
-        const dz = this.player.position.z - pool.z;
-        if (dx * dx + dz * dz < pool.radius * pool.radius) {
-          if (this.player.iFrameTimer <= 0) {
-            this.lastDamageSource = "lava";
-            this.damagePlayer(1); // 1 damage per tick, 5x/sec = 5 DPS
+      const onPlatform = this.lavaPlatforms.some(p => p.state === "visible" && Math.hypot(this.player.position.x - p.x, this.player.position.z - p.z) < p.radius);
+      if (!onPlatform) {
+        for (const pool of this.lavaPoolPositions) {
+          const dx = this.player.position.x - pool.x;
+          const dz = this.player.position.z - pool.z;
+          if (dx * dx + dz * dz < pool.radius * pool.radius) {
+            if (this.player.iFrameTimer <= 0) {
+              this.lastDamageSource = "lava";
+              this.damagePlayer(1); // 1 damage per tick, 5x/sec = 5 DPS
+            }
+            break;
           }
-          break;
         }
       }
     }
