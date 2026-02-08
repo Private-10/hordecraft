@@ -2864,6 +2864,19 @@ export class GameEngine {
         this.scene.add(trail);
         this.particles.push({ mesh: trail, velocity: new THREE.Vector3((Math.random() - 0.5) * 0.3, 0.2, (Math.random() - 0.5) * 0.3), life: 0, maxLife: 0.3 });
       }
+      // Hit ground
+      const groundY = this.getTerrainHeight(proj.position.x, proj.position.z);
+      if (proj.position.y < groundY + 0.2) { proj.isAlive = false; continue; }
+      // Hit environment (rocks, trees, pillars)
+      for (const col of this.rockColliders) {
+        const cdx = proj.position.x - col.position.x;
+        const cdz = proj.position.z - col.position.z;
+        if (cdx * cdx + cdz * cdz < col.radius * col.radius) {
+          proj.isAlive = false;
+          break;
+        }
+      }
+      if (!proj.isAlive) continue;
       // Hit player
       const epdx = proj.position.x - this.player.position.x;
       const epdz = proj.position.z - this.player.position.z;

@@ -147,6 +147,23 @@ export class MobileInputManager {
 
   setActive(active: boolean) {
     this._active = active;
+    if (!active) {
+      // Reset all input state when deactivated (e.g. level-up modal)
+      this.moveX = 0;
+      this.moveY = 0;
+      this.isMoving = false;
+      this.cameraDeltaX = 0;
+      this.cameraDeltaY = 0;
+      this.jumpPressed = false;
+      this.slidePressed = false;
+      this.joystickTouchId = null;
+      this.cameraTouchId = null;
+      this._lastCameraX = null;
+      this._lastCameraY = null;
+      if (this.joystickKnob) {
+        this.joystickKnob.style.transform = "translate(-50%, -50%)";
+      }
+    }
   }
 
   private onTouchStart = (e: TouchEvent) => {
