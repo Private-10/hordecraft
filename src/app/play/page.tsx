@@ -368,16 +368,9 @@ export default function PlayPage() {
   }, [selectedChar, selectedMap]);
 
   const startGame = useCallback(() => {
-    console.log("[HordeCraft] startGame called, engine:", !!engineRef.current);
-    const tutorialDone = secureGet("hordecraft_tutorial_done");
-    console.log("[HordeCraft] tutorialDone:", tutorialDone);
-    if (!tutorialDone) {
-      // Skip tutorial on mobile — go straight to game
-      secureSet("hordecraft_tutorial_done", "1");
-      actualStartGame();
-    } else {
-      actualStartGame();
-    }
+    alert("startGame called! Engine: " + !!engineRef.current);
+    secureSet("hordecraft_tutorial_done", "1");
+    actualStartGame();
   }, [actualStartGame]);
 
   const selectUpgrade = useCallback((option: UpgradeOption) => {
@@ -807,7 +800,7 @@ export default function PlayPage() {
                     <span className="auth-avatar">👤</span>
                     <span className="auth-name">{nickname}</span>
                   </div>
-                  <button className="btn-play" onClick={startGame}>
+                  <button className="btn-play" onPointerUp={() => { try { startGame(); } catch(e) { alert("Error: " + e); } }} onTouchEnd={(e) => { e.preventDefault(); try { startGame(); } catch(err) { alert("Touch Error: " + err); } }} onClick={() => { try { startGame(); } catch(e) { alert("Click Error: " + e); } }}>
                     {lang === "tr" ? "⚔️ SAVAŞA GİR" : "⚔️ ENTER BATTLE"}
                   </button>
                   <button onClick={() => { logoutNickname(); setNickLoggedIn(false); setNicknameState(""); setPin(""); if (engineRef.current) { engineRef.current.setMetaState({ gold: 0, permanentUpgrades: {}, unlockedCharacters: ["knight"], unlockedMaps: ["forest"], totalRuns: 0, achievements: { maxKills: 0, maxSurvivalTime: 0, maxLevel: 0, totalRuns: 0 } }); } }} className="auth-logout">
@@ -933,7 +926,7 @@ export default function PlayPage() {
                   </div>
 
                   {/* Guest play */}
-                  <button className="btn-guest" onClick={() => { logoutNickname(); setNicknameState(""); if (engineRef.current) { engineRef.current.setMetaState({ gold: 0, permanentUpgrades: {}, unlockedCharacters: ["knight"], unlockedMaps: ["forest"], totalRuns: 0, achievements: { maxKills: 0, maxSurvivalTime: 0, maxLevel: 0, totalRuns: 0 } }); } startGame(); }}>
+                  <button className="btn-guest" onPointerUp={() => { try { logoutNickname(); setNicknameState(""); if (engineRef.current) { engineRef.current.setMetaState({ gold: 0, permanentUpgrades: {}, unlockedCharacters: ["knight"], unlockedMaps: ["forest"], totalRuns: 0, achievements: { maxKills: 0, maxSurvivalTime: 0, maxLevel: 0, totalRuns: 0 } }); } startGame(); } catch(e) { alert("Guest Error: " + e); } }} onClick={() => { try { logoutNickname(); setNicknameState(""); if (engineRef.current) { engineRef.current.setMetaState({ gold: 0, permanentUpgrades: {}, unlockedCharacters: ["knight"], unlockedMaps: ["forest"], totalRuns: 0, achievements: { maxKills: 0, maxSurvivalTime: 0, maxLevel: 0, totalRuns: 0 } }); } startGame(); } catch(e) { alert("Guest Click Error: " + e); } }}>
                     👤 {lang === "tr" ? "Misafir Oyna" : "Play as Guest"}
                   </button>
                   <div className="auth-hint" style={{ marginTop: 4 }}>
