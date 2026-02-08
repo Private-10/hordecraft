@@ -5684,23 +5684,29 @@ export class GameEngine {
     if (this.weapons.length < 6) {
       const owned = new Set(this.weapons.map(w => w.id));
       const charId = this.selectedCharacter.id;
-      const characterWeapons: Record<string, string> = {
-        priest: "holySmite", rogue: "shuriken", berserker: "bloodAxe",
-        necromancer: "soulHarvest", mage: "arcaneOrb",
+      // Character-exclusive weapons map
+      const exclusiveWeapons: Record<string, string> = {
+        knight: "orbitBlade",
+        mage: "lightningArc",
+        rogue: "shuriken",
+        priest: "holySmite",
+        berserker: "bloodAxe",
+        necromancer: "soulHarvest",
       };
+      // Universal weapons available to all characters
       const allWeapons = [
         { id: "boneToss", ...WEAPONS.boneToss },
         { id: "shockWave", ...WEAPONS.shockWave },
-        { id: "lightningArc", ...WEAPONS.lightningArc },
         { id: "fireTrail", ...WEAPONS.fireTrail },
         { id: "frostNova", ...WEAPONS.frostNova },
         { id: "voidVortex", ...WEAPONS.voidVortex },
-        // Character-specific weapons only appear for their character
-        ...(charId === "priest" ? [{ id: "holySmite", ...WEAPONS.holySmite }] : []),
+        // Character-exclusive: only show for the matching character
+        ...(charId === "knight" ? [{ id: "orbitBlade", ...WEAPONS.orbitBlade }] : []),
+        ...(charId === "mage" ? [{ id: "lightningArc", ...WEAPONS.lightningArc }, { id: "arcaneOrb", ...WEAPONS.arcaneOrb }] : []),
         ...(charId === "rogue" ? [{ id: "shuriken", ...WEAPONS.shuriken }] : []),
+        ...(charId === "priest" ? [{ id: "holySmite", ...WEAPONS.holySmite }] : []),
         ...(charId === "berserker" ? [{ id: "bloodAxe", ...WEAPONS.bloodAxe }] : []),
         ...(charId === "necromancer" ? [{ id: "soulHarvest", ...WEAPONS.soulHarvest }] : []),
-        ...(charId === "mage" ? [{ id: "arcaneOrb", ...WEAPONS.arcaneOrb }] : []),
       ];
       for (const w of allWeapons) {
         if (!owned.has(w.id)) {
