@@ -3010,17 +3010,17 @@ export class GameEngine {
     let groupSize: number;
 
     if (minute < 2) {
-      spawnInterval = 2.5;
-      types = ["goblin", "spider", "wolf"];
-      groupSize = Math.floor(3 + Math.random() * 2); // 3-4
+      spawnInterval = 1.8;
+      types = ["goblin", "spider", "wolf", "slime"];
+      groupSize = Math.floor(4 + Math.random() * 3); // 4-6
     } else if (minute < 5) {
-      spawnInterval = 2;
-      types = ["goblin", "spider", "wolf", "slime", "zombie"];
-      groupSize = Math.floor(4 + Math.random() * 2); // 4-5
+      spawnInterval = 1.4;
+      types = ["goblin", "spider", "wolf", "slime", "zombie", "bat"];
+      groupSize = Math.floor(5 + Math.random() * 3); // 5-7
     } else if (minute < 10) {
-      spawnInterval = 1.5;
+      spawnInterval = 1.2;
       types = ["goblin", "slime", "skeleton", "bat", "spider", "wolf", "zombie"];
-      groupSize = Math.floor(5 + Math.random() * 2); // 5-6
+      groupSize = Math.floor(6 + Math.random() * 3); // 6-8
     } else if (minute < 15) {
       spawnInterval = 1;
       types = ["skeleton", "bat", "ogre", "zombie", "wolf"];
