@@ -54,29 +54,45 @@ export async function GET(req: NextRequest) {
       } catch {} // skip nickname claim errors
     }
 
-    // Write presence docs for 5-15 "online" bots
-    const presenceCount = Math.floor(Math.random() * 11) + 5;
+    // Write presence docs for 30-45 "online" bots with FIXED IDs (so they get updated, not duplicated)
+    const presenceCount = Math.floor(Math.random() * 16) + 30;
     for (let i = 0; i < presenceCount; i++) {
-      const presId = `bot_${Date.now()}_${i}`;
+      const presId = `bot_persistent_${i}`;
       promises.push(setDoc(doc(db, "presence", presId), { timestamp: Date.now() }));
     }
 
-    // Bot chat messages (1-3 messages, smart: each bot speaks their own language, no duplicates)
+    // Bot chat messages (1-2 messages per run, diverse and natural)
     const trMessages = [
-      "gg", "bu oyun efsane", "boss çok zor", "necromancer op",
-      "kim 20dk geçti?", "lvl 30 geldim 💪", "slime'lar çok kolay",
-      "desert haritası zor", "knight en iyi karakter", "combo x5 yaptım",
-      "yeni güncelleme süper", "sıralama kaçıncıyım", "berserker deneyin",
-      "fire trail op silah", "ilk boss'u yendim!", "selam herkese",
-      "bu harita çok güzel", "mage ile 15dk geçtim", "biri yardım etsin",
+      "selam", "gg wp", "bu oyun baya sarıyor", "stone golem nasıl yeniliyor?",
+      "necromancer ile 18dk dayandım", "fire trail + frost nova deneyin efsane",
+      "çöl haritası aşırı zor ya", "yeni haritayı açtım sonunda 🎉",
+      "berserker en iyi karakter bence", "50 combo yaptım az önce",
+      "knight ile başlayın tavsiyem", "boss'a az kaldı ama öldüm 😭",
+      "mağazadan magnet al ilk önce", "lvl 40'a kim ulaştı?",
+      "spider düşmanlar sinir bozucu", "rogue hız efsane ya",
+      "şu orbit blade çok op", "sıralamada 3. oldum 🏆",
+      "arkadaşlarla oynasak süper olur", "priest ile regen kasınca ölmüyorsun",
+      "troll düşmanın regenini kesemiyorum", "elite mob'lar çok XP veriyor",
+      "gg herkese", "ben yeni başladım nasıl oynuyoruz?", "void vortex denediniz mi?",
+      "shockwave alanı çok geniş süper", "lav havuzlarına dikkat edin",
+      "meteor yağmuru çok epik", "shadow lord'u yendim sonunda!",
+      "2 saat oynadım farkında bile olmadım 😅",
     ];
     const enMessages = [
-      "gg", "this game rocks", "boss is tough", "necromancer op",
-      "anyone past 20min?", "lvl 30 let's go 💪", "slimes are easy",
-      "desert map is hard", "knight is the best", "combo x5!",
-      "love the new update", "what's my rank?", "try berserker",
-      "fire trail is op", "beat first boss!", "hey everyone",
-      "this map is amazing", "15min with mage", "need help lol",
+      "hey", "gg wp", "this game is so addicting", "how do you beat stone golem?",
+      "18min with necromancer!", "try fire trail + frost nova combo",
+      "desert map is brutal", "finally unlocked the new map 🎉",
+      "berserker is the best imo", "just hit 50 combo",
+      "start with knight trust me", "almost beat the boss then died 😭",
+      "buy magnet upgrade first", "who reached lvl 40?",
+      "spider enemies are so annoying", "rogue speed is nuts",
+      "orbit blade is so broken lol", "rank 3 on leaderboard 🏆",
+      "wish we could play co-op", "priest regen build is immortal",
+      "can't outdamage troll regen", "elite mobs give crazy XP",
+      "gg everyone", "just started, any tips?", "have you tried void vortex?",
+      "shockwave range is insane", "watch out for lava pools",
+      "meteor shower is so epic", "finally beat shadow lord!",
+      "played 2 hours without realizing 😅",
     ];
     // Turkish bot names speak Turkish, English names speak English
     const trBotNames = new Set(["xKralx", "GölgeAvcısı", "Yıldırım34", "KurtAdam55", "AlpSavaşçı"]);
