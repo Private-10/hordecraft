@@ -1,45 +1,40 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
-const { spawn } = require('child_process');
+const http = require('http');
 
-const isDev = !app.isPackaged;
 let mainWindow;
-let serverProcess;
+let nextServer;
 
-function startNextServer() {
-  return new Promise((resolve) => {
-    if (isDev) {
-      // Dev mode: assume next dev is already running
-      resolve('http://localhost:3000');
-      return;
-    }
-
-    // Production: start next server from built output
-    const nextBin = path.join(__dirname, '..', 'node_modules', '.bin', 'next.cmd');
-    const nextDir = path.join(__dirname, '..');
-    
-    serverProcess = spawn(nextBin, ['start', '--port', '3456'], {
-      cwd: nextDir,
-      env: { ...process.env, NODE_ENV: 'production' },
-      stdio: ['pipe', 'pipe', 'pipe'],
-      shell: true,
-    });
-
-    serverProcess.stdout.on('data', (data) => {
-      const msg = data.toString();
-      console.log('[Next.js]', msg);
-      if (msg.includes('Ready') || msg.includes('started') || msg.includes('3456')) {
-        setTimeout(() => resolve('http://localhost:3456'), 500);
-      }
-    });
-
-    serverProcess.stderr.on('data', (data) => {
-      console.error('[Next.js Error]', data.toString());
-    });
-
-    // Fallback: resolve after 5 seconds anyway
-    setTimeout(() => resolve('http://localhost:3456'), 5000);
+async function startNextServer() {
+  const port = 3456;
+  const appPath = app.isPackaged ? app.getAppPath() : path.join(__dirname, '..');
+  
+  console.log('Starting Next.js from:', appPath);
+  console.log('Is packaged:', app.isPackaged);
+  
+  const next = require(path.join(appPath, 'node_modules', 'next'));
+  
+  const nextApp = next({
+    dev: false,
+    dir: appPath,
+    port: port,
   });
+  
+  const handle = nextApp.getRequestHandler();
+  await nextApp.prepare();
+  
+  nextServer = http.createServer((req, res) => {
+    handle(req, res);
+  });
+  
+  await new Promise((resolve) => {
+    nextServer.listen(port, () => {
+      console.log(`Next.js ready on http://localhost:${port}`);
+      resolve();
+    });
+  });
+  
+  return `http://localhost:${port}`;
 }
 
 async function createWindow() {
@@ -51,7 +46,7 @@ async function createWindow() {
     title: 'HordeCraft',
     icon: path.join(__dirname, 'icon.png'),
     autoHideMenuBar: true,
-    fullscreen: false,
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
@@ -59,7 +54,6 @@ async function createWindow() {
     },
   });
 
-  // F11 fullscreen toggle
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (input.key === 'F11') {
       mainWindow.setFullScreen(!mainWindow.isFullScreen());
@@ -67,43 +61,25 @@ async function createWindow() {
     }
   });
 
-  if (isDev) {
-    mainWindow.webContents.openDevTools();
+  // Loading screen
+  mainWindow.loadURL('data:text/html,<html><body style="background:%230a0a1a;color:%23ff6b35;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;font-size:28px;margin:0"><div style="text-align:center"><div style="font-size:48px;font-weight:bold;margin-bottom:16px">HORDECRAFT</div><div>Yükleniyor...</div></div></body></html>');
+  mainWindow.show();
+
+  try {
+    const serverUrl = await startNextServer();
+    mainWindow.loadURL(serverUrl + '/play');
+  } catch (e) {
+    console.error('Server start failed:', e);
+    mainWindow.loadURL('data:text/html,<html><body style="background:%230a0a1a;color:%23ff3366;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;font-size:16px;margin:0;padding:20px"><div style="text-align:center"><div style="font-size:24px;margin-bottom:16px">Hata</div><pre style="color:%23888;text-align:left;max-width:600px;overflow:auto">' + String(e.stack || e) + '</pre></div></body></html>');
   }
 
-  // Show loading while server starts
-  mainWindow.loadURL('data:text/html,<html><body style="background:#0a0a1a;color:#ff6b35;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;font-size:24px"><div>HordeCraft yükleniyor...</div></body></html>');
-
-  const serverUrl = await startNextServer();
-  mainWindow.loadURL(serverUrl);
-
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-  });
+  mainWindow.on('closed', () => { mainWindow = null; });
 }
 
-// Try to init Steam
-try {
-  require('./steam.cjs');
-} catch (e) {
-  console.log('Steam integration not available:', e.message);
-}
+try { require('./steam.cjs'); } catch (e) { console.log('Steam:', e.message); }
 
 app.whenReady().then(createWindow);
-
 app.on('window-all-closed', () => {
-  if (serverProcess) {
-    serverProcess.kill();
-  }
+  if (nextServer) nextServer.close();
   app.quit();
-});
-
-app.on('before-quit', () => {
-  if (serverProcess) {
-    serverProcess.kill();
-  }
-});
-
-app.on('activate', () => {
-  if (mainWindow === null) createWindow();
 });
