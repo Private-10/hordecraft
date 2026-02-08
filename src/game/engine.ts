@@ -16,6 +16,11 @@ import type {
   VortexEffect, MetaState, ChestInstance,
 } from "./types";
 
+const ALL_BOSS_TYPES = new Set([
+  ...Object.keys(BOSSES),
+  ...Object.values(MAP_BOSSES).flat().map(e => e.type),
+]);
+
 export class GameEngine {
   // Three.js
   private renderer!: THREE.WebGLRenderer;
@@ -533,6 +538,7 @@ export class GameEngine {
 
     if (mapId === "volcanic") {
       this.setupVolcanicObjects();
+      this.initLavaPlatforms();
     } else if (mapId === "desert") {
       this.setupDesertObjects();
     } else if (mapId === "frozen") {
@@ -1104,6 +1110,86 @@ export class GameEngine {
     }
     // Clear eruption warning after 5s
     setTimeout(() => { this.onEruption?.(false, false); }, 5000);
+  }
+
+  // ========== LAVA PLATFORMS (Volcanic) ==========
+  private initLavaPlatforms() {
+    // Clean up old ones
+    for (const p of this.lavaPlatforms) { this.scene.remove(p.mesh); }
+    this.lavaPlatforms = [];
+    if (this.selectedMap !== "volcanic" || this.lavaPoolPositions.length === 0) return;
+
+    const platformCount = 5; // 4-6 range, use 5
+    for (let i = 0; i < platformCount; i++) {
+      const pool = this.lavaPoolPositions[Math.floor(Math.random() * this.lavaPoolPositions.length)];
+      const radius = 1.2 + Math.random() * 0.5;
+      const geo = new THREE.CircleGeometry(radius, 16);
+      const mat = new THREE.MeshLambertMaterial({ color: 0x887766, emissive: 0x332211, transparent: true, opacity: 1.0 });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.rotation.x = -Math.PI / 2;
+      const y = this.getTerrainHeight(pool.x, pool.z) + 0.15;
+      mesh.position.set(pool.x, y, pool.z);
+      this.scene.add(mesh);
+      this.lavaPlatforms.push({
+        mesh, x: pool.x, z: pool.z, radius,
+        visibleTimer: 8 + Math.random() * 4, // 8-12s visible
+        warningTimer: 0, cooldownTimer: 0, state: "visible",
+      });
+    }
+  }
+
+  private updateLavaPlatforms(dt: number) {
+    if (this.selectedMap !== "volcanic") return;
+    for (const p of this.lavaPlatforms) {
+      const mat = p.mesh.material as THREE.MeshLambertMaterial;
+      if (p.state === "visible") {
+        p.visibleTimer -= dt;
+        mat.opacity = 1.0;
+        p.mesh.visible = true;
+        if (p.visibleTimer <= 0) {
+          p.state = "warning";
+          p.warningTimer = 3;
+        }
+      } else if (p.state === "warning") {
+        p.warningTimer -= dt;
+        // Blink effect
+        mat.opacity = Math.sin(this.gameTime * 12) > 0 ? 0.8 : 0.2;
+        p.mesh.visible = true;
+        if (p.warningTimer <= 0) {
+          p.state = "hidden";
+          p.cooldownTimer = 5 + Math.random() * 5; // 5-10s hidden
+          p.mesh.visible = false;
+        }
+      } else { // hidden
+        p.cooldownTimer -= dt;
+        p.mesh.visible = false;
+        if (p.cooldownTimer <= 0) {
+          // Respawn at a random lava pool position
+          const pool = this.lavaPoolPositions[Math.floor(Math.random() * this.lavaPoolPositions.length)];
+          p.x = pool.x;
+          p.z = pool.z;
+          const y = this.getTerrainHeight(pool.x, pool.z) + 0.15;
+          p.mesh.position.set(pool.x, y, pool.z);
+          p.state = "visible";
+          p.visibleTimer = 8 + Math.random() * 4;
+        }
+      }
+    }
+  }
+
+  // ========== DESERT SLIDE BOOST ==========
+  private updateDesertSlide(dt: number) {
+    if (this.selectedMap !== "desert") { this.desertSlideBoost = 0; return; }
+    const currentHeight = this.getTerrainHeight(this.player.position.x, this.player.position.z);
+    const heightDiff = this.previousTerrainHeight - currentHeight;
+    this.previousTerrainHeight = currentHeight;
+    if (heightDiff > 0.01) {
+      // Going downhill — boost proportional to slope (30-50%)
+      this.desertSlideBoost = Math.min(0.5, heightDiff * 3);
+    } else {
+      this.desertSlideBoost *= 0.9; // decay
+      if (this.desertSlideBoost < 0.01) this.desertSlideBoost = 0;
+    }
   }
 
   private createPlayerMesh(charId = "knight") {
@@ -2074,6 +2160,227 @@ export class GameEngine {
       return g;
     };
 
+    // === MAP BOSS: Treant Guardian (Forest Mini) ===
+    this.enemyMeshFactories.treantGuardian = () => {
+      const g = new THREE.Group();
+      const barkMat = new THREE.MeshLambertMaterial({ color: 0x5a3a1a });
+      const leafMat = new THREE.MeshLambertMaterial({ color: 0x228833 });
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.7, 2.5, 6), barkMat);
+      body.position.y = 1.25; body.castShadow = true; g.add(body);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.8, 6, 5), leafMat);
+      head.position.y = 3.0; g.add(head);
+      const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+      const le = new THREE.Mesh(new THREE.SphereGeometry(0.08, 4, 4), eyeMat); le.position.set(-0.2, 3.05, 0.6); g.add(le);
+      const re = new THREE.Mesh(new THREE.SphereGeometry(0.08, 4, 4), eyeMat); re.position.set(0.2, 3.05, 0.6); g.add(re);
+      g.scale.set(1.0, 1.0, 1.0); return g;
+    };
+
+    // === MAP BOSS: Ancient Oak (Forest Boss) ===
+    this.enemyMeshFactories.ancientOak = () => {
+      const g = new THREE.Group();
+      const barkMat = new THREE.MeshLambertMaterial({ color: 0x3a2a0a });
+      const leafMat = new THREE.MeshLambertMaterial({ color: 0x1a5c1a });
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.2, 3.5, 8), barkMat);
+      body.position.y = 1.75; body.castShadow = true; g.add(body);
+      // Branches
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2;
+        const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.15, 2, 4), barkMat);
+        branch.position.set(Math.cos(a) * 1.0, 2.8, Math.sin(a) * 1.0);
+        branch.rotation.z = Math.cos(a) * 0.5; branch.rotation.x = Math.sin(a) * 0.5;
+        g.add(branch);
+      }
+      const crown = new THREE.Mesh(new THREE.SphereGeometry(1.5, 8, 6), leafMat);
+      crown.position.y = 3.8; g.add(crown);
+      g.scale.set(1.4, 1.4, 1.4); return g;
+    };
+
+    // === MAP BOSS: Forest Warden (Forest Final) ===
+    this.enemyMeshFactories.forestWarden = () => {
+      const g = new THREE.Group();
+      const greenMat = new THREE.MeshLambertMaterial({ color: 0x33aa33 });
+      const goldMat = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
+      const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.8, 2.0, 6, 8), greenMat);
+      body.position.y = 2.0; body.castShadow = true; g.add(body);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.5, 6, 5), greenMat);
+      head.position.y = 3.5; g.add(head);
+      // Crown
+      for (let i = 0; i < 5; i++) {
+        const spike = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.4, 4), goldMat);
+        const a = (i / 5) * Math.PI * 2;
+        spike.position.set(Math.cos(a) * 0.4, 3.9, Math.sin(a) * 0.4); g.add(spike);
+      }
+      const aura = new THREE.Mesh(new THREE.SphereGeometry(1.3, 8, 6), new THREE.MeshBasicMaterial({ color: 0x33ff33, transparent: true, opacity: 0.2 }));
+      aura.position.y = 2.0; g.add(aura);
+      g.scale.set(1.4, 1.4, 1.4); return g;
+    };
+
+    // === MAP BOSS: Sand Scorpion (Desert Mini) ===
+    this.enemyMeshFactories.sandScorpion = () => {
+      const g = new THREE.Group();
+      const shellMat = new THREE.MeshLambertMaterial({ color: 0xaa8833 });
+      const darkMat = new THREE.MeshLambertMaterial({ color: 0x664422 });
+      const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.5, 1.2, 5, 6), shellMat);
+      body.rotation.x = Math.PI / 2; body.position.set(0, 0.6, 0); g.add(body);
+      // Tail
+      const tail1 = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, 0.8, 4, 4), darkMat);
+      tail1.position.set(0, 1.2, -0.8); tail1.rotation.x = -0.5; g.add(tail1);
+      const stinger = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.3, 4), new THREE.MeshBasicMaterial({ color: 0xff4444 }));
+      stinger.position.set(0, 1.8, -1.2); g.add(stinger);
+      // Claws
+      const clawGeo = new THREE.BoxGeometry(0.3, 0.1, 0.4);
+      const lc = new THREE.Mesh(clawGeo, darkMat); lc.position.set(-0.6, 0.4, 0.8); g.add(lc);
+      const rc = new THREE.Mesh(clawGeo, darkMat); rc.position.set(0.6, 0.4, 0.8); g.add(rc);
+      g.scale.set(1.0, 1.0, 1.0); return g;
+    };
+
+    // === MAP BOSS: Desert Colossus (Desert Boss) ===
+    this.enemyMeshFactories.desertColossus = () => {
+      const g = new THREE.Group();
+      const sandMat = new THREE.MeshLambertMaterial({ color: 0xbbaa77 });
+      const darkMat = new THREE.MeshLambertMaterial({ color: 0x886644 });
+      const body = new THREE.Mesh(new THREE.CapsuleGeometry(1.0, 1.5, 6, 8), sandMat);
+      body.position.y = 2.0; body.castShadow = true; g.add(body);
+      const head = new THREE.Mesh(new THREE.DodecahedronGeometry(0.6, 0), darkMat);
+      head.position.y = 3.3; g.add(head);
+      const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff8800 });
+      const le = new THREE.Mesh(new THREE.SphereGeometry(0.1, 4, 4), eyeMat); le.position.set(-0.2, 3.35, 0.45); g.add(le);
+      const re = new THREE.Mesh(new THREE.SphereGeometry(0.1, 4, 4), eyeMat); re.position.set(0.2, 3.35, 0.45); g.add(re);
+      const la = new THREE.Mesh(new THREE.CapsuleGeometry(0.35, 1.2, 4, 5), sandMat); la.position.set(-1.3, 1.5, 0); g.add(la);
+      const ra = new THREE.Mesh(new THREE.CapsuleGeometry(0.35, 1.2, 4, 5), sandMat); ra.position.set(1.3, 1.5, 0); g.add(ra);
+      g.scale.set(1.5, 1.5, 1.5); return g;
+    };
+
+    // === MAP BOSS: Sandstorm Djinn (Desert Final) ===
+    this.enemyMeshFactories.sandstormDjinn = () => {
+      const g = new THREE.Group();
+      const goldMat = new THREE.MeshBasicMaterial({ color: 0xccaa33, transparent: true, opacity: 0.8 });
+      const purpleMat = new THREE.MeshBasicMaterial({ color: 0x9933cc, transparent: true, opacity: 0.5 });
+      const body = new THREE.Mesh(new THREE.ConeGeometry(0.8, 2.5, 8), goldMat);
+      body.position.y = 2.5; g.add(body);
+      const aura = new THREE.Mesh(new THREE.SphereGeometry(1.3, 8, 6), purpleMat);
+      aura.position.y = 2.5; g.add(aura);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.45, 6, 5), new THREE.MeshLambertMaterial({ color: 0xccaa33 }));
+      head.position.y = 4.0; g.add(head);
+      const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff00ff });
+      const le = new THREE.Mesh(new THREE.SphereGeometry(0.08, 4, 4), eyeMat); le.position.set(-0.15, 4.05, 0.35); g.add(le);
+      const re = new THREE.Mesh(new THREE.SphereGeometry(0.08, 4, 4), eyeMat); re.position.set(0.15, 4.05, 0.35); g.add(re);
+      g.scale.set(1.4, 1.4, 1.4); return g;
+    };
+
+    // === MAP BOSS: Magma Slime (Volcanic Mini) ===
+    this.enemyMeshFactories.magmaSlime = () => {
+      const g = new THREE.Group();
+      const lavaMat = new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.85 });
+      const coreMat = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
+      const body = new THREE.Mesh(new THREE.SphereGeometry(1.0, 8, 6), lavaMat);
+      body.position.y = 1.0; g.add(body);
+      const core = new THREE.Mesh(new THREE.SphereGeometry(0.4, 6, 5), coreMat);
+      core.position.y = 1.0; g.add(core);
+      const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      const le = new THREE.Mesh(new THREE.SphereGeometry(0.12, 4, 4), eyeMat); le.position.set(-0.3, 1.3, 0.7); g.add(le);
+      const re = new THREE.Mesh(new THREE.SphereGeometry(0.12, 4, 4), eyeMat); re.position.set(0.3, 1.3, 0.7); g.add(re);
+      g.scale.set(1.0, 1.0, 1.0); return g;
+    };
+
+    // === MAP BOSS: Obsidian Golem (Volcanic Boss) ===
+    this.enemyMeshFactories.obsidianGolem = () => {
+      const g = new THREE.Group();
+      const obsidianMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+      const glowMat = new THREE.MeshBasicMaterial({ color: 0xff2200 });
+      const body = new THREE.Mesh(new THREE.CapsuleGeometry(1.0, 1.2, 6, 8), obsidianMat);
+      body.position.y = 1.8; body.castShadow = true; g.add(body);
+      const head = new THREE.Mesh(new THREE.DodecahedronGeometry(0.55, 0), obsidianMat);
+      head.position.y = 3.0; g.add(head);
+      const le = new THREE.Mesh(new THREE.SphereGeometry(0.1, 4, 4), glowMat); le.position.set(-0.2, 3.05, 0.4); g.add(le);
+      const re = new THREE.Mesh(new THREE.SphereGeometry(0.1, 4, 4), glowMat); re.position.set(0.2, 3.05, 0.4); g.add(re);
+      // Lava cracks
+      const c1 = new THREE.Mesh(new THREE.OctahedronGeometry(0.15), glowMat); c1.position.set(-0.4, 2.5, 0.7); g.add(c1);
+      const c2 = new THREE.Mesh(new THREE.OctahedronGeometry(0.12), glowMat); c2.position.set(0.3, 2.8, 0.5); g.add(c2);
+      const la = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 1.0, 4, 5), obsidianMat); la.position.set(-1.3, 1.4, 0); g.add(la);
+      const ra = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 1.0, 4, 5), obsidianMat); ra.position.set(1.3, 1.4, 0); g.add(ra);
+      g.scale.set(1.5, 1.5, 1.5); return g;
+    };
+
+    // === MAP BOSS: Inferno Dragon (Volcanic Final) ===
+    this.enemyMeshFactories.infernoDragon = () => {
+      const g = new THREE.Group();
+      const dragonMat = new THREE.MeshLambertMaterial({ color: 0xcc2200 });
+      const fireMat = new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.7 });
+      const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.8, 2.0, 6, 8), dragonMat);
+      body.position.y = 2.5; body.castShadow = true; g.add(body);
+      const head = new THREE.Mesh(new THREE.ConeGeometry(0.4, 0.8, 5), dragonMat);
+      head.position.set(0, 3.8, 0.3); head.rotation.x = 0.3; g.add(head);
+      const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+      const le = new THREE.Mesh(new THREE.SphereGeometry(0.08, 4, 4), eyeMat); le.position.set(-0.15, 3.85, 0.6); g.add(le);
+      const re = new THREE.Mesh(new THREE.SphereGeometry(0.08, 4, 4), eyeMat); re.position.set(0.15, 3.85, 0.6); g.add(re);
+      // Wings
+      const wingGeo = new THREE.PlaneGeometry(2, 1.5);
+      const wingMat = new THREE.MeshLambertMaterial({ color: 0x991100, side: THREE.DoubleSide });
+      const lw = new THREE.Mesh(wingGeo, wingMat); lw.position.set(-1.5, 3.0, 0); lw.rotation.y = -0.3; g.add(lw);
+      const rw = new THREE.Mesh(wingGeo, wingMat); rw.position.set(1.5, 3.0, 0); rw.rotation.y = 0.3; g.add(rw);
+      const aura = new THREE.Mesh(new THREE.SphereGeometry(1.5, 8, 6), fireMat);
+      aura.position.y = 2.5; g.add(aura);
+      g.scale.set(1.4, 1.4, 1.4); return g;
+    };
+
+    // === MAP BOSS: Frost Wolf Alpha (Frozen Mini) ===
+    this.enemyMeshFactories.frostWolfAlpha = () => {
+      const g = new THREE.Group();
+      const furMat = new THREE.MeshLambertMaterial({ color: 0xaaddff });
+      const darkMat = new THREE.MeshLambertMaterial({ color: 0x6699cc });
+      const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.5, 1.2, 5, 6), furMat);
+      body.rotation.x = Math.PI / 2; body.position.set(0, 0.7, 0); g.add(body);
+      const head = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.6, 5), furMat);
+      head.position.set(0, 0.9, 0.8); head.rotation.x = -Math.PI / 2; g.add(head);
+      const eyeMat = new THREE.MeshBasicMaterial({ color: 0x00aaff });
+      const le = new THREE.Mesh(new THREE.SphereGeometry(0.06, 4, 4), eyeMat); le.position.set(-0.12, 1.0, 1.0); g.add(le);
+      const re = new THREE.Mesh(new THREE.SphereGeometry(0.06, 4, 4), eyeMat); re.position.set(0.12, 1.0, 1.0); g.add(re);
+      // Legs
+      const legGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.5, 4);
+      for (const [ox, oz] of [[-0.3, 0.3], [0.3, 0.3], [-0.3, -0.3], [0.3, -0.3]]) {
+        const leg = new THREE.Mesh(legGeo, darkMat); leg.position.set(ox, 0.25, oz); g.add(leg);
+      }
+      g.scale.set(1.0, 1.0, 1.0); return g;
+    };
+
+    // === MAP BOSS: Ice Golem (Frozen Boss) ===
+    this.enemyMeshFactories.iceGolem = () => {
+      const g = new THREE.Group();
+      const iceMat = new THREE.MeshLambertMaterial({ color: 0x88ccff });
+      const crystalMat = new THREE.MeshBasicMaterial({ color: 0x44aaff });
+      const body = new THREE.Mesh(new THREE.CapsuleGeometry(1.0, 1.2, 6, 8), iceMat);
+      body.position.y = 1.8; body.castShadow = true; g.add(body);
+      const head = new THREE.Mesh(new THREE.DodecahedronGeometry(0.55, 0), iceMat);
+      head.position.y = 3.0; g.add(head);
+      const le = new THREE.Mesh(new THREE.SphereGeometry(0.1, 4, 4), crystalMat); le.position.set(-0.2, 3.05, 0.4); g.add(le);
+      const re = new THREE.Mesh(new THREE.SphereGeometry(0.1, 4, 4), crystalMat); re.position.set(0.2, 3.05, 0.4); g.add(re);
+      const aura = new THREE.Mesh(new THREE.SphereGeometry(1.5, 8, 6), new THREE.MeshBasicMaterial({ color: 0x44aaff, transparent: true, opacity: 0.15 }));
+      aura.position.y = 1.8; g.add(aura);
+      g.scale.set(1.5, 1.5, 1.5); return g;
+    };
+
+    // === MAP BOSS: Blizzard Titan (Frozen Final) ===
+    this.enemyMeshFactories.blizzardTitan = () => {
+      const g = new THREE.Group();
+      const iceMat = new THREE.MeshLambertMaterial({ color: 0xeeeeff });
+      const darkIceMat = new THREE.MeshLambertMaterial({ color: 0x4466aa });
+      const body = new THREE.Mesh(new THREE.CapsuleGeometry(1.1, 1.8, 6, 8), iceMat);
+      body.position.y = 2.0; body.castShadow = true; g.add(body);
+      // Shoulder ice spikes
+      const spikeGeo = new THREE.ConeGeometry(0.2, 1.0, 5);
+      const ls = new THREE.Mesh(spikeGeo, darkIceMat); ls.position.set(-1.3, 3.0, 0); g.add(ls);
+      const rs = new THREE.Mesh(spikeGeo, darkIceMat); rs.position.set(1.3, 3.0, 0); g.add(rs);
+      const head = new THREE.Mesh(new THREE.DodecahedronGeometry(0.6, 0), darkIceMat);
+      head.position.y = 3.5; g.add(head);
+      const eyeMat = new THREE.MeshBasicMaterial({ color: 0x00ccff });
+      const le = new THREE.Mesh(new THREE.SphereGeometry(0.1, 4, 4), eyeMat); le.position.set(-0.2, 3.55, 0.45); g.add(le);
+      const re = new THREE.Mesh(new THREE.SphereGeometry(0.1, 4, 4), eyeMat); re.position.set(0.2, 3.55, 0.45); g.add(re);
+      const aura = new THREE.Mesh(new THREE.SphereGeometry(1.8, 8, 6), new THREE.MeshBasicMaterial({ color: 0xaaccff, transparent: true, opacity: 0.15 }));
+      aura.position.y = 2.0; g.add(aura);
+      g.scale.set(1.4, 1.4, 1.4); return g;
+    };
+
     // === TIER 3: Necromancer ===
     this.enemyMeshFactories.necromancer = () => {
       const g = new THREE.Group();
@@ -2348,6 +2655,12 @@ export class GameEngine {
     this.lavaPoolMeshes = [];
     this.lavaDamageTimer = 0;
     this.volcanicEruptionTimer = 90;
+    for (const p of this.lavaPlatforms) this.scene.remove(p.mesh);
+    this.lavaPlatforms = [];
+    this.previousTerrainHeight = 0;
+    this.desertSlideBoost = 0;
+    this.mapBossSpawned.clear();
+    this.mapBossRound = 0;
     this.meteorWarnings.forEach(w => this.scene.remove(w.mesh));
     this.meteorWarnings = [];
     this.meteorsFalling.forEach(m => this.scene.remove(m.mesh));
@@ -2467,6 +2780,8 @@ export class GameEngine {
     this.updateMistWave(cappedDt);
     this.updateFireflies(cappedDt);
     this.updateVolcanic(cappedDt);
+    this.updateLavaPlatforms(cappedDt);
+    this.updateDesertSlide(cappedDt);
     this.updateBlizzard(cappedDt);
     this.updateTimedRemovals();
     this.performanceCleanup();
@@ -2534,6 +2849,7 @@ export class GameEngine {
     }
 
     let speed = p.speed * (p.isSliding ? PLAYER.sprintMultiplier : 1);
+    if (this.desertSlideBoost > 0) speed *= (1 + this.desertSlideBoost); // Desert downhill boost
     if (this.blizzardActive) speed *= 0.75; // Blizzard slows player by 25%
     const control = p.isGrounded ? 1 : PLAYER.airControl;
 
@@ -3214,7 +3530,7 @@ export class GameEngine {
 
   private returnEnemyMesh(type: string, mesh: THREE.Object3D) {
     // Don't pool boss meshes — they have unique scale
-    const bossTypes = new Set(Object.keys(BOSSES));
+    const bossTypes = ALL_BOSS_TYPES;
     if (bossTypes.has(type)) {
       this.scene.remove(mesh);
       // Don't dispose shared enemy geometries — just remove from scene
@@ -3272,7 +3588,7 @@ export class GameEngine {
     let isElite = false;
 
     // Elite roll (not for bosses)
-    const bossTypes = new Set(Object.keys(BOSSES));
+    const bossTypes = ALL_BOSS_TYPES;
     if (!bossTypes.has(type)) {
       const eliteChance = Math.min(0.5, (this.gameTime / 60) * 0.025);
       if (Math.random() < eliteChance) {
@@ -3415,7 +3731,7 @@ export class GameEngine {
     this.cleanupDead();
     if (this.enemies.length > maxEnemies) {
       // Remove farthest non-boss enemies that are far from player
-      const bossTypes = new Set(Object.keys(BOSSES));
+      const bossTypes = ALL_BOSS_TYPES;
       const removable = this.enemies
         .filter(e => !bossTypes.has(e.type) && e.isAlive)
         .sort((a, b) =>
@@ -3611,7 +3927,7 @@ export class GameEngine {
 
     // Reduce max enemies more aggressively at late game
     const maxEnemyHard = Math.min(170, 90 + this.player.level * 3);
-    const bossTypes = new Set(Object.keys(BOSSES));
+    const bossTypes = ALL_BOSS_TYPES;
     if (this.enemies.length > maxEnemyHard) {
       const removable = this.enemies
         .filter(e => e.isAlive && !bossTypes.has(e.type) && e.position.distanceToSquared(this.player.position) > 400)
@@ -3660,6 +3976,13 @@ export class GameEngine {
       this.stats.maxCombo = this.stats.currentCombo;
     }
 
+    // Magma Slime split: spawn 2 mini slimes on death
+    if (enemy.type === "magmaSlime") {
+      this.spawnEnemyAtPosition("slime", enemy.position.x + 1, enemy.position.z + 1);
+      this.spawnEnemyAtPosition("slime", enemy.position.x - 1, enemy.position.z - 1);
+      this.spawnEnemyAtPosition("slime", enemy.position.x + 1, enemy.position.z - 1);
+    }
+
     // Slime split: spawn 2 mini slimes (mini slimes don't split further)
     if (enemy.type === "slime") {
       this.spawnEnemyAtPosition("mini_slime", enemy.position.x + 0.5, enemy.position.z + 0.5);
@@ -3686,41 +4009,51 @@ export class GameEngine {
   private updateBoss(dt: number) {
     const minute = this.gameTime / 60;
 
-    // Check boss spawns
-    for (const [type, cfg] of Object.entries(BOSSES)) {
-      if (!this.bossSpawned.has(type) && minute >= cfg.spawnMinute && !this.activeBoss) {
-        this.spawnBoss(type);
-        break;
+    // Map-specific boss spawns
+    const mapSchedule = MAP_BOSSES[this.selectedMap];
+    if (mapSchedule) {
+      for (const entry of mapSchedule) {
+        const key = `${entry.type}_${entry.spawnMinute}`;
+        if (!this.mapBossSpawned.has(key) && minute >= entry.spawnMinute && !this.activeBoss) {
+          this.mapBossSpawned.add(key);
+          this.spawnMapBoss(entry.type, entry.isMini);
+          break;
+        }
+      }
+    } else {
+      // Fallback to legacy bosses for unknown maps
+      for (const [type, cfg] of Object.entries(BOSSES)) {
+        if (!this.bossSpawned.has(type) && minute >= cfg.spawnMinute && !this.activeBoss) {
+          this.spawnBoss(type);
+          break;
+        }
       }
     }
 
-    // Boss scaling after all 3 original bosses defeated (20+ minutes)
-    const allBossKeys = Object.keys(BOSSES);
-    const allOriginalBossesDefeated = allBossKeys.every(k => this.bossSpawned.has(k));
-    if (allOriginalBossesDefeated && !this.activeBoss && minute >= 20) {
-      const nextBossMinute = 20 + this.bossRound * 5;
+    // Boss scaling after schedule exhausted (20+ minutes)
+    const scheduleTypes = mapSchedule ? mapSchedule.map(e => e.type) : Object.keys(BOSSES);
+    const allKeys = mapSchedule ? mapSchedule.map(e => `${e.type}_${e.spawnMinute}`) : Object.keys(BOSSES);
+    const allDone = mapSchedule ? allKeys.every(k => this.mapBossSpawned.has(k)) : Object.keys(BOSSES).every(k => this.bossSpawned.has(k));
+    if (allDone && !this.activeBoss && minute >= 20) {
+      const nextBossMinute = 20 + this.mapBossRound * 5;
       if (minute >= nextBossMinute && this.gameTime - this.lastScaledBossTime > 10) {
-        const bossIndex = this.bossRound % allBossKeys.length;
-        const bossType = allBossKeys[bossIndex];
-        const round = Math.floor(this.bossRound / allBossKeys.length) + 1;
+        const uniqueTypes = [...new Set(scheduleTypes)];
+        const bossIndex = this.mapBossRound % uniqueTypes.length;
+        const bossType = uniqueTypes[bossIndex];
+        const round = Math.floor(this.mapBossRound / uniqueTypes.length) + 1;
         const hpScale = Math.pow(1.5, round);
         const dmgScale = Math.pow(1.25, round);
 
-        // Double boss at 30+ min, death wall at 40+
         if (minute >= 40) {
           this.spawnScaledBoss(bossType, hpScale * 2.0, dmgScale * 1.5);
-          const secondType = allBossKeys[(bossIndex + 1) % allBossKeys.length];
-          this.spawnScaledBoss(secondType, hpScale * 2.0, dmgScale * 1.5);
         } else if (minute >= 30) {
           this.spawnScaledBoss(bossType, hpScale * 1.5, dmgScale * 1.25);
-          const secondType = allBossKeys[(bossIndex + 1) % allBossKeys.length];
-          this.spawnScaledBoss(secondType, hpScale * 1.5, dmgScale * 1.25);
         } else {
           this.spawnScaledBoss(bossType, hpScale, dmgScale);
         }
 
         this.lastScaledBossTime = this.gameTime;
-        this.bossRound++;
+        this.mapBossRound++;
       }
     }
 
@@ -3728,7 +4061,10 @@ export class GameEngine {
     if (this.activeBoss && this.activeBoss.isAlive) {
       const boss = this.activeBoss;
       const bossType = boss.type as keyof typeof BOSSES;
-      const cfg = BOSSES[bossType];
+      const legacyCfg = BOSSES[bossType];
+      const mapSchedule = MAP_BOSSES[this.selectedMap];
+      const mapEntry = mapSchedule?.find(e => e.type === boss.type);
+      const cfg = legacyCfg || (mapEntry ? { slamInterval: mapEntry.slamInterval, slamRadius: mapEntry.slamRadius, slamDamage: mapEntry.slamDamage } : null);
 
       // Phase tracking
       if (boss.phase === undefined) boss.phase = 1;
@@ -3883,6 +4219,211 @@ export class GameEngine {
         }
       }
 
+      // === MAP-SPECIFIC BOSS BEHAVIORS ===
+      // Treant Guardian: root attack (slow player 1.5s)
+      if (boss.type === "treantGuardian" && boss.phase === 1 && hpPercent <= 0.5) {
+        boss.phase = 2; boss.speed = boss.baseSpeed * 0.8;
+        this.triggerShake(0.5, 0.3);
+      }
+      if (boss.type === "treantGuardian") {
+        if ((boss.phaseTimer || 0) >= 4) {
+          boss.phaseTimer = 0;
+          const dx = this.player.position.x - boss.position.x;
+          const dz = this.player.position.z - boss.position.z;
+          if (dx * dx + dz * dz < 36) { // range 6
+            this.player.speed = this.player.speed * 0.5;
+            setTimeout(() => { this.player.speed = PLAYER.baseSpeed * (1 + this.player.level * 0.02); }, 1500);
+          }
+        }
+      }
+
+      // Ancient Oak: leaf storm AOE every 5s
+      if (boss.type === "ancientOak" && boss.phase === 1 && hpPercent <= 0.5) {
+        boss.phase = 2; boss.phaseTimer = 0; this.triggerShake(0.8, 0.5);
+      }
+      if (boss.type === "ancientOak" && (boss.phaseTimer || 0) >= 5) {
+        boss.phaseTimer = 0;
+        // Leaf storm: AOE damage in radius 8
+        const dx = boss.position.x - this.player.position.x;
+        const dz = boss.position.z - this.player.position.z;
+        if (dx * dx + dz * dz < 64 && this.player.iFrameTimer <= 0) {
+          this.damagePlayer(15);
+        }
+        // Green particle burst
+        for (let i = 0; i < 10; i++) {
+          const a = Math.random() * Math.PI * 2;
+          const sp = 2 + Math.random() * 3;
+          const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.06, 4, 4), new THREE.MeshBasicMaterial({ color: 0x33cc33, transparent: true, opacity: 0.8 }));
+          leaf.position.copy(boss.position);
+          this.scene.add(leaf);
+          this.particles.push({ mesh: leaf, velocity: new THREE.Vector3(Math.cos(a) * sp, 1 + Math.random() * 2, Math.sin(a) * sp), life: 0, maxLife: 1.0 });
+        }
+      }
+
+      // Forest Warden: summon wolves/spiders every 8s
+      if (boss.type === "forestWarden" && boss.phase === 1 && hpPercent <= 0.5) {
+        boss.phase = 2; boss.phaseTimer = 0; this.triggerShake(1.0, 0.6);
+      }
+      if (boss.type === "forestWarden" && (boss.phaseTimer || 0) >= 8) {
+        boss.phaseTimer = 0;
+        for (let s = 0; s < 3; s++) {
+          const t = Math.random() > 0.5 ? "wolf" : "spider";
+          this.spawnEnemyAtPosition(t, boss.position.x + (Math.random() - 0.5) * 6, boss.position.z + (Math.random() - 0.5) * 6);
+        }
+      }
+
+      // Sand Scorpion: poison DoT on hit (handled via slam, extra fast)
+      if (boss.type === "sandScorpion" && boss.phase === 1 && hpPercent <= 0.5) {
+        boss.phase = 2; boss.speed = boss.baseSpeed * 1.5; this.triggerShake(0.5, 0.3);
+      }
+
+      // Desert Colossus: shockwave + hide phase
+      if (boss.type === "desertColossus" && boss.phase === 1 && hpPercent <= 0.5) {
+        boss.phase = 2; boss.phaseTimer = 0; this.triggerShake(0.8, 0.5);
+      }
+      if (boss.type === "desertColossus" && boss.phase === 2 && (boss.phaseTimer || 0) >= 6) {
+        boss.phaseTimer = 0;
+        // Teleport (burrow)
+        const a = Math.random() * Math.PI * 2;
+        boss.position.x = Math.max(-ARENA.halfSize + 5, Math.min(ARENA.halfSize - 5, this.player.position.x + Math.cos(a) * 10));
+        boss.position.z = Math.max(-ARENA.halfSize + 5, Math.min(ARENA.halfSize - 5, this.player.position.z + Math.sin(a) * 10));
+        boss.position.y = this.getTerrainHeight(boss.position.x, boss.position.z);
+        boss.mesh.position.copy(boss.position);
+      }
+
+      // Sandstorm Djinn: teleport + sand tornado
+      if (boss.type === "sandstormDjinn" && boss.phase === 1 && hpPercent <= 0.6) {
+        boss.phase = 2; boss.phaseTimer = 0; this.triggerShake(1.0, 0.6);
+      }
+      if (boss.type === "sandstormDjinn" && (boss.phaseTimer || 0) >= 5) {
+        boss.phaseTimer = 0;
+        // Teleport near player
+        const a = Math.random() * Math.PI * 2;
+        const d = 8 + Math.random() * 5;
+        boss.position.x = Math.max(-ARENA.halfSize + 5, Math.min(ARENA.halfSize - 5, this.player.position.x + Math.cos(a) * d));
+        boss.position.z = Math.max(-ARENA.halfSize + 5, Math.min(ARENA.halfSize - 5, this.player.position.z + Math.sin(a) * d));
+        boss.position.y = this.getTerrainHeight(boss.position.x, boss.position.z) + 2;
+        boss.mesh.position.copy(boss.position);
+        // Sand burst particles
+        for (let i = 0; i < 8; i++) {
+          const pa = Math.random() * Math.PI * 2;
+          const dust = new THREE.Mesh(new THREE.SphereGeometry(0.08, 4, 4), new THREE.MeshBasicMaterial({ color: 0xccaa33, transparent: true, opacity: 0.7 }));
+          dust.position.copy(boss.position);
+          this.scene.add(dust);
+          this.particles.push({ mesh: dust, velocity: new THREE.Vector3(Math.cos(pa) * 3, 2, Math.sin(pa) * 3), life: 0, maxLife: 0.8 });
+        }
+      }
+
+      // Magma Slime: splits into mini slimes on death (handled in killEnemy)
+      if (boss.type === "magmaSlime" && boss.phase === 1 && hpPercent <= 0.5) {
+        boss.phase = 2; boss.speed = boss.baseSpeed * 1.3; this.triggerShake(0.5, 0.3);
+      }
+
+      // Obsidian Golem: lava spray
+      if (boss.type === "obsidianGolem" && boss.phase === 1 && hpPercent <= 0.5) {
+        boss.phase = 2; boss.phaseTimer = 0; this.triggerShake(0.8, 0.5);
+      }
+      if (boss.type === "obsidianGolem" && boss.phase === 2 && (boss.phaseTimer || 0) >= 4) {
+        boss.phaseTimer = 0;
+        // Drop lava pool at current position
+        const px = boss.position.x; const pz = boss.position.z;
+        const py = this.getTerrainHeight(px, pz) + 0.05;
+        const poolR = 2;
+        const poolMat = new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.7 });
+        const poolMesh = new THREE.Mesh(new THREE.CircleGeometry(poolR, 12), poolMat);
+        poolMesh.rotation.x = -Math.PI / 2; poolMesh.position.set(px, py, pz);
+        this.scene.add(poolMesh); this.environmentObjects.push(poolMesh);
+        this.lavaPoolPositions.push({ x: px, z: pz, radius: poolR }); this.lavaPoolMeshes.push(poolMesh);
+        const poolRef = { x: px, z: pz, radius: poolR };
+        this.scheduleRemoval(poolMesh, 10);
+        setTimeout(() => {
+          const idx = this.lavaPoolPositions.findIndex(p => p.x === poolRef.x && p.z === poolRef.z && p.radius === poolRef.radius);
+          if (idx >= 0) { this.lavaPoolPositions.splice(idx, 1); this.lavaPoolMeshes.splice(idx, 1); }
+        }, 10000);
+      }
+
+      // Inferno Dragon: fire breath cone + meteor rain in phase 2
+      if (boss.type === "infernoDragon" && boss.phase === 1 && hpPercent <= 0.6) {
+        boss.phase = 2; boss.phaseTimer = 0; this.triggerShake(1.2, 0.8);
+      }
+      if (boss.type === "infernoDragon" && (boss.phaseTimer || 0) >= 6) {
+        boss.phaseTimer = 0;
+        // Fire breath: cone damage in front
+        const dx = this.player.position.x - boss.position.x;
+        const dz = this.player.position.z - boss.position.z;
+        if (dx * dx + dz * dz < 100 && this.player.iFrameTimer <= 0) {
+          this.damagePlayer(20);
+        }
+        // Fire particles
+        for (let i = 0; i < 12; i++) {
+          const a = Math.random() * Math.PI * 2;
+          const f = new THREE.Mesh(new THREE.SphereGeometry(0.1, 4, 4), new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.8 }));
+          f.position.copy(boss.position); f.position.y += 1;
+          this.scene.add(f);
+          this.particles.push({ mesh: f, velocity: new THREE.Vector3(Math.cos(a) * 4, 1 + Math.random(), Math.sin(a) * 4), life: 0, maxLife: 0.6 });
+        }
+        // Phase 2: meteor rain
+        if (boss.phase === 2) {
+          for (let i = 0; i < 3; i++) {
+            const mx = this.player.position.x + (Math.random() - 0.5) * 12;
+            const mz = this.player.position.z + (Math.random() - 0.5) * 12;
+            const my = this.getTerrainHeight(mx, mz);
+            const wMat = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.4, side: THREE.DoubleSide });
+            const wMesh = new THREE.Mesh(new THREE.CircleGeometry(3, 12), wMat);
+            wMesh.rotation.x = -Math.PI / 2; wMesh.position.set(mx, my + 0.1, mz);
+            this.scene.add(wMesh);
+            this.meteorWarnings.push({ position: new THREE.Vector3(mx, my, mz), mesh: wMesh, timer: 2.0 });
+          }
+        }
+      }
+
+      // Frost Wolf Alpha: summon wolves
+      if (boss.type === "frostWolfAlpha" && boss.phase === 1 && hpPercent <= 0.5) {
+        boss.phase = 2; boss.speed = boss.baseSpeed * 1.3; boss.phaseTimer = 0; this.triggerShake(0.5, 0.3);
+      }
+      if (boss.type === "frostWolfAlpha" && (boss.phaseTimer || 0) >= 6) {
+        boss.phaseTimer = 0;
+        for (let s = 0; s < 3; s++) {
+          this.spawnEnemyAtPosition("wolf", boss.position.x + (Math.random() - 0.5) * 5, boss.position.z + (Math.random() - 0.5) * 5);
+        }
+      }
+
+      // Ice Golem: freezing aura (slow nearby player) + ice spear
+      if (boss.type === "iceGolem" && boss.phase === 1 && hpPercent <= 0.5) {
+        boss.phase = 2; boss.phaseTimer = 0; this.triggerShake(0.8, 0.5);
+      }
+      if (boss.type === "iceGolem") {
+        // Freezing aura: slow player if within 8 units
+        const dx = this.player.position.x - boss.position.x;
+        const dz = this.player.position.z - boss.position.z;
+        if (dx * dx + dz * dz < 64) {
+          this.player.speed = PLAYER.baseSpeed * 0.6 * (1 + this.player.level * 0.02);
+        }
+      }
+
+      // Blizzard Titan: blizzard + ice walls + avalanche
+      if (boss.type === "blizzardTitan" && boss.phase === 1 && hpPercent <= 0.6) {
+        boss.phase = 2; boss.phaseTimer = 0; this.triggerShake(1.2, 0.8);
+      }
+      if (boss.type === "blizzardTitan" && (boss.phaseTimer || 0) >= 7) {
+        boss.phaseTimer = 0;
+        // Ice wall: spawn obstacle
+        const wx = boss.position.x + (Math.random() - 0.5) * 8;
+        const wz = boss.position.z + (Math.random() - 0.5) * 8;
+        const wy = this.getTerrainHeight(wx, wz);
+        const wall = new THREE.Mesh(new THREE.BoxGeometry(4, 3, 0.5), new THREE.MeshLambertMaterial({ color: 0xaaddff, transparent: true, opacity: 0.7 }));
+        wall.position.set(wx, wy + 1.5, wz);
+        wall.rotation.y = Math.random() * Math.PI;
+        this.scene.add(wall); this.environmentObjects.push(wall);
+        this.scheduleRemoval(wall, 8);
+        // AOE damage
+        const dx = boss.position.x - this.player.position.x;
+        const dz = boss.position.z - this.player.position.z;
+        if (dx * dx + dz * dz < 81 && this.player.iFrameTimer <= 0) {
+          this.damagePlayer(18);
+        }
+      }
+
       if (cfg) {
         let slamInterval = cfg.slamInterval;
         // Stone Golem phase 2: halve slam cooldown
@@ -3905,14 +4446,15 @@ export class GameEngine {
       const enemy = this.enemies.find(e => e.id === id);
       if (enemy && enemy.mesh) {
         const s = newProgress;
-        // Boss meshes have their own base scale (1.3-1.5), so we scale relative
-        const baseScale = enemy.type === "stoneGolem" ? 1.5 : enemy.type === "fireWraith" ? 1.3 : 1.4;
+        // Boss meshes have their own base scale
+        const miniTypes = new Set(["treantGuardian", "sandScorpion", "magmaSlime", "frostWolfAlpha"]);
+        const baseScale = miniTypes.has(enemy.type) ? 1.0 : enemy.type === "stoneGolem" ? 1.5 : enemy.type === "fireWraith" ? 1.3 : 1.4;
         enemy.mesh.scale.set(baseScale * s, baseScale * s, baseScale * s);
       }
     }
 
     // Boss idle animations & particles
-    const bossTypes = new Set(Object.keys(BOSSES));
+    const bossTypes = ALL_BOSS_TYPES;
     for (const enemy of this.enemies) {
       if (!enemy.isAlive || !bossTypes.has(enemy.type)) continue;
 
@@ -4070,6 +4612,45 @@ export class GameEngine {
     this.activeBoss = boss;
     this.bossSlamTimers.set(boss.id, BOSSES[type as keyof typeof BOSSES]?.slamInterval || 4);
     this.bossSpawnScale.set(boss.id, 0); // start spawn animation
+    mesh.scale.set(0, 0, 0);
+    this.onBossSpawn?.(type);
+    Audio.playBossSpawn();
+  }
+
+  private spawnMapBoss(type: string, isMini: boolean) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 20;
+    const pos = new THREE.Vector3(
+      this.player.position.x + Math.cos(angle) * dist, 0.5,
+      this.player.position.z + Math.sin(angle) * dist);
+    pos.x = Math.max(-ARENA.halfSize + 5, Math.min(ARENA.halfSize - 5, pos.x));
+    pos.z = Math.max(-ARENA.halfSize + 5, Math.min(ARENA.halfSize - 5, pos.z));
+    pos.y = this.getTerrainHeight(pos.x, pos.z);
+
+    const stats = ENEMIES[type as keyof typeof ENEMIES];
+    if (!stats) return;
+    const factory = this.enemyMeshFactories[type];
+    if (!factory) return;
+    const mesh = factory();
+    mesh.position.copy(pos); mesh.castShadow = true;
+    this.scene.add(mesh);
+
+    const minuteScale = 1 + this.gameTime / 60 * 0.15;
+    const boss: EnemyInstance = {
+      id: this.nextEnemyId++, type, position: pos, velocity: new THREE.Vector3(),
+      hp: stats.hp * minuteScale, maxHp: stats.hp * minuteScale,
+      damage: stats.damage * (1 + this.gameTime / 120 * 0.1),
+      speed: stats.speed, radius: stats.radius, mesh, isAlive: true, hitTimer: 0,
+      xpValue: stats.xp, color: stats.color,
+      slowTimer: 0, slowAmount: 0, burnTimer: 0, burnDamage: 0,
+      lastDamageTime: this.gameTime, isElite: false, attackTimer: 0, summonTimer: 0,
+      baseSpeed: stats.speed, baseDamage: stats.damage * (1 + this.gameTime / 120 * 0.1),
+    };
+    this.enemies.push(boss);
+    this.activeBoss = boss;
+    const mapEntry = MAP_BOSSES[this.selectedMap]?.find(e => e.type === type);
+    this.bossSlamTimers.set(boss.id, mapEntry?.slamInterval || 4);
+    this.bossSpawnScale.set(boss.id, 0);
     mesh.scale.set(0, 0, 0);
     this.onBossSpawn?.(type);
     Audio.playBossSpawn();

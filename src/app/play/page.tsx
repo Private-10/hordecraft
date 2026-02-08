@@ -358,19 +358,55 @@ export default function PlayPage() {
           stoneGolem: lang === "tr" ? "⛰️ Taş Golem" : "⛰️ Stone Golem",
           fireWraith: lang === "tr" ? "🔥 Ateş Hayaleti" : "🔥 Fire Wraith",
           shadowLord: lang === "tr" ? "👿 Gölge Lordu" : "👿 Shadow Lord",
+          treantGuardian: lang === "tr" ? "🌲 Treant Muhafız" : "🌲 Treant Guardian",
+          ancientOak: lang === "tr" ? "🌳 Kadim Meşe" : "🌳 Ancient Oak",
+          forestWarden: lang === "tr" ? "🌿 Orman Koruyucu" : "🌿 Forest Warden",
+          sandScorpion: lang === "tr" ? "🦂 Kum Akrebi" : "🦂 Sand Scorpion",
+          desertColossus: lang === "tr" ? "🏜️ Çöl Devi" : "🏜️ Desert Colossus",
+          sandstormDjinn: lang === "tr" ? "🌪️ Kum Fırtınası Cini" : "🌪️ Sandstorm Djinn",
+          magmaSlime: lang === "tr" ? "🔥 Magma Balçığı" : "🔥 Magma Slime",
+          obsidianGolem: lang === "tr" ? "⬛ Obsidyen Golem" : "⬛ Obsidian Golem",
+          infernoDragon: lang === "tr" ? "🐉 Cehennem Ejderhası" : "🐉 Inferno Dragon",
+          frostWolfAlpha: lang === "tr" ? "🐺 Buz Kurdu Alfa" : "🐺 Frost Wolf Alpha",
+          iceGolem: lang === "tr" ? "❄️ Buz Golem" : "❄️ Ice Golem",
+          blizzardTitan: lang === "tr" ? "🌨️ Kar Fırtınası Titanı" : "🌨️ Blizzard Titan",
         };
         setBossInfo({ name: names[boss.type] || boss.type, hp: boss.hp, maxHp: boss.maxHp });
         setNextBossTime(null);
         setBossWarning(null);
       } else {
         setBossInfo(null);
-        const bossSchedule = [
+        // Use map-specific schedule if available
+        const mapSchedules: Record<string, { type: string; minute: number; name: string }[]> = {
+          forest: [
+            { type: "treantGuardian", minute: 3, name: lang === "tr" ? "Treant Muhafız" : "Treant Guardian" },
+            { type: "ancientOak", minute: 7, name: lang === "tr" ? "Kadim Meşe" : "Ancient Oak" },
+            { type: "forestWarden", minute: 15, name: lang === "tr" ? "Orman Koruyucu" : "Forest Warden" },
+          ],
+          desert: [
+            { type: "sandScorpion", minute: 3, name: lang === "tr" ? "Kum Akrebi" : "Sand Scorpion" },
+            { type: "desertColossus", minute: 7, name: lang === "tr" ? "Çöl Devi" : "Desert Colossus" },
+            { type: "sandstormDjinn", minute: 15, name: lang === "tr" ? "Kum Fırtınası Cini" : "Sandstorm Djinn" },
+          ],
+          volcanic: [
+            { type: "magmaSlime", minute: 3, name: lang === "tr" ? "Magma Balçığı" : "Magma Slime" },
+            { type: "obsidianGolem", minute: 7, name: lang === "tr" ? "Obsidyen Golem" : "Obsidian Golem" },
+            { type: "infernoDragon", minute: 15, name: lang === "tr" ? "Cehennem Ejderhası" : "Inferno Dragon" },
+          ],
+          frozen: [
+            { type: "frostWolfAlpha", minute: 3, name: lang === "tr" ? "Buz Kurdu Alfa" : "Frost Wolf Alpha" },
+            { type: "iceGolem", minute: 7, name: lang === "tr" ? "Buz Golem" : "Ice Golem" },
+            { type: "blizzardTitan", minute: 15, name: lang === "tr" ? "Kar Fırtınası Titanı" : "Blizzard Titan" },
+          ],
+        };
+        const selectedMap = (eng as any).selectedMap || "forest";
+        const bossSchedule = mapSchedules[selectedMap] || [
           { type: "stoneGolem", minute: 5, name: lang === "tr" ? "Taş Golem" : "Stone Golem" },
           { type: "fireWraith", minute: 10, name: lang === "tr" ? "Ateş Hayaleti" : "Fire Wraith" },
           { type: "shadowLord", minute: 15, name: lang === "tr" ? "Gölge Lordu" : "Shadow Lord" },
         ];
         const currentMinute = eng.gameTime / 60;
-        const next = bossSchedule.find(b => !eng.bossSpawned.has(b.type) && currentMinute < b.minute);
+        const next = bossSchedule.find(b => currentMinute < b.minute);
         if (next) {
           const secsLeft = Math.max(0, next.minute * 60 - eng.gameTime);
           setNextBossTime(secsLeft);
