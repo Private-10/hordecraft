@@ -40,9 +40,10 @@ const CHARACTERS = [
 ];
 
 const TIME_FILTERS = [
-  { id: "all", tr: "Tüm Zamanlar", en: "All Time" },
-  { id: "week", tr: "Bu Hafta", en: "This Week" },
+  { id: "all", tr: "Tümü", en: "All Time" },
   { id: "today", tr: "Bugün", en: "Today" },
+  { id: "week", tr: "Bu Hafta", en: "This Week" },
+  { id: "month", tr: "Bu Ay", en: "This Month" },
 ];
 
 function getWeekBounds() {
@@ -183,7 +184,9 @@ export default function LeaderboardPage() {
       const now = new Date();
       let cutoff: Date;
       if (timeFilter === "today") {
-        cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        cutoff = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+      } else if (timeFilter === "month") {
+        cutoff = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
       } else {
         // this week (last 7 days)
         cutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);

@@ -18,6 +18,7 @@ export default function PlayPage() {
   const engineRef = useRef<GameEngine | null>(null);
 
   const [gameState, setGameState] = useState<GameState>("menu");
+  const [deathCause, setDeathCause] = useState("");
   const [upgradeOptions, setUpgradeOptions] = useState<UpgradeOption[]>([]);
   const [stats, setStats] = useState({
     hp: 100, maxHp: 100, xp: 0, xpToNext: 20, level: 1,
@@ -177,6 +178,8 @@ export default function PlayPage() {
     engine.onStateChange = (state: GameState) => {
       setGameState(state);
       if (state === "gameover") {
+        // Read death cause
+        if (engineRef.current) setDeathCause(engineRef.current.getDeathCause());
         // Update stats one final time (gold is calculated in actualGameOver)
         setStats({
           hp: Math.round(engine.player.hp),
@@ -1235,6 +1238,20 @@ export default function PlayPage() {
           <div className="game-over-panel">
             <div className="game-over-title">{t("gameover.title")}</div>
             <div className="game-over-score">{t("gameover.score")}: {stats.score.toLocaleString()}</div>
+            {deathCause && (() => {
+              const deathNames: Record<string, string> = {
+                goblin: "🟢 Goblin", slime: "🟢 Slime", skeleton: "💀 İskelet", bat: "🦇 Yarasa",
+                ogre: "👹 Ogre", spider: "🕷️ Örümcek", zombie: "🧟 Zombi", wolf: "🐺 Kurt",
+                necromancer: "🔮 Nekromansır", troll: "🧌 Trol", shaman: "✨ Şaman",
+                stoneGolem: "⛰️ Taş Golem", fireWraith: "🔥 Ateş Hayaleti", shadowLord: "👿 Gölge Lord",
+                lava: "🌋 Lav", projectile: "🏹 Ok", meteor: "☄️ Meteor", mini_slime: "🟢 Mini Slime",
+              };
+              return (
+                <div style={{ fontSize: 16, color: "rgba(255,255,255,0.8)", marginBottom: 8 }}>
+                  💀 Öldüren: <span style={{ fontWeight: 700, color: "#ff6b35" }}>{deathNames[deathCause] || deathCause}</span>
+                </div>
+              );
+            })()}
             <div className="game-over-stats">
               <span>⏱️ {formatTime(stats.survivalTime)}</span>
               <span>☠️ {stats.kills.toLocaleString()} {t("gameover.kill")}</span>

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-export type GameState = "menu" | "playing" | "levelup" | "gameover";
+export type GameState = "menu" | "playing" | "levelup" | "gameover" | "chest_spin";
 
 export interface PlayerState {
   position: THREE.Vector3;

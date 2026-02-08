@@ -8,6 +8,10 @@ export class MobileInputManager {
   cameraDeltaX = 0;
   cameraDeltaY = 0;
 
+  // Pinch zoom
+  pinchDelta = 0;
+  private pinchStartDist: number | null = null;
+
   // Buttons
   jumpPressed = false;
   slidePressed = false;
@@ -156,6 +160,8 @@ export class MobileInputManager {
       this.cameraDeltaY = 0;
       this.jumpPressed = false;
       this.slidePressed = false;
+      this.pinchDelta = 0;
+      this.pinchStartDist = null;
       this.joystickTouchId = null;
       this.cameraTouchId = null;
       this._lastCameraX = null;
@@ -166,8 +172,22 @@ export class MobileInputManager {
     }
   }
 
+  private getTouchDistance(touches: TouchList): number {
+    if (touches.length < 2) return 0;
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
   private onTouchStart = (e: TouchEvent) => {
     if (!this._active) return; // Don't capture touches when inactive (menu)
+
+    // Pinch detection: 2 fingers
+    if (e.touches.length === 2) {
+      this.pinchStartDist = this.getTouchDistance(e.touches);
+      e.preventDefault();
+      return;
+    }
 
     for (let i = 0; i < e.changedTouches.length; i++) {
       const touch = e.changedTouches[i];
@@ -193,6 +213,16 @@ export class MobileInputManager {
 
   private onTouchMove = (e: TouchEvent) => {
     if (!this._active) return;
+
+    // Pinch zoom
+    if (e.touches.length === 2 && this.pinchStartDist !== null) {
+      const newDist = this.getTouchDistance(e.touches);
+      this.pinchDelta += (newDist - this.pinchStartDist) * 0.02;
+      this.pinchStartDist = newDist;
+      e.preventDefault();
+      return;
+    }
+
     for (let i = 0; i < e.changedTouches.length; i++) {
       const touch = e.changedTouches[i];
 
@@ -231,6 +261,7 @@ export class MobileInputManager {
 
   private onTouchEnd = (e: TouchEvent) => {
     if (!this._active) return;
+    if (e.touches.length < 2) this.pinchStartDist = null;
     for (let i = 0; i < e.changedTouches.length; i++) {
       const touch = e.changedTouches[i];
 
@@ -251,6 +282,12 @@ export class MobileInputManager {
       }
     }
   };
+
+  consumePinch(): number {
+    const d = this.pinchDelta;
+    this.pinchDelta = 0;
+    return d;
+  }
 
   consumeCameraDelta() {
     const dx = this.cameraDeltaX;

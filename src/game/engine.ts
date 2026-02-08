@@ -36,6 +36,9 @@ export class GameEngine {
   private cameraDistance = CAMERA.distance;
   private cameraTargetDistance = CAMERA.distance;
 
+  // Death cause tracking
+  private lastDamageSource = "";
+
   // Screen shake
   private shakeIntensity = 0;
   private shakeTimer = 0;
@@ -245,6 +248,7 @@ export class GameEngine {
   private chestSpawnTimer = 45;
   private nextChestId = 0;
   onChestCollect?: (type: string, amount: number) => void;
+  onChestOpen?: (options: {icon: string, name: string, type: 'weapon' | 'passive', id: string}[]) => void;
 
   // Anti-cheat integrity tracking
   private integrityHash = 0;
@@ -941,6 +945,7 @@ export class GameEngine {
         const dz = this.player.position.z - pool.z;
         if (dx * dx + dz * dz < pool.radius * pool.radius) {
           if (this.player.iFrameTimer <= 0) {
+            this.lastDamageSource = "lava";
             this.damagePlayer(1); // 1 damage per tick, 5x/sec = 5 DPS
           }
           break;
@@ -1006,6 +1011,7 @@ export class GameEngine {
         const dx = this.player.position.x - m.position.x;
         const dz = this.player.position.z - m.position.z;
         if (dx * dx + dz * dz < 25 && this.player.iFrameTimer <= 0) {
+          this.lastDamageSource = "meteor";
           this.damagePlayer(m.damage);
         }
         // Explosion particles
@@ -2151,6 +2157,7 @@ export class GameEngine {
     const ch = this.selectedCharacter;
 
     this.player = this.createDefaultPlayer();
+    this.lastDamageSource = "";
     // Apply character stats
     this.player.maxHp = Math.round(PLAYER.baseHP * ch.hpMult);
     this.player.hp = this.player.maxHp;
@@ -2641,6 +2648,15 @@ export class GameEngine {
       this.cameraTargetDistance = Math.max(CAMERA.minDistance, Math.min(CAMERA.maxDistance, this.cameraTargetDistance));
     }
 
+    // Pinch zoom (mobile)
+    if (this.isMobile) {
+      const pinch = this.mobileInput.consumePinch();
+      if (pinch !== 0) {
+        this.cameraTargetDistance -= pinch; // positive pinch = zoom in = decrease distance
+        this.cameraTargetDistance = Math.max(8, Math.min(18, this.cameraTargetDistance));
+      }
+    }
+
     // Combat auto-zoom: count nearby enemies
     let nearbyEnemies = 0;
     for (const e of this.enemies) {
@@ -2650,17 +2666,53 @@ export class GameEngine {
       if (edx * edx + edz * edz < 225) nearbyEnemies++; // 15^2
     }
     const combatZoomTarget = nearbyEnemies > 10
-      ? this.cameraTargetDistance + 2
-      : this.cameraTargetDistance;
+      ? this.cameraTargetDistance + 3
+      : nearbyEnemies < 5 ? this.cameraTargetDistance : this.cameraDistance;
 
     // Smooth lerp
-    this.cameraDistance += (combatZoomTarget - this.cameraDistance) * 0.05;
+    this.cameraDistance += (combatZoomTarget - this.cameraDistance) * 0.02;
 
     const dist = this.cameraDistance;
 
     let camX = p.x + Math.sin(this.cameraYaw) * Math.cos(this.cameraPitch) * dist;
     let camY = p.y + Math.sin(this.cameraPitch) * dist;
     let camZ = p.z + Math.cos(this.cameraYaw) * Math.cos(this.cameraPitch) * dist;
+
+    // Camera wall collision: prevent clipping through rocks
+    {
+      const dirX = camX - p.x;
+      const dirY = camY - p.y;
+      const dirZ = camZ - p.z;
+      const camDist = Math.sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ);
+      if (camDist > 0.1) {
+        const ndx = dirX / camDist;
+        const ndy = dirY / camDist;
+        const ndz = dirZ / camDist;
+        let closestT = 1.0;
+        for (const rock of this.rockColliders) {
+          // Ray-sphere intersection: line from player to camera vs rock sphere
+          const ox = p.x - rock.position.x;
+          const oz = p.z - rock.position.z;
+          const a = ndx * ndx + ndz * ndz;
+          const b = 2 * (ox * ndx + oz * ndz);
+          const r = rock.radius + 0.5; // padding
+          const c = ox * ox + oz * oz - r * r;
+          const disc = b * b - 4 * a * c;
+          if (disc >= 0 && a > 0) {
+            const t = (-b - Math.sqrt(disc)) / (2 * a * camDist);
+            if (t > 0.05 && t < closestT) closestT = t;
+          }
+        }
+        if (closestT < 1.0) {
+          camX = p.x + dirX * closestT;
+          camY = p.y + dirY * closestT;
+          camZ = p.z + dirZ * closestT;
+        }
+      }
+      // Ensure camera stays above terrain
+      const terrainAtCam = this.getTerrainHeight(camX, camZ);
+      if (camY < terrainAtCam + 1) camY = terrainAtCam + 1;
+    }
 
     // Apply screen shake
     if (this.shakeTimer > 0) {
@@ -2921,6 +2973,7 @@ export class GameEngine {
       const collDistSq = cdx * cdx + cdz * cdz;
       const collRadius = enemy.radius + PLAYER.radius;
       if (collDistSq < collRadius * collRadius && this.player.iFrameTimer <= 0) {
+        this.lastDamageSource = enemy.type;
         this.damagePlayer(enemy.damage, enemy.position);
       }
     }
@@ -3030,6 +3083,7 @@ export class GameEngine {
       const epDistSq = epdx * epdx + epdz * epdz + epdy * epdy;
       const epRadius = PLAYER.radius + 0.2;
       if (epDistSq < epRadius * epRadius && this.player.iFrameTimer <= 0) {
+        this.lastDamageSource = "projectile";
         this.damagePlayer(proj.damage, proj.position);
         proj.isAlive = false;
       }
@@ -3495,7 +3549,20 @@ export class GameEngine {
         const round = Math.floor(this.bossRound / allBossKeys.length) + 1;
         const hpScale = Math.pow(1.5, round);
         const dmgScale = Math.pow(1.25, round);
-        this.spawnScaledBoss(bossType, hpScale, dmgScale);
+
+        // Double boss at 30+ min, death wall at 40+
+        if (minute >= 40) {
+          this.spawnScaledBoss(bossType, hpScale * 2.0, dmgScale * 1.5);
+          const secondType = allBossKeys[(bossIndex + 1) % allBossKeys.length];
+          this.spawnScaledBoss(secondType, hpScale * 2.0, dmgScale * 1.5);
+        } else if (minute >= 30) {
+          this.spawnScaledBoss(bossType, hpScale * 1.5, dmgScale * 1.25);
+          const secondType = allBossKeys[(bossIndex + 1) % allBossKeys.length];
+          this.spawnScaledBoss(secondType, hpScale * 1.5, dmgScale * 1.25);
+        } else {
+          this.spawnScaledBoss(bossType, hpScale, dmgScale);
+        }
+
         this.lastScaledBossTime = this.gameTime;
         this.bossRound++;
       }
@@ -3761,6 +3828,41 @@ export class GameEngine {
     Audio.playBossSpawn();
   }
 
+  private spawnSecondBoss(type: string, hpScale: number, dmgScale: number) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 20;
+    const pos = new THREE.Vector3(
+      this.player.position.x + Math.cos(angle) * dist + 20, 0.5,
+      this.player.position.z + Math.sin(angle) * dist);
+    pos.x = Math.max(-ARENA.halfSize + 5, Math.min(ARENA.halfSize - 5, pos.x));
+    pos.z = Math.max(-ARENA.halfSize + 5, Math.min(ARENA.halfSize - 5, pos.z));
+    pos.y = this.getTerrainHeight(pos.x, pos.z);
+
+    const stats = ENEMIES[type as keyof typeof ENEMIES];
+    if (!stats) return;
+    const factory = this.enemyMeshFactories[type];
+    if (!factory) return;
+    const mesh = factory();
+    mesh.position.copy(pos); mesh.castShadow = true;
+    this.scene.add(mesh);
+
+    const minuteScale = 1 + this.gameTime / 60 * 0.15;
+    const boss: EnemyInstance = {
+      id: this.nextEnemyId++, type, position: pos, velocity: new THREE.Vector3(),
+      hp: stats.hp * minuteScale * hpScale, maxHp: stats.hp * minuteScale * hpScale,
+      damage: stats.damage * (1 + this.gameTime / 120 * 0.1) * dmgScale,
+      speed: stats.speed, radius: stats.radius, mesh, isAlive: true, hitTimer: 0,
+      xpValue: stats.xp * Math.ceil(hpScale), color: stats.color,
+      slowTimer: 0, slowAmount: 0, burnTimer: 0, burnDamage: 0,
+      lastDamageTime: this.gameTime, isElite: false, attackTimer: 0, summonTimer: 0,
+      baseSpeed: stats.speed, baseDamage: stats.damage * (1 + this.gameTime / 120 * 0.1) * dmgScale,
+    };
+    this.enemies.push(boss);
+    // Don't override activeBoss - this is the second boss, tracked as regular enemy with boss stats
+    this.bossSlamTimers.set(boss.id, BOSSES[type as keyof typeof BOSSES]?.slamInterval || 4);
+    Audio.playBossSpawn();
+  }
+
   private bossSlam(boss: EnemyInstance, radius: number, damage: number) {
     // Strong screen shake for boss slam
     this.triggerShake(0.8, 0.3);
@@ -3769,6 +3871,7 @@ export class GameEngine {
     const bsdx = boss.position.x - this.player.position.x;
     const bsdz = boss.position.z - this.player.position.z;
     if (bsdx * bsdx + bsdz * bsdz < radius * radius && this.player.iFrameTimer <= 0) {
+      this.lastDamageSource = boss.type;
       this.damagePlayer(damage, boss.position);
     }
 
@@ -4518,6 +4621,10 @@ export class GameEngine {
       }
       this.killEnemy(enemy);
     }
+  }
+
+  getDeathCause(): string {
+    return this.lastDamageSource;
   }
 
   private damagePlayer(damage: number, knockbackSource?: THREE.Vector3) {
