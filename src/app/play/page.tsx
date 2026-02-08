@@ -8,6 +8,7 @@ import { CHARACTERS, type CharacterDef } from "@/game/characters";
 import { MAPS } from "@/game/constants";
 import type { MetaState } from "@/game/types";
 import { getActiveNickname, registerNickname, claimNickname, isNicknameClaimed, logoutNickname } from "@/game/nickname";
+import { loadMetaFromCloud, mergeMetaStates } from "@/game/cloud-save";
 import { collection, addDoc, query, orderBy, limit as fbLimit, onSnapshot } from "firebase/firestore";
 import { db } from "@/game/firebase";
 
@@ -87,6 +88,18 @@ export default function PlayPage() {
     if (savedNick && savedNick.trim().length >= 2) {
       setNicknameState(savedNick);
       setNickLoggedIn(true);
+      // Sync cloud meta on page load (delayed to let engine init)
+      setTimeout(() => {
+        if (engineRef.current) {
+          loadMetaFromCloud(savedNick).then(cloud => {
+            if (cloud && engineRef.current) {
+              const local = engineRef.current.getMetaState();
+              const merged = mergeMetaStates(local, cloud);
+              engineRef.current.setMetaState(merged);
+            }
+          }).catch(() => {});
+        }
+      }, 1500);
     }
 
     const onMouseMove = (e: MouseEvent) => {
@@ -298,6 +311,22 @@ export default function PlayPage() {
   const refreshMeta = useCallback(() => {
     if (engineRef.current) setMetaState({ ...engineRef.current.getMetaState() });
   }, []);
+
+  /** Load cloud meta, merge with local, apply to engine */
+  const syncCloudMeta = useCallback(async (nick: string) => {
+    if (!engineRef.current) return;
+    try {
+      const cloud = await loadMetaFromCloud(nick);
+      if (cloud) {
+        const local = engineRef.current.getMetaState();
+        const merged = mergeMetaStates(local, cloud);
+        engineRef.current.setMetaState(merged);
+      }
+    } catch (e) {
+      console.warn("Cloud sync failed:", e);
+    }
+    refreshMeta();
+  }, [refreshMeta]);
 
   // Refresh meta on mount and when returning to menu
   useEffect(() => {
@@ -646,6 +675,7 @@ export default function PlayPage() {
                             setNickError(lang === "tr" ? "İsim bulunamadı" : "Name not found");
                           } else {
                             setNickLoggedIn(true);
+                            syncCloudMeta(nickname.trim());
                           }
                         }}
                       >
@@ -668,6 +698,7 @@ export default function PlayPage() {
                             }
                           } else {
                             setNickLoggedIn(true);
+                            syncCloudMeta(nickname.trim());
                           }
                         }}
                       >

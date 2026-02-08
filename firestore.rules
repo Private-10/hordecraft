@@ -20,6 +20,13 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Players: cloud save for meta progression
+    match /players/{playerId} {
+      allow read: if true;
+      allow create, update: if true;
+      allow delete: if false;
+    }
+
     // Chat: anyone can read, anyone can create (no edit/delete)
     match /chat/{msgId} {
       allow read: if true;

@@ -6,6 +6,8 @@ import * as Audio from "./audio";
 import { getCharacter, type CharacterDef } from "./characters";
 export { Audio };
 import { t } from "./i18n";
+import { getActiveNickname } from "./nickname";
+import { saveMetaToCloud } from "./cloud-save";
 import type {
   GameState, PlayerState, EnemyInstance, XPGem, Projectile,
   WeaponState, UpgradeOption, GameStats, ShockWaveEffect, LightningEffect, FireSegment,
@@ -4813,9 +4815,20 @@ export class GameEngine {
     try {
       localStorage.setItem("hordecraft_meta", JSON.stringify(this.metaState));
     } catch {}
+    // Fire-and-forget cloud save if logged in
+    const nick = getActiveNickname();
+    if (nick) {
+      saveMetaToCloud(nick, this.metaState);
+    }
   }
 
   getMetaState(): MetaState { return this.metaState; }
+
+  /** Replace meta state (used after cloud merge on login) */
+  setMetaState(meta: MetaState) {
+    this.metaState = meta;
+    this.saveMetaState();
+  }
 
   getUpgradeCost(id: string, level: number): number {
     return Math.floor(100 * Math.pow(1.5, level));
