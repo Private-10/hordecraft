@@ -172,6 +172,13 @@ export class GameEngine {
   // Vortex tracking
   private vortexes: VortexEffect[] = [];
 
+  // New weapon state
+  private soulCount = 0;
+  private soulParticles: { mesh: THREE.Mesh; velocity: THREE.Vector3; timer: number }[] = [];
+  private holySmiteEffects: { position: THREE.Vector3; mesh: THREE.Group; timer: number; maxTime: number; damage: number; healAmount: number; radius: number }[] = [];
+  private arcaneOrbs: { position: THREE.Vector3; velocity: THREE.Vector3; mesh: THREE.Group; timer: number; maxTime: number; damage: number; radius: number }[] = [];
+  private bloodAxeProjectiles: { position: THREE.Vector3; velocity: THREE.Vector3; mesh: THREE.Mesh; timer: number; damage: number; hitEnemies: Set<number> }[] = [];
+
   // Settings
   settings = this.loadSettings();
 
@@ -532,15 +539,15 @@ export class GameEngine {
     const rockCount = Math.floor(50 * (0.8 + rng() * 0.4));
     const sharedRockMat = new THREE.MeshLambertMaterial({ color: 0x445544 });
     for (let i = 0; i < rockCount; i++) {
-      const rockRadius = Math.random() * 2.5 + 0.5;
+      const rockRadius = rng() * 2.5 + 0.5;
       const rockGeo = new THREE.DodecahedronGeometry(rockRadius, 0);
       const rock = new THREE.Mesh(rockGeo, sharedRockMat);
-      const rx = (Math.random() - 0.5) * ARENA.size * 0.85;
-      const rz = (Math.random() - 0.5) * ARENA.size * 0.85;
+      const rx = (rng() - 0.5) * ARENA.size * 0.85;
+      const rz = (rng() - 0.5) * ARENA.size * 0.85;
       if (Math.abs(rx) < 5 && Math.abs(rz) < 5) continue;
-      const ry = this.getTerrainHeight(rx, rz) + Math.random() * 0.3;
+      const ry = this.getTerrainHeight(rx, rz) + rng() * 0.3;
       rock.position.set(rx, ry, rz);
-      rock.rotation.set(Math.random() * 0.5, Math.random() * Math.PI * 2, Math.random() * 0.5);
+      rock.rotation.set(rng() * 0.5, rng() * Math.PI * 2, rng() * 0.5);
       rock.castShadow = true;
       rock.receiveShadow = true;
       this.scene.add(rock);
@@ -570,14 +577,14 @@ export class GameEngine {
     // Trees - increased to 80
     const treeCount = Math.floor(80 * (0.8 + rng() * 0.4));
     for (let i = 0; i < treeCount; i++) {
-      const tx = (Math.random() - 0.5) * ARENA.size * 0.85;
-      const tz = (Math.random() - 0.5) * ARENA.size * 0.85;
+      const tx = (rng() - 0.5) * ARENA.size * 0.85;
+      const tz = (rng() - 0.5) * ARENA.size * 0.85;
       const ty = this.getTerrainHeight(tx, tz);
       if (Math.abs(tx) < 8 && Math.abs(tz) < 8) continue;
 
       const tree = new THREE.Group();
-      const treeType = Math.random();
-      const scale = 0.7 + Math.random() * 0.6;
+      const treeType = rng();
+      const scale = 0.7 + rng() * 0.6;
 
       if (treeType < 0.33) {
         // Pine tree
@@ -607,12 +614,12 @@ export class GameEngine {
         trunk.position.y = 1;
         trunk.castShadow = true;
         tree.add(trunk);
-        const leaves1 = new THREE.Mesh(oakLeafGeo1, Math.random() > 0.5 ? oakLeafMat : oakLeafMatDark);
+        const leaves1 = new THREE.Mesh(oakLeafGeo1, rng() > 0.5 ? oakLeafMat : oakLeafMatDark);
         leaves1.position.y = 2.8 * scale;
         leaves1.scale.setScalar(scale);
         leaves1.castShadow = true;
         tree.add(leaves1);
-        const leaves2 = new THREE.Mesh(oakLeafGeo2, Math.random() > 0.5 ? oakLeafMatDark : oakLeafMat);
+        const leaves2 = new THREE.Mesh(oakLeafGeo2, rng() > 0.5 ? oakLeafMatDark : oakLeafMat);
         leaves2.position.y = 3.8 * scale;
         leaves2.scale.setScalar(scale);
         leaves2.castShadow = true;
@@ -620,7 +627,7 @@ export class GameEngine {
       }
 
       tree.position.set(tx, ty, tz);
-      tree.rotation.y = Math.random() * Math.PI * 2;
+      tree.rotation.y = rng() * Math.PI * 2;
       this.scene.add(tree);
       this.environmentObjects.push(tree);
       this.rockColliders.push({ position: new THREE.Vector3(tx, ty, tz), radius: 0.4 });
@@ -631,12 +638,12 @@ export class GameEngine {
     const grassMat = new THREE.MeshLambertMaterial({ color: 0x33aa44, side: THREE.DoubleSide });
     const grassCount = Math.floor(350 * (0.8 + rng() * 0.4));
     for (let i = 0; i < grassCount; i++) {
-      const gx = (Math.random() - 0.5) * ARENA.size * 0.9;
-      const gz = (Math.random() - 0.5) * ARENA.size * 0.9;
+      const gx = (rng() - 0.5) * ARENA.size * 0.9;
+      const gz = (rng() - 0.5) * ARENA.size * 0.9;
       const gy = this.getTerrainHeight(gx, gz);
       const grass = new THREE.Mesh(grassGeo, grassMat);
       grass.position.set(gx, gy + 0.3, gz);
-      grass.rotation.y = Math.random() * Math.PI;
+      grass.rotation.y = rng() * Math.PI;
       grass.rotation.x = -0.2;
       this.scene.add(grass);
       this.environmentObjects.push(grass);
@@ -654,8 +661,8 @@ export class GameEngine {
 
     const mushroomCount = Math.floor(50 * (0.8 + rng() * 0.4));
     for (let i = 0; i < mushroomCount; i++) {
-      const mx = (Math.random() - 0.5) * ARENA.size * 0.8;
-      const mz = (Math.random() - 0.5) * ARENA.size * 0.8;
+      const mx = (rng() - 0.5) * ARENA.size * 0.8;
+      const mz = (rng() - 0.5) * ARENA.size * 0.8;
       const my = this.getTerrainHeight(mx, mz);
       const mushroom = new THREE.Group();
       const stem = new THREE.Mesh(mushroomStemGeo, stemMat);
@@ -664,7 +671,7 @@ export class GameEngine {
       const cap = new THREE.Mesh(mushroomCapGeo, mushroomMats[i % 3]);
       cap.position.y = 0.2;
       mushroom.add(cap);
-      const s = 0.5 + Math.random() * 1;
+      const s = 0.5 + rng() * 1;
       mushroom.scale.setScalar(s);
       mushroom.position.set(mx, my, mz);
       this.scene.add(mushroom);
@@ -761,12 +768,12 @@ export class GameEngine {
     const pillarMat = new THREE.MeshLambertMaterial({ color: 0x997744 });
     const pillarCount = Math.floor(40 * (0.8 + rng() * 0.4));
     for (let i = 0; i < pillarCount; i++) {
-      const px = (Math.random() - 0.5) * ARENA.size * 0.85;
-      const pz = (Math.random() - 0.5) * ARENA.size * 0.85;
+      const px = (rng() - 0.5) * ARENA.size * 0.85;
+      const pz = (rng() - 0.5) * ARENA.size * 0.85;
       if (Math.abs(px) < 8 && Math.abs(pz) < 8) continue;
       const py = this.getTerrainHeight(px, pz);
-      const h = 2 + Math.random() * 4;
-      const r = 0.3 + Math.random() * 0.4;
+      const h = 2 + rng() * 4;
+      const r = 0.3 + rng() * 0.4;
 
       const pillar = new THREE.Group();
       const body = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.7, r, h, 6), pillarMat);
@@ -789,14 +796,14 @@ export class GameEngine {
     const boulderMat = new THREE.MeshLambertMaterial({ color: 0xaa8855 });
     const boulderCount = Math.floor(30 * (0.8 + rng() * 0.4));
     for (let i = 0; i < boulderCount; i++) {
-      const bx = (Math.random() - 0.5) * ARENA.size * 0.85;
-      const bz = (Math.random() - 0.5) * ARENA.size * 0.85;
+      const bx = (rng() - 0.5) * ARENA.size * 0.85;
+      const bz = (rng() - 0.5) * ARENA.size * 0.85;
       if (Math.abs(bx) < 5 && Math.abs(bz) < 5) continue;
-      const br = Math.random() * 2 + 0.5;
+      const br = rng() * 2 + 0.5;
       const by = this.getTerrainHeight(bx, bz) + br * 0.3;
       const boulder = new THREE.Mesh(new THREE.SphereGeometry(br, 6, 5), boulderMat);
       boulder.position.set(bx, by, bz);
-      boulder.scale.y = 0.6 + Math.random() * 0.4;
+      boulder.scale.y = 0.6 + rng() * 0.4;
       boulder.castShadow = true;
       boulder.receiveShadow = true;
       this.scene.add(boulder);
@@ -808,16 +815,16 @@ export class GameEngine {
     const bushMat = new THREE.MeshLambertMaterial({ color: 0x665533 });
     const bushCount = Math.floor(100 * (0.8 + rng() * 0.4));
     for (let i = 0; i < bushCount; i++) {
-      const dx = (Math.random() - 0.5) * ARENA.size * 0.9;
-      const dz = (Math.random() - 0.5) * ARENA.size * 0.9;
+      const dx = (rng() - 0.5) * ARENA.size * 0.9;
+      const dz = (rng() - 0.5) * ARENA.size * 0.9;
       const dy = this.getTerrainHeight(dx, dz);
       const bush = new THREE.Group();
       // Small branching sticks
-      for (let j = 0; j < 3 + Math.floor(Math.random() * 3); j++) {
-        const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.03, 0.3 + Math.random() * 0.3, 3), bushMat);
+      for (let j = 0; j < 3 + Math.floor(rng() * 3); j++) {
+        const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.03, 0.3 + rng() * 0.3, 3), bushMat);
         stick.position.y = 0.15;
-        stick.rotation.x = (Math.random() - 0.5) * 1.2;
-        stick.rotation.z = (Math.random() - 0.5) * 1.2;
+        stick.rotation.x = (rng() - 0.5) * 1.2;
+        stick.rotation.z = (rng() - 0.5) * 1.2;
         bush.add(stick);
       }
       bush.position.set(dx, dy, dz);
@@ -829,25 +836,25 @@ export class GameEngine {
     const cactusMat = new THREE.MeshLambertMaterial({ color: 0x336633 });
     const cactusCount = Math.floor(20 * (0.8 + rng() * 0.4));
     for (let i = 0; i < cactusCount; i++) {
-      const cx = (Math.random() - 0.5) * ARENA.size * 0.8;
-      const cz = (Math.random() - 0.5) * ARENA.size * 0.8;
+      const cx = (rng() - 0.5) * ARENA.size * 0.8;
+      const cz = (rng() - 0.5) * ARENA.size * 0.8;
       if (Math.abs(cx) < 5 && Math.abs(cz) < 5) continue;
       const cy = this.getTerrainHeight(cx, cz);
       const cactus = new THREE.Group();
-      const h = 1 + Math.random() * 1.5;
+      const h = 1 + rng() * 1.5;
       // Main body
       const body = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, h, 6), cactusMat);
       body.position.y = h / 2;
       body.castShadow = true;
       cactus.add(body);
       // Arms
-      if (Math.random() > 0.3) {
+      if (rng() > 0.3) {
         const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.5, 5), cactusMat);
         arm.position.set(0.2, h * 0.6, 0);
         arm.rotation.z = -Math.PI / 3;
         cactus.add(arm);
       }
-      if (Math.random() > 0.5) {
+      if (rng() > 0.5) {
         const arm2 = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.4, 5), cactusMat);
         arm2.position.set(-0.18, h * 0.45, 0);
         arm2.rotation.z = Math.PI / 3;
@@ -870,11 +877,11 @@ export class GameEngine {
     const lavaPoolGeo = new THREE.CircleGeometry(2.5, 16);
     const lavaCount = Math.floor(18 * (0.8 + rng() * 0.4));
     for (let i = 0; i < lavaCount; i++) {
-      const lx = (Math.random() - 0.5) * ARENA.size * 0.8;
-      const lz = (Math.random() - 0.5) * ARENA.size * 0.8;
+      const lx = (rng() - 0.5) * ARENA.size * 0.8;
+      const lz = (rng() - 0.5) * ARENA.size * 0.8;
       if (Math.abs(lx) < 8 && Math.abs(lz) < 8) continue;
       const ly = this.getTerrainHeight(lx, lz) + 0.05;
-      const radius = 1.5 + Math.random() * 1.5;
+      const radius = 1.5 + rng() * 1.5;
       const poolMat = new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.8 });
       const pool = new THREE.Mesh(new THREE.CircleGeometry(radius, 16), poolMat);
       pool.rotation.x = -Math.PI / 2;
@@ -889,12 +896,12 @@ export class GameEngine {
     const obsidianMat = new THREE.MeshLambertMaterial({ color: 0x1a1a2e });
     const obsidianCount = Math.floor(23 * (0.8 + rng() * 0.4));
     for (let i = 0; i < obsidianCount; i++) {
-      const px = (Math.random() - 0.5) * ARENA.size * 0.85;
-      const pz = (Math.random() - 0.5) * ARENA.size * 0.85;
+      const px = (rng() - 0.5) * ARENA.size * 0.85;
+      const pz = (rng() - 0.5) * ARENA.size * 0.85;
       if (Math.abs(px) < 8 && Math.abs(pz) < 8) continue;
       const py = this.getTerrainHeight(px, pz);
-      const h = 3 + Math.random() * 5;
-      const r = 0.3 + Math.random() * 0.3;
+      const h = 3 + rng() * 5;
+      const r = 0.3 + rng() * 0.3;
       const pillar = new THREE.Group();
       const body = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.6, r, h, 5), obsidianMat);
       body.position.y = h / 2;
@@ -914,14 +921,14 @@ export class GameEngine {
     const volcanicRockMat = new THREE.MeshLambertMaterial({ color: 0x2d1b1b });
     const volcanicRockCount = Math.floor(30 * (0.8 + rng() * 0.4));
     for (let i = 0; i < volcanicRockCount; i++) {
-      const rx = (Math.random() - 0.5) * ARENA.size * 0.85;
-      const rz = (Math.random() - 0.5) * ARENA.size * 0.85;
+      const rx = (rng() - 0.5) * ARENA.size * 0.85;
+      const rz = (rng() - 0.5) * ARENA.size * 0.85;
       if (Math.abs(rx) < 5 && Math.abs(rz) < 5) continue;
-      const rr = Math.random() * 2 + 0.5;
+      const rr = rng() * 2 + 0.5;
       const ry = this.getTerrainHeight(rx, rz) + rr * 0.3;
       const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(rr, 0), volcanicRockMat);
       rock.position.set(rx, ry, rz);
-      rock.rotation.set(Math.random() * 0.5, Math.random() * Math.PI * 2, Math.random() * 0.5);
+      rock.rotation.set(rng() * 0.5, rng() * Math.PI * 2, rng() * 0.5);
       rock.castShadow = true;
       rock.receiveShadow = true;
       this.scene.add(rock);
@@ -2193,6 +2200,8 @@ export class GameEngine {
 
   startGame(characterId?: string, mapId?: string) {
     this.selectedMap = mapId || "forest";
+    this.mapSeed = Date.now(); // New seed each run for procedural maps
+    this.soulCount = 0;
     this.setupArena(this.selectedMap);
     this.selectedCharacter = getCharacter(characterId || "knight");
     const ch = this.selectedCharacter;
@@ -2291,6 +2300,16 @@ export class GameEngine {
     this.fireSegments = [];
     this.vortexes.forEach(v => { if (v.mesh.parent) this.scene.remove(v.mesh); });
     this.vortexes = [];
+    this.holySmiteEffects.forEach(h => { if (h.mesh.parent) this.scene.remove(h.mesh); });
+    this.holySmiteEffects = [];
+    this.bloodAxeProjectiles.forEach(a => { if (a.mesh.parent) this.scene.remove(a.mesh); });
+    this.bloodAxeProjectiles = [];
+    this.arcaneOrbs.forEach(o => { if (o.mesh.parent) this.scene.remove(o.mesh); });
+    this.arcaneOrbs = [];
+    this.soulParticles.forEach(s => { if (s.mesh.parent) this.scene.remove(s.mesh); });
+    this.soulParticles = [];
+    this.soulCount = 0;
+    this.enemyLODLevel.clear();
 
     // Clear chests
     this.chests.forEach(c => { if (c.mesh.parent) this.scene.remove(c.mesh); });
@@ -2407,6 +2426,10 @@ export class GameEngine {
     this.updateLightnings(cappedDt);
     this.updateFireSegments(cappedDt);
     this.updateVortexes(cappedDt);
+    this.updateHolySmites(cappedDt);
+    this.updateBloodAxes(cappedDt);
+    this.updateArcaneOrbs(cappedDt);
+    this.updateLOD();
     this.updateXPGems(cappedDt);
     this.updateSpawning(cappedDt);
     this.updateBoss(cappedDt);
@@ -3478,6 +3501,59 @@ export class GameEngine {
     }
   }
 
+  // ========== LOD SYSTEM ==========
+  private lastLODTime = 0;
+  private lodLowGeo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+  private lodLowMat = new THREE.MeshLambertMaterial({ color: 0x888888 });
+  private lodMedMat = new THREE.MeshLambertMaterial({ color: 0x888888, flatShading: true });
+  private enemyLODLevel: Map<number, number> = new Map(); // enemy id -> 0=high, 1=med, 2=low
+
+  private updateLOD() {
+    // Run every 1 second
+    if (this.gameTime - this.lastLODTime < 1) return;
+    this.lastLODTime = this.gameTime;
+
+    const playerPos = this.player.position;
+    for (const enemy of this.enemies) {
+      if (!enemy.isAlive) continue;
+      const dx = enemy.position.x - playerPos.x;
+      const dz = enemy.position.z - playerPos.z;
+      const distSq = dx * dx + dz * dz;
+
+      let targetLOD: number;
+      if (distSq > 625) targetLOD = 2; // > 25 units
+      else if (distSq > 225) targetLOD = 1; // 15-25 units
+      else targetLOD = 0; // < 15 units
+
+      const currentLOD = this.enemyLODLevel.get(enemy.id) ?? 0;
+      if (currentLOD === targetLOD) continue;
+      this.enemyLODLevel.set(enemy.id, targetLOD);
+
+      // Apply LOD
+      if (enemy.mesh instanceof THREE.Mesh) {
+        if (targetLOD === 2) {
+          // Low: simple box
+          enemy.mesh.geometry = this.lodLowGeo;
+          enemy.mesh.material = this.lodLowMat;
+          (enemy.mesh.material as THREE.MeshLambertMaterial).color.setHex(enemy.color);
+        } else if (targetLOD === 1) {
+          // Medium: original geo, flat material
+          const origGeo = this.enemyGeometries[enemy.type];
+          if (origGeo) enemy.mesh.geometry = origGeo;
+          const mat = this.lodMedMat.clone();
+          mat.color.setHex(enemy.color);
+          enemy.mesh.material = mat;
+        } else {
+          // High: restore original
+          const origGeo = this.enemyGeometries[enemy.type];
+          if (origGeo) enemy.mesh.geometry = origGeo;
+          const origMat = this.enemyMaterials[enemy.type];
+          if (origMat) enemy.mesh.material = origMat.clone();
+        }
+      }
+    }
+  }
+
   private shamanAuraTimer = 0;
   private lastCleanupTime = 0;
   private performanceCleanup() {
@@ -3572,6 +3648,16 @@ export class GameEngine {
     if (enemy.type === "slime") {
       this.spawnEnemyAtPosition("mini_slime", enemy.position.x + 0.5, enemy.position.z + 0.5);
       this.spawnEnemyAtPosition("mini_slime", enemy.position.x - 0.5, enemy.position.z - 0.5);
+    }
+
+    // Soul Harvest: collect soul on kill
+    if (this.weapons.some(w => w.id === "soulHarvest")) {
+      this.soulCount++;
+      const soulMesh = new THREE.Mesh(this.sharedSmallSphereGeo, new THREE.MeshBasicMaterial({ color: 0x44ff66, transparent: true, opacity: 0.7 }));
+      soulMesh.position.copy(enemy.position);
+      soulMesh.position.y += 1;
+      this.scene.add(soulMesh);
+      this.soulParticles.push({ mesh: soulMesh, velocity: new THREE.Vector3(), timer: 2 });
     }
 
     // Spawn XP gem
@@ -4138,6 +4224,33 @@ export class GameEngine {
             weapon.timer = (1 / WEAPONS.voidVortex.fireRate) * cdReduction;
           }
           break;
+        case "holySmite":
+          if (weapon.timer <= 0) {
+            this.fireHolySmite(weapon);
+            weapon.timer = (1 / WEAPONS.holySmite.fireRate) * cdReduction;
+          }
+          break;
+        case "shadowDagger":
+          if (weapon.timer <= 0) {
+            this.fireShadowDagger(weapon);
+            weapon.timer = (1 / WEAPONS.shadowDagger.fireRate) * cdReduction;
+          }
+          break;
+        case "bloodAxe":
+          if (weapon.timer <= 0) {
+            this.fireBloodAxe(weapon);
+            weapon.timer = (1 / WEAPONS.bloodAxe.fireRate) * cdReduction;
+          }
+          break;
+        case "soulHarvest":
+          this.updateSoulHarvest(dt, weapon);
+          break;
+        case "arcaneOrb":
+          if (weapon.timer <= 0) {
+            this.fireArcaneOrb(weapon);
+            weapon.timer = (1 / WEAPONS.arcaneOrb.fireRate) * cdReduction;
+          }
+          break;
       }
     }
   }
@@ -4556,6 +4669,325 @@ export class GameEngine {
       pullForce,
       radius,
     });
+  }
+
+  // ========== NEW CHARACTER-SPECIFIC WEAPONS ==========
+
+  private fireHolySmite(weapon: WeaponState) {
+    const w = WEAPONS.holySmite;
+    const evolved = weapon.level >= 6;
+    const damage = w.baseDamage * (1 + (weapon.level - 1) * 0.3) * this.player.damageMultiplier;
+    const radius = (w.range + weapon.level * 0.3) * (evolved ? 2 : 1);
+    const healAmount = (w.healAmount + weapon.level) * (evolved ? 3 : 1);
+
+    // Random position near player
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 3 + Math.random() * 8;
+    const sx = this.player.position.x + Math.cos(angle) * dist;
+    const sz = this.player.position.z + Math.sin(angle) * dist;
+    const sy = this.getTerrainHeight(sx, sz);
+
+    // Visual: golden light pillar
+    const group = new THREE.Group();
+    const pillarGeo = new THREE.CylinderGeometry(radius * 0.3, radius * 0.5, 12, 8);
+    const pillarMat = new THREE.MeshBasicMaterial({ color: 0xffffaa, transparent: true, opacity: 0.5 });
+    const pillar = new THREE.Mesh(pillarGeo, pillarMat);
+    pillar.position.y = 6;
+    group.add(pillar);
+    const groundGlow = new THREE.Mesh(
+      new THREE.CircleGeometry(radius, 16),
+      new THREE.MeshBasicMaterial({ color: 0xffdd44, transparent: true, opacity: 0.4, side: THREE.DoubleSide })
+    );
+    groundGlow.rotation.x = -Math.PI / 2;
+    groundGlow.position.y = 0.1;
+    group.add(groundGlow);
+    group.position.set(sx, sy, sz);
+    this.scene.add(group);
+
+    this.holySmiteEffects.push({
+      position: new THREE.Vector3(sx, sy, sz),
+      mesh: group,
+      timer: 1.5,
+      maxTime: 1.5,
+      damage,
+      healAmount,
+      radius,
+    });
+  }
+
+  private updateHolySmites(dt: number) {
+    for (let i = this.holySmiteEffects.length - 1; i >= 0; i--) {
+      const h = this.holySmiteEffects[i];
+      h.timer -= dt;
+      if (h.timer <= 0) {
+        this.scene.remove(h.mesh);
+        this.holySmiteEffects.splice(i, 1);
+        continue;
+      }
+      // Fade animation
+      const fade = h.timer / h.maxTime;
+      h.mesh.children.forEach(child => {
+        if (child instanceof THREE.Mesh) (child.material as THREE.MeshBasicMaterial).opacity = fade * 0.6;
+      });
+      // Damage enemies in radius
+      for (const enemy of this.enemies) {
+        if (!enemy.isAlive) continue;
+        const dx = enemy.position.x - h.position.x;
+        const dz = enemy.position.z - h.position.z;
+        if (dx * dx + dz * dz < h.radius * h.radius && enemy.hitTimer <= 0) {
+          this.damageEnemy(enemy, h.damage * dt * 2, true);
+          enemy.hitTimer = 0.3;
+        }
+      }
+      // Heal player if in range
+      const pdx = this.player.position.x - h.position.x;
+      const pdz = this.player.position.z - h.position.z;
+      if (pdx * pdx + pdz * pdz < h.radius * h.radius) {
+        this.player.hp = Math.min(this.player.maxHp, this.player.hp + h.healAmount * dt);
+      }
+    }
+  }
+
+  private fireShadowDagger(weapon: WeaponState) {
+    const w = WEAPONS.shadowDagger;
+    const evolved = weapon.level >= 6;
+    const count = evolved ? 3 : w.baseCount + Math.floor((weapon.level - 1) / 2);
+    const damage = w.baseDamage * (1 + (weapon.level - 1) * 0.2) * this.player.damageMultiplier;
+
+    // Find nearest enemy
+    let nearest: EnemyInstance | null = null;
+    let nearDist = Infinity;
+    for (const e of this.enemies) {
+      if (!e.isAlive) continue;
+      const d = this.player.position.distanceToSquared(e.position);
+      if (d < nearDist) { nearDist = d; nearest = e; }
+    }
+    if (!nearest) return;
+
+    for (let c = 0; c < count; c++) {
+      const dir = this._tmpDir.set(nearest.position.x - this.player.position.x, 0, nearest.position.z - this.player.position.z).normalize();
+      // Slight spread for multi-daggers
+      const spreadAngle = (c - (count - 1) / 2) * 0.15;
+      const cos = Math.cos(spreadAngle), sin = Math.sin(spreadAngle);
+      const fx = dir.x * cos - dir.z * sin;
+      const fz = dir.x * sin + dir.z * cos;
+
+      const mesh = new THREE.Mesh(
+        new THREE.ConeGeometry(0.1, 0.6, 4),
+        new THREE.MeshBasicMaterial({ color: evolved ? 0x440066 : 0x333355, transparent: true, opacity: 0.8 })
+      );
+      mesh.position.copy(this.player.position);
+      mesh.position.y += 1;
+      mesh.lookAt(mesh.position.x + fx, mesh.position.y, mesh.position.z + fz);
+      this.scene.add(mesh);
+
+      // Check backstab: is enemy facing away from player?
+      const enemyFwd = this._tmpVec.set(Math.sin(nearest.mesh.rotation.y), 0, Math.cos(nearest.mesh.rotation.y));
+      const toEnemy = this._tmpVec2.set(fx, 0, fz).normalize();
+      const dot = enemyFwd.dot(toEnemy);
+      const isBackstab = dot > 0.3 || evolved; // same direction = backstab
+
+      const critRoll = Math.random() < (w.critChance + this.player.critChance) ? 2 : 1;
+      const backstabMul = isBackstab ? w.backstabMultiplier : 1;
+      const finalDmg = damage * critRoll * backstabMul;
+
+      this.projectiles.push({
+        id: this.nextProjId++,
+        position: mesh.position.clone(),
+        velocity: new THREE.Vector3(fx * w.speed, 0, fz * w.speed),
+        damage: finalDmg,
+        mesh,
+        isAlive: true,
+        lifetime: w.range / w.speed,
+        penetration: evolved ? 3 : 0,
+        hitEnemies: new Set(),
+      });
+    }
+  }
+
+  private fireBloodAxe(weapon: WeaponState) {
+    const w = WEAPONS.bloodAxe;
+    const evolved = weapon.level >= 6;
+    const hpPercent = this.player.hp / this.player.maxHp;
+    const lowHpBonus = hpPercent < 0.5 ? (1 + w.lowHpBonusDamage) : 1;
+    const damage = w.baseDamage * (1 + (weapon.level - 1) * 0.3) * this.player.damageMultiplier * lowHpBonus;
+    const count = evolved ? 3 : w.baseCount + Math.floor((weapon.level - 1) / 3);
+
+    for (let c = 0; c < count; c++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dir = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+
+      const axeGeo = new THREE.BoxGeometry(0.8, 0.15, 0.4);
+      const axeMat = new THREE.MeshBasicMaterial({ color: evolved ? 0xff0000 : 0x884422 });
+      const mesh = new THREE.Mesh(axeGeo, axeMat);
+      mesh.position.copy(this.player.position);
+      mesh.position.y += 1;
+      this.scene.add(mesh);
+
+      this.bloodAxeProjectiles.push({
+        position: mesh.position.clone(),
+        velocity: dir.multiplyScalar(w.speed),
+        mesh,
+        timer: w.range / w.speed,
+        damage,
+        hitEnemies: new Set(),
+      });
+    }
+  }
+
+  private updateBloodAxes(dt: number) {
+    for (let i = this.bloodAxeProjectiles.length - 1; i >= 0; i--) {
+      const a = this.bloodAxeProjectiles[i];
+      a.timer -= dt;
+      if (a.timer <= 0) {
+        this.scene.remove(a.mesh);
+        this.bloodAxeProjectiles.splice(i, 1);
+        continue;
+      }
+      a.position.addScaledVector(a.velocity, dt);
+      a.mesh.position.copy(a.position);
+      a.mesh.rotation.y += dt * 12; // spinning
+
+      for (const enemy of this.enemies) {
+        if (!enemy.isAlive || a.hitEnemies.has(enemy.id)) continue;
+        const dx = enemy.position.x - a.position.x;
+        const dz = enemy.position.z - a.position.z;
+        if (dx * dx + dz * dz < (enemy.radius + 0.5) * (enemy.radius + 0.5)) {
+          this.damageEnemy(enemy, a.damage, true);
+          a.hitEnemies.add(enemy.id);
+        }
+      }
+    }
+  }
+
+  private updateSoulHarvest(dt: number, weapon: WeaponState) {
+    const w = WEAPONS.soulHarvest;
+    const evolved = weapon.level >= 6;
+    const soulsNeeded = evolved ? 5 : w.soulsToDetonate;
+    const radius = (w.range + weapon.level * 0.5) * (evolved ? 2 : 1);
+
+    // Collect souls from recently dead enemies (handled in damageEnemy -> enemy death)
+    // Update soul particles (fly toward player)
+    for (let i = this.soulParticles.length - 1; i >= 0; i--) {
+      const sp = this.soulParticles[i];
+      sp.timer -= dt;
+      if (sp.timer <= 0) {
+        this.scene.remove(sp.mesh);
+        this.soulParticles.splice(i, 1);
+        continue;
+      }
+      // Move toward player
+      const dir = this._tmpDir.set(
+        this.player.position.x - sp.mesh.position.x, 1, this.player.position.z - sp.mesh.position.z
+      ).normalize();
+      sp.mesh.position.addScaledVector(dir, 8 * dt);
+      sp.mesh.position.y += Math.sin(this.gameTime * 4) * 0.02;
+    }
+
+    // Check detonation
+    if (this.soulCount >= soulsNeeded) {
+      this.soulCount = 0;
+      const damage = w.baseDamage * (1 + (weapon.level - 1) * 0.4) * this.player.damageMultiplier;
+      const pos = this.player.position.clone();
+
+      // AOE explosion
+      for (const enemy of this.enemies) {
+        if (!enemy.isAlive) continue;
+        const dx = enemy.position.x - pos.x;
+        const dz = enemy.position.z - pos.z;
+        if (dx * dx + dz * dz < radius * radius) {
+          this.damageEnemy(enemy, damage, true);
+        }
+      }
+
+      // Visual: green explosion
+      const explGeo = new THREE.SphereGeometry(radius, 8, 8);
+      const explMat = new THREE.MeshBasicMaterial({ color: 0x44ff66, transparent: true, opacity: 0.4 });
+      const explMesh = new THREE.Mesh(explGeo, explMat);
+      explMesh.position.copy(pos);
+      explMesh.position.y += 1;
+      this.scene.add(explMesh);
+      this.timedRemovals.push({ mesh: explMesh, removeAt: this.gameTime + 0.5 });
+    }
+  }
+
+  private fireArcaneOrb(weapon: WeaponState) {
+    const w = WEAPONS.arcaneOrb;
+    const evolved = weapon.level >= 6;
+    const count = evolved ? 3 : 1;
+    const damage = w.baseDamage * (1 + (weapon.level - 1) * 0.25) * this.player.damageMultiplier;
+    const duration = (w.duration + weapon.level * 500) / 1000;
+    const radius = w.range + weapon.level * 0.3;
+
+    for (let c = 0; c < count; c++) {
+      const angle = (c / count) * Math.PI * 2 + Math.random() * 0.5;
+      const dir = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+
+      const group = new THREE.Group();
+      const orbGeo = new THREE.SphereGeometry(radius * 0.5, 8, 8);
+      const orbMat = new THREE.MeshBasicMaterial({ color: evolved ? 0xff44ff : 0x6644cc, transparent: true, opacity: 0.6 });
+      const orb = new THREE.Mesh(orbGeo, orbMat);
+      group.add(orb);
+      // Inner glow
+      const glowGeo = new THREE.SphereGeometry(radius * 0.3, 6, 6);
+      const glowMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3 });
+      group.add(new THREE.Mesh(glowGeo, glowMat));
+
+      group.position.copy(this.player.position);
+      group.position.y += 1.5;
+      this.scene.add(group);
+
+      this.arcaneOrbs.push({
+        position: group.position.clone(),
+        velocity: dir.multiplyScalar(w.speed),
+        mesh: group,
+        timer: duration,
+        maxTime: duration,
+        damage,
+        radius,
+      });
+    }
+  }
+
+  private updateArcaneOrbs(dt: number) {
+    for (let i = this.arcaneOrbs.length - 1; i >= 0; i--) {
+      const orb = this.arcaneOrbs[i];
+      orb.timer -= dt;
+      if (orb.timer <= 0) {
+        // Evolved: explode on expire
+        const weapon = this.weapons.find(w => w.id === "arcaneOrb");
+        if (weapon && weapon.level >= 6) {
+          for (const enemy of this.enemies) {
+            if (!enemy.isAlive) continue;
+            const dx = enemy.position.x - orb.position.x;
+            const dz = enemy.position.z - orb.position.z;
+            if (dx * dx + dz * dz < (orb.radius * 2) * (orb.radius * 2)) {
+              this.damageEnemy(enemy, orb.damage * 3, true);
+            }
+          }
+        }
+        this.scene.remove(orb.mesh);
+        this.arcaneOrbs.splice(i, 1);
+        continue;
+      }
+      orb.position.addScaledVector(orb.velocity, dt);
+      orb.mesh.position.copy(orb.position);
+      orb.mesh.rotation.y += dt * 2;
+      // Pulse
+      const pulse = 1 + Math.sin(this.gameTime * 3) * 0.15;
+      orb.mesh.scale.setScalar(pulse);
+
+      // Damage enemies passing through
+      for (const enemy of this.enemies) {
+        if (!enemy.isAlive) continue;
+        const dx = enemy.position.x - orb.position.x;
+        const dz = enemy.position.z - orb.position.z;
+        if (dx * dx + dz * dz < orb.radius * orb.radius && enemy.hitTimer <= 0) {
+          this.damageEnemy(enemy, orb.damage * dt * 3, true);
+          enemy.hitTimer = 0.2;
+        }
+      }
+    }
   }
 
   private updateVortexes(dt: number) {
@@ -5191,6 +5623,11 @@ export class GameEngine {
     // New weapons (if under 6)
     if (this.weapons.length < 6) {
       const owned = new Set(this.weapons.map(w => w.id));
+      const charId = this.selectedCharacter.id;
+      const characterWeapons: Record<string, string> = {
+        priest: "holySmite", rogue: "shadowDagger", berserker: "bloodAxe",
+        necromancer: "soulHarvest", mage: "arcaneOrb",
+      };
       const allWeapons = [
         { id: "boneToss", ...WEAPONS.boneToss },
         { id: "shockWave", ...WEAPONS.shockWave },
@@ -5198,6 +5635,12 @@ export class GameEngine {
         { id: "fireTrail", ...WEAPONS.fireTrail },
         { id: "frostNova", ...WEAPONS.frostNova },
         { id: "voidVortex", ...WEAPONS.voidVortex },
+        // Character-specific weapons only appear for their character
+        ...(charId === "priest" ? [{ id: "holySmite", ...WEAPONS.holySmite }] : []),
+        ...(charId === "rogue" ? [{ id: "shadowDagger", ...WEAPONS.shadowDagger }] : []),
+        ...(charId === "berserker" ? [{ id: "bloodAxe", ...WEAPONS.bloodAxe }] : []),
+        ...(charId === "necromancer" ? [{ id: "soulHarvest", ...WEAPONS.soulHarvest }] : []),
+        ...(charId === "mage" ? [{ id: "arcaneOrb", ...WEAPONS.arcaneOrb }] : []),
       ];
       for (const w of allWeapons) {
         if (!owned.has(w.id)) {
@@ -5286,6 +5729,11 @@ export class GameEngine {
       case "fireTrail": return "+süre, +hasar";
       case "frostNova": return "+çap, +yavaşlatma";
       case "voidVortex": return "+çap, +çekim gücü";
+      case "holySmite": return "+çap, +iyileştirme";
+      case "shadowDagger": return "+hız, +kritik";
+      case "bloodAxe": return "+hasar, +can emme";
+      case "soulHarvest": return "+patlama, +ruh çapı";
+      case "arcaneOrb": return "+süre, +hasar";
       default: return "+güç";
     }
   }
@@ -5801,11 +6249,11 @@ export class GameEngine {
     const pillarMat = new THREE.MeshLambertMaterial({ color: 0x88bbdd, transparent: true, opacity: 0.7 });
     const pillarCount = Math.floor(30 * (0.8 + rng() * 0.4));
     for (let i = 0; i < pillarCount; i++) {
-      const px = (Math.random() - 0.5) * ARENA.size * 0.85;
-      const pz = (Math.random() - 0.5) * ARENA.size * 0.85;
+      const px = (rng() - 0.5) * ARENA.size * 0.85;
+      const pz = (rng() - 0.5) * ARENA.size * 0.85;
       if (Math.abs(px) < 6 && Math.abs(pz) < 6) continue;
-      const h = 3 + Math.random() * 5;
-      const r = 0.3 + Math.random() * 0.4;
+      const h = 3 + rng() * 5;
+      const r = 0.3 + rng() * 0.4;
       const pillarGeo = new THREE.CylinderGeometry(r * 0.7, r, h, 8);
       const pillar = new THREE.Mesh(pillarGeo, pillarMat);
       const py = this.getTerrainHeight(px, pz);
@@ -5820,10 +6268,10 @@ export class GameEngine {
     const snowMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
     const moundCount = Math.floor(40 * (0.8 + rng() * 0.4));
     for (let i = 0; i < moundCount; i++) {
-      const mx = (Math.random() - 0.5) * ARENA.size * 0.85;
-      const mz = (Math.random() - 0.5) * ARENA.size * 0.85;
+      const mx = (rng() - 0.5) * ARENA.size * 0.85;
+      const mz = (rng() - 0.5) * ARENA.size * 0.85;
       if (Math.abs(mx) < 5 && Math.abs(mz) < 5) continue;
-      const mr = 0.8 + Math.random() * 1.5;
+      const mr = 0.8 + rng() * 1.5;
       const moundGeo = new THREE.SphereGeometry(mr, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2);
       const mound = new THREE.Mesh(moundGeo, snowMat);
       const my = this.getTerrainHeight(mx, mz);
@@ -5839,25 +6287,25 @@ export class GameEngine {
     const branchMat = new THREE.MeshLambertMaterial({ color: 0x5a4838 });
     const treeCount = Math.floor(25 * (0.8 + rng() * 0.4));
     for (let i = 0; i < treeCount; i++) {
-      const tx = (Math.random() - 0.5) * ARENA.size * 0.85;
-      const tz = (Math.random() - 0.5) * ARENA.size * 0.85;
+      const tx = (rng() - 0.5) * ARENA.size * 0.85;
+      const tz = (rng() - 0.5) * ARENA.size * 0.85;
       if (Math.abs(tx) < 8 && Math.abs(tz) < 8) continue;
       const ty = this.getTerrainHeight(tx, tz);
       const tree = new THREE.Group();
       // Trunk
-      const trunkH = 2 + Math.random() * 1.5;
+      const trunkH = 2 + rng() * 1.5;
       const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.15, trunkH, 6), trunkMat);
       trunk.position.y = trunkH / 2;
       trunk.castShadow = true;
       tree.add(trunk);
       // Bare branches (3-5 thin cylinders)
-      const branchCount = 3 + Math.floor(Math.random() * 3);
+      const branchCount = 3 + Math.floor(rng() * 3);
       for (let b = 0; b < branchCount; b++) {
-        const bLen = 0.8 + Math.random() * 1.2;
+        const bLen = 0.8 + rng() * 1.2;
         const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.04, bLen, 4), branchMat);
-        branch.position.y = trunkH * (0.5 + Math.random() * 0.4);
-        branch.rotation.z = (Math.random() - 0.5) * 1.2;
-        branch.rotation.y = Math.random() * Math.PI * 2;
+        branch.position.y = trunkH * (0.5 + rng() * 0.4);
+        branch.rotation.z = (rng() - 0.5) * 1.2;
+        branch.rotation.y = rng() * Math.PI * 2;
         branch.position.x = Math.sin(branch.rotation.y) * 0.3;
         branch.position.z = Math.cos(branch.rotation.y) * 0.3;
         tree.add(branch);
@@ -5871,14 +6319,14 @@ export class GameEngine {
     const crystalMat = new THREE.MeshStandardMaterial({ color: 0x44aaff, emissive: 0x2266cc, emissiveIntensity: 0.5, transparent: true, opacity: 0.8 });
     const crystalCount = Math.floor(20 * (0.8 + rng() * 0.4));
     for (let i = 0; i < crystalCount; i++) {
-      const cx = (Math.random() - 0.5) * ARENA.size * 0.85;
-      const cz = (Math.random() - 0.5) * ARENA.size * 0.85;
+      const cx = (rng() - 0.5) * ARENA.size * 0.85;
+      const cz = (rng() - 0.5) * ARENA.size * 0.85;
       if (Math.abs(cx) < 5 && Math.abs(cz) < 5) continue;
-      const cs = 0.3 + Math.random() * 0.5;
+      const cs = 0.3 + rng() * 0.5;
       const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(cs), crystalMat);
       const cy = this.getTerrainHeight(cx, cz) + cs;
       crystal.position.set(cx, cy, cz);
-      crystal.rotation.set(Math.random(), Math.random(), Math.random());
+      crystal.rotation.set(rng(), rng(), rng());
       this.scene.add(crystal);
       this.environmentObjects.push(crystal);
     }

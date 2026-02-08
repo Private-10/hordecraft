@@ -114,6 +114,52 @@ export const WEAPONS = {
     pullForce: 8,
     duration: 3000,
   },
+  holySmite: {
+    name: "Holy Smite",
+    icon: "🌟",
+    baseDamage: 25,
+    fireRate: 0.33,
+    range: 4,
+    healAmount: 3,
+  },
+  shadowDagger: {
+    name: "Shadow Dagger",
+    icon: "🗡️",
+    baseDamage: 8,
+    fireRate: 3.0,
+    speed: 18,
+    range: 12,
+    baseCount: 1,
+    critChance: 0.3,
+    backstabMultiplier: 2.0,
+  },
+  bloodAxe: {
+    name: "Blood Axe",
+    icon: "🪓",
+    baseDamage: 40,
+    fireRate: 0.5,
+    speed: 10,
+    range: 18,
+    baseCount: 1,
+    lowHpBonusDamage: 0.5,
+  },
+  soulHarvest: {
+    name: "Soul Harvest",
+    icon: "👻",
+    baseDamage: 35,
+    soulsToDetonate: 10,
+    range: 8,
+    soulCollectRadius: 3,
+  },
+  arcaneOrb: {
+    name: "Arcane Orb",
+    icon: "🔮",
+    baseDamage: 6,
+    fireRate: 0.2,
+    speed: 3,
+    range: 3,
+    duration: 5000,
+  },
 };
 
 export const EVOLUTIONS: Record<string, { weapon: string; passive: string; evolvedName: string; evolvedIcon: string; description: string }> = {
@@ -123,6 +169,11 @@ export const EVOLUTIONS: Record<string, { weapon: string; passive: string; evolv
   infernoPath: { weapon: "fireTrail", passive: "damage", evolvedName: "Inferno Path", evolvedIcon: "🌋🔥", description: "Trail explodes, massive damage" },
   absoluteZero: { weapon: "frostNova", passive: "hp", evolvedName: "Absolute Zero", evolvedIcon: "🧊❄️", description: "Freezes all enemies 3s" },
   singularity: { weapon: "voidVortex", passive: "magnet", evolvedName: "Singularity", evolvedIcon: "🕳️🌀", description: "Massive vortex, pulls everything" },
+  divineWrath: { weapon: "holySmite", passive: "hp", evolvedName: "Divine Wrath", evolvedIcon: "✝️🌟", description: "Constant light pillars, full heal" },
+  phantomBlade: { weapon: "shadowDagger", passive: "crit", evolvedName: "Phantom Blade", evolvedIcon: "👤🗡️", description: "Triple daggers, always backstab" },
+  berserkerFury: { weapon: "bloodAxe", passive: "damage", evolvedName: "Berserker Fury", evolvedIcon: "🩸🪓", description: "Spinning axes, lifesteal" },
+  soulStorm: { weapon: "soulHarvest", passive: "cooldown", evolvedName: "Soul Storm", evolvedIcon: "💀👻", description: "Auto-detonate at 5 souls, 2x radius" },
+  arcaneNova: { weapon: "arcaneOrb", passive: "speed", evolvedName: "Arcane Nova", evolvedIcon: "💎🔮", description: "3 orbs, explode on expire" },
 };
 
 export const XP_TABLE = {

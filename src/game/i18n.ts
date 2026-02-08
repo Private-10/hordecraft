@@ -102,6 +102,13 @@ const translations = {
   "upgrade.frostNova": { tr: "+çap, +yavaşlatma", en: "+range, +slow" },
   "upgrade.voidVortex": { tr: "+çap, +çekim gücü", en: "+range, +pull force" },
 
+  // New character-specific weapons
+  "upgrade.holySmite": { tr: "+çap, +iyileştirme", en: "+range, +healing" },
+  "upgrade.shadowDagger": { tr: "+hız, +kritik şans", en: "+speed, +crit chance" },
+  "upgrade.bloodAxe": { tr: "+hasar, +can emme", en: "+damage, +lifesteal" },
+  "upgrade.soulHarvest": { tr: "+ruh çapı, +patlama hasarı", en: "+soul radius, +blast damage" },
+  "upgrade.arcaneOrb": { tr: "+süre, +hasar", en: "+duration, +damage" },
+
   // Evolutions
   "evolution.stormBlade": { tr: "⚡⚔️ Fırtına Kılıcı — 8 elektrik bıçak, 2x hız", en: "⚡⚔️ Storm Blade — 8 electric blades, 2x speed" },
   "evolution.deathBarrage": { tr: "💀🦴 Ölüm Yağmuru — 3 kemik, hep kritik", en: "💀🦴 Death Barrage — Triple bones, all crit" },
@@ -109,6 +116,11 @@ const translations = {
   "evolution.infernoPath": { tr: "🌋🔥 Cehennem Yolu — Patlamalı iz, dev hasar", en: "🌋🔥 Inferno Path — Explosive trail, massive damage" },
   "evolution.absoluteZero": { tr: "🧊❄️ Mutlak Sıfır — Tüm düşmanları dondur", en: "🧊❄️ Absolute Zero — Freezes all enemies" },
   "evolution.singularity": { tr: "🕳️🌀 Tekillik — Dev girdap, her şeyi çeker", en: "🕳️🌀 Singularity — Massive vortex, pulls everything" },
+  "evolution.divineWrath": { tr: "✝️🌟 İlahi Gazap — Sürekli ışık sütunları, tam iyileştirme", en: "✝️🌟 Divine Wrath — Constant light pillars, full heal" },
+  "evolution.phantomBlade": { tr: "👤🗡️ Hayalet Bıçak — 3'lü hançer, sürekli arkadan vuruş", en: "👤🗡️ Phantom Blade — Triple daggers, always backstab" },
+  "evolution.berserkerFury": { tr: "🩸🪓 Berserker Öfkesi — Dönen baltalar, can emme", en: "🩸🪓 Berserker Fury — Spinning axes, lifesteal" },
+  "evolution.soulStorm": { tr: "💀👻 Ruh Fırtınası — 5 ruhta otomatik patlama, 2x çap", en: "💀👻 Soul Storm — Auto-detonate at 5 souls, 2x radius" },
+  "evolution.arcaneNova": { tr: "💎🔮 Arcane Nova — 3 küre, süresi dolunca patlama", en: "💎🔮 Arcane Nova — 3 orbs, explode on expire" },
 
   // Meta upgrades
   "meta.hp": { tr: "Kalıcı Can+", en: "Permanent HP+" },

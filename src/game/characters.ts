@@ -58,7 +58,7 @@ export const CHARACTERS: CharacterDef[] = [
     critChance: 0.1,
     armor: 0,
     magnetRange: 4,
-    startWeapon: "lightningArc",
+    startWeapon: "arcaneOrb",
     unlock: { isDefault: false, unlockCondition: "unlock.mage", unlockCost: 500, checkUnlocked: (a) => a.maxKills >= 100 },
   },
   {
@@ -75,7 +75,7 @@ export const CHARACTERS: CharacterDef[] = [
     critChance: 0.2,
     armor: 0,
     magnetRange: 3,
-    startWeapon: "boneToss",
+    startWeapon: "shadowDagger",
     unlock: { isDefault: false, unlockCondition: "unlock.rogue", unlockCost: 200, checkUnlocked: (a) => a.totalRuns >= 1 },
   },
   {
@@ -92,7 +92,7 @@ export const CHARACTERS: CharacterDef[] = [
     critChance: 0.05,
     armor: 1,
     magnetRange: 5,
-    startWeapon: "shockWave",
+    startWeapon: "holySmite",
     unlock: { isDefault: false, unlockCondition: "unlock.priest", unlockCost: 800, checkUnlocked: (a) => a.totalRuns >= 5 },
   },
   {
@@ -109,7 +109,7 @@ export const CHARACTERS: CharacterDef[] = [
     critChance: 0.15,
     armor: 0,
     magnetRange: 2,
-    startWeapon: "orbitBlade",
+    startWeapon: "bloodAxe",
     unlock: { isDefault: false, unlockCondition: "unlock.berserker", unlockCost: 1000, checkUnlocked: (a) => a.maxSurvivalTime >= 900 },
   },
   {
@@ -126,7 +126,7 @@ export const CHARACTERS: CharacterDef[] = [
     critChance: 0.08,
     armor: 0,
     magnetRange: 4,
-    startWeapon: "fireTrail",
+    startWeapon: "soulHarvest",
     unlock: { isDefault: false, unlockCondition: "unlock.necromancer", unlockCost: 1500, checkUnlocked: (a) => a.maxLevel >= 20 },
   },
 ];
