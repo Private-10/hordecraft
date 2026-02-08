@@ -150,6 +150,10 @@ const translations = {
   "settings.invertY": { tr: "Mouse Y Ekseni Ters", en: "Invert Mouse Y Axis" },
   "settings.volume": { tr: "Ses Seviyesi", en: "Volume" },
   "settings.close": { tr: "Kapat", en: "Close" },
+  "settings.quality": { tr: "Grafik Kalitesi", en: "Graphics Quality" },
+  "settings.quality.low": { tr: "Düşük", en: "Low" },
+  "settings.quality.medium": { tr: "Orta", en: "Medium" },
+  "settings.quality.high": { tr: "Yüksek", en: "High" },
 
   // Tier 3 enemies
   "enemy.necromancer": { tr: "Nekromansır", en: "Necromancer" },
@@ -162,9 +166,12 @@ const translations = {
   "map.forest_desc": { tr: "Huzurlu orman arenası", en: "Peaceful forest arena" },
   "map.desert": { tr: "Kavurucu Çöl", en: "Scorched Desert" },
   "map.desert_desc": { tr: "Kum tepeleri ve fırtınalar", en: "Sand dunes and storms" },
+  "map.volcanic": { tr: "Volkanik Derinlikler", en: "Volcanic Depths" },
+  "map.volcanic_desc": { tr: "Lav havuzları ve meteor yağmuru", en: "Lava pools and meteor showers" },
   "map.select": { tr: "Harita değiştir", en: "Change map" },
   "map.locked": { tr: "🔒 Kilitli", en: "🔒 Locked" },
   "hud.sandstorm": { tr: "⚠️ KUM FIRTINASI!", en: "⚠️ SANDSTORM!" },
+  "hud.eruption": { tr: "🌋 VOLKANİK PATLAMA!", en: "🌋 VOLCANIC ERUPTION!" },
   "chest.xp": { tr: "+{0} XP!", en: "+{0} XP!" },
   "chest.gold": { tr: "+{0} Gold!", en: "+{0} Gold!" },
   "chest.hp": { tr: "+{0} HP!", en: "+{0} HP!" },

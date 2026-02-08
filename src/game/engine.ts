@@ -211,6 +211,20 @@ export class GameEngine {
   private originalFogFar = 80;
   onSandstorm?: (warning: boolean, active: boolean) => void;
 
+  // Volcanic system
+  private lavaPoolPositions: { x: number; z: number; radius: number }[] = [];
+  private lavaPoolMeshes: THREE.Mesh[] = [];
+  private lavaDamageTimer = 0;
+  private volcanicEruptionTimer = 90;
+  private meteorWarnings: { position: THREE.Vector3; mesh: THREE.Mesh; timer: number }[] = [];
+  private meteorsFalling: { position: THREE.Vector3; mesh: THREE.Mesh; targetY: number; speed: number; damage: number }[] = [];
+  private emberParticles: THREE.Points | null = null;
+  onEruption?: (warning: boolean, active: boolean) => void;
+
+  // Slow-motion death
+  private slowMoTimer = 0;
+  private slowMoActive = false;
+
   // Chest system
   private chests: ChestInstance[] = [];
   private chestSpawnTimer = 45;
@@ -344,6 +358,11 @@ export class GameEngine {
     if (this.groundMesh) { this.scene.remove(this.groundMesh); this.groundMesh = null; }
     if (this.gridHelper) { this.scene.remove(this.gridHelper); this.gridHelper = null; }
     if (this.sandstormParticles) { this.scene.remove(this.sandstormParticles); this.sandstormParticles = null; }
+    if (this.emberParticles) { this.scene.remove(this.emberParticles); this.emberParticles = null; }
+    this.meteorWarnings.forEach(w => this.scene.remove(w.mesh));
+    this.meteorWarnings = [];
+    this.meteorsFalling.forEach(m => this.scene.remove(m.mesh));
+    this.meteorsFalling = [];
   }
 
   private setupArena(mapId: string) {
@@ -357,7 +376,14 @@ export class GameEngine {
     this.originalFogFar = 80;
 
     // Update lights based on map
-    if (mapId === "desert") {
+    if (mapId === "volcanic") {
+      if (this.ambientLight) { this.ambientLight.color.set(0x442222); this.ambientLight.intensity = 0.7; }
+      if (this.sunLight) { this.sunLight.color.set(0xff6633); this.sunLight.intensity = 1.0; }
+      if (this.hemiLight) { this.hemiLight.color.set(0x883322); (this.hemiLight as THREE.HemisphereLight).groundColor.set(0x331111); }
+      this.scene.fog = new THREE.Fog(mapDef.fogColor, 30, 70);
+      this.originalFogNear = 30;
+      this.originalFogFar = 70;
+    } else if (mapId === "desert") {
       if (this.ambientLight) { this.ambientLight.color.set(0x554433); this.ambientLight.intensity = 0.9; }
       if (this.sunLight) { this.sunLight.color.set(0xffcc88); this.sunLight.intensity = 1.4; }
       if (this.hemiLight) { this.hemiLight.color.set(0xaa8866); (this.hemiLight as THREE.HemisphereLight).groundColor.set(0x443322); }
@@ -373,7 +399,9 @@ export class GameEngine {
     for (let i = 0; i < posAttr.count; i++) {
       const x = posAttr.getX(i);
       const y = posAttr.getY(i);
-      const height = mapId === "desert"
+      const height = mapId === "volcanic"
+        ? Math.sin(x * 0.15) * Math.cos(y * 0.12) * 2.5 + Math.abs(Math.sin(x * 0.08 + y * 0.06)) * 1.5
+        : mapId === "desert"
         ? Math.sin(x * 0.08) * Math.cos(y * 0.06) * 3 + Math.sin(x * 0.15) * 1.5 + Math.cos(y * 0.12) * 2
         : Math.sin(x * 0.1) * Math.cos(y * 0.1) * 1.5 + Math.sin(x * 0.05 + 1) * Math.cos(y * 0.07) * 2;
       posAttr.setZ(i, height);
@@ -393,7 +421,7 @@ export class GameEngine {
 
     // Borders
     const borderGeo = new THREE.BoxGeometry(ARENA.size, 3, 0.5);
-    const borderMat = new THREE.MeshLambertMaterial({ color: mapId === "desert" ? 0x443322 : 0x332244, transparent: true, opacity: 0.3 });
+    const borderMat = new THREE.MeshLambertMaterial({ color: mapId === "volcanic" ? 0x441111 : mapId === "desert" ? 0x443322 : 0x332244, transparent: true, opacity: 0.3 });
     const borders = [
       { pos: [0, 1.5, -ARENA.halfSize], rot: 0 },
       { pos: [0, 1.5, ARENA.halfSize], rot: 0 },
@@ -408,7 +436,9 @@ export class GameEngine {
       this.environmentObjects.push(m);
     });
 
-    if (mapId === "desert") {
+    if (mapId === "volcanic") {
+      this.setupVolcanicObjects();
+    } else if (mapId === "desert") {
       this.setupDesertObjects();
     } else {
       this.setupForestObjects();
@@ -621,6 +651,225 @@ export class GameEngine {
       this.environmentObjects.push(cactus);
       this.rockColliders.push({ position: new THREE.Vector3(cx, cy, cz), radius: 0.3 });
     }
+  }
+
+  private setupVolcanicObjects() {
+    this.rockColliders = [];
+    this.lavaPoolPositions = [];
+    this.lavaPoolMeshes = [];
+
+    // Lava pools (15-20)
+    const lavaPoolGeo = new THREE.CircleGeometry(2.5, 16);
+    for (let i = 0; i < 18; i++) {
+      const lx = (Math.random() - 0.5) * ARENA.size * 0.8;
+      const lz = (Math.random() - 0.5) * ARENA.size * 0.8;
+      if (Math.abs(lx) < 8 && Math.abs(lz) < 8) continue;
+      const ly = this.getTerrainHeight(lx, lz) + 0.05;
+      const radius = 1.5 + Math.random() * 1.5;
+      const poolMat = new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.8 });
+      const pool = new THREE.Mesh(new THREE.CircleGeometry(radius, 16), poolMat);
+      pool.rotation.x = -Math.PI / 2;
+      pool.position.set(lx, ly, lz);
+      this.scene.add(pool);
+      this.environmentObjects.push(pool);
+      this.lavaPoolMeshes.push(pool);
+      this.lavaPoolPositions.push({ x: lx, z: lz, radius });
+    }
+
+    // Obsidian pillars (20-25)
+    const obsidianMat = new THREE.MeshLambertMaterial({ color: 0x1a1a2e });
+    for (let i = 0; i < 23; i++) {
+      const px = (Math.random() - 0.5) * ARENA.size * 0.85;
+      const pz = (Math.random() - 0.5) * ARENA.size * 0.85;
+      if (Math.abs(px) < 8 && Math.abs(pz) < 8) continue;
+      const py = this.getTerrainHeight(px, pz);
+      const h = 3 + Math.random() * 5;
+      const r = 0.3 + Math.random() * 0.3;
+      const pillar = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.6, r, h, 5), obsidianMat);
+      body.position.y = h / 2;
+      body.castShadow = true;
+      pillar.add(body);
+      const top = new THREE.Mesh(new THREE.ConeGeometry(r * 0.8, 1, 5), obsidianMat);
+      top.position.y = h;
+      top.castShadow = true;
+      pillar.add(top);
+      pillar.position.set(px, py, pz);
+      this.scene.add(pillar);
+      this.environmentObjects.push(pillar);
+      this.rockColliders.push({ position: new THREE.Vector3(px, py, pz), radius: r });
+    }
+
+    // Volcanic rocks (30)
+    const volcanicRockMat = new THREE.MeshLambertMaterial({ color: 0x2d1b1b });
+    for (let i = 0; i < 30; i++) {
+      const rx = (Math.random() - 0.5) * ARENA.size * 0.85;
+      const rz = (Math.random() - 0.5) * ARENA.size * 0.85;
+      if (Math.abs(rx) < 5 && Math.abs(rz) < 5) continue;
+      const rr = Math.random() * 2 + 0.5;
+      const ry = this.getTerrainHeight(rx, rz) + rr * 0.3;
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(rr, 0), volcanicRockMat);
+      rock.position.set(rx, ry, rz);
+      rock.rotation.set(Math.random() * 0.5, Math.random() * Math.PI * 2, Math.random() * 0.5);
+      rock.castShadow = true;
+      rock.receiveShadow = true;
+      this.scene.add(rock);
+      this.environmentObjects.push(rock);
+      this.rockColliders.push({ position: new THREE.Vector3(rx, ry, rz), radius: rr * 0.8 });
+    }
+
+    // Ember particles
+    const emberCount = 500;
+    const emberGeo = new THREE.BufferGeometry();
+    const emberPositions = new Float32Array(emberCount * 3);
+    const emberColors = new Float32Array(emberCount * 3);
+    for (let i = 0; i < emberCount; i++) {
+      emberPositions[i * 3] = (Math.random() - 0.5) * ARENA.size;
+      emberPositions[i * 3 + 1] = Math.random() * 15 + 2;
+      emberPositions[i * 3 + 2] = (Math.random() - 0.5) * ARENA.size;
+      const r = 0.8 + Math.random() * 0.2;
+      const g = 0.2 + Math.random() * 0.3;
+      emberColors[i * 3] = r;
+      emberColors[i * 3 + 1] = g;
+      emberColors[i * 3 + 2] = 0;
+    }
+    emberGeo.setAttribute("position", new THREE.BufferAttribute(emberPositions, 3));
+    emberGeo.setAttribute("color", new THREE.BufferAttribute(emberColors, 3));
+    const emberMat = new THREE.PointsMaterial({ size: 0.15, vertexColors: true, transparent: true, opacity: 0.8 });
+    this.emberParticles = new THREE.Points(emberGeo, emberMat);
+    this.scene.add(this.emberParticles);
+  }
+
+  private updateVolcanic(dt: number) {
+    if (this.selectedMap !== "volcanic") return;
+
+    // Pulse lava pools
+    const pulse = 0.7 + Math.sin(this.gameTime * 3) * 0.3;
+    for (const pool of this.lavaPoolMeshes) {
+      (pool.material as THREE.MeshBasicMaterial).opacity = pulse;
+      (pool.material as THREE.MeshBasicMaterial).color.setHex(
+        this.gameTime % 2 < 1 ? 0xff4400 : 0xff6600
+      );
+    }
+
+    // Lava damage (5 DPS)
+    this.lavaDamageTimer -= dt;
+    if (this.lavaDamageTimer <= 0) {
+      this.lavaDamageTimer = 0.2; // check 5x/sec
+      for (const pool of this.lavaPoolPositions) {
+        const dx = this.player.position.x - pool.x;
+        const dz = this.player.position.z - pool.z;
+        if (dx * dx + dz * dz < pool.radius * pool.radius) {
+          if (this.player.iFrameTimer <= 0) {
+            this.damagePlayer(1); // 1 damage per tick, 5x/sec = 5 DPS
+          }
+          break;
+        }
+      }
+    }
+
+    // Animate ember particles
+    if (this.emberParticles) {
+      const pos = this.emberParticles.geometry.getAttribute("position");
+      for (let i = 0; i < pos.count; i++) {
+        let y = pos.getY(i);
+        y += dt * (1 + Math.random() * 0.5);
+        if (y > 20) y = 1;
+        pos.setY(i, y);
+        pos.setX(i, pos.getX(i) + Math.sin(this.gameTime + i) * dt * 0.3);
+      }
+      pos.needsUpdate = true;
+    }
+
+    // Volcanic eruption every 90s
+    this.volcanicEruptionTimer -= dt;
+    if (this.volcanicEruptionTimer <= 0) {
+      this.volcanicEruptionTimer = 90;
+      this.triggerVolcanicEruption();
+    }
+
+    // Update meteor warnings
+    for (let i = this.meteorWarnings.length - 1; i >= 0; i--) {
+      const w = this.meteorWarnings[i];
+      w.timer -= dt;
+      // Pulse warning circle
+      const scale = 1 + Math.sin(w.timer * 10) * 0.2;
+      w.mesh.scale.set(scale, scale, 1);
+      if (w.timer <= 0) {
+        this.scene.remove(w.mesh);
+        // Spawn falling meteor
+        const meteorGeo = new THREE.SphereGeometry(0.8, 6, 6);
+        const meteorMat = new THREE.MeshBasicMaterial({ color: 0xff6600 });
+        const meteor = new THREE.Mesh(meteorGeo, meteorMat);
+        const startY = 40;
+        meteor.position.set(w.position.x, startY, w.position.z);
+        this.scene.add(meteor);
+        this.meteorsFalling.push({
+          position: meteor.position,
+          mesh: meteor,
+          targetY: w.position.y,
+          speed: 30,
+          damage: 30,
+        });
+        this.meteorWarnings.splice(i, 1);
+      }
+    }
+
+    // Update falling meteors
+    for (let i = this.meteorsFalling.length - 1; i >= 0; i--) {
+      const m = this.meteorsFalling[i];
+      m.position.y -= m.speed * dt;
+      if (m.position.y <= m.targetY) {
+        // Impact!
+        this.scene.remove(m.mesh);
+        // Damage in radius 5
+        const dx = this.player.position.x - m.position.x;
+        const dz = this.player.position.z - m.position.z;
+        if (dx * dx + dz * dz < 25 && this.player.iFrameTimer <= 0) {
+          this.damagePlayer(m.damage);
+        }
+        // Explosion particles
+        for (let j = 0; j < 10; j++) {
+          const pMat = new THREE.MeshBasicMaterial({ color: Math.random() > 0.5 ? 0xff4400 : 0xffaa00, transparent: true });
+          const pMesh = new THREE.Mesh(this.sharedParticleBoxGeo, pMat);
+          pMesh.position.set(m.position.x, m.targetY + 1, m.position.z);
+          this.scene.add(pMesh);
+          this.particles.push({
+            mesh: pMesh,
+            velocity: new THREE.Vector3((Math.random() - 0.5) * 8, Math.random() * 6 + 2, (Math.random() - 0.5) * 8),
+            life: 0, maxLife: 1.0,
+          });
+        }
+        // Screen shake
+        this.shakeIntensity = 0.5;
+        this.shakeTimer = 0.3;
+        this.meteorsFalling.splice(i, 1);
+      }
+    }
+  }
+
+  private triggerVolcanicEruption() {
+    this.onEruption?.(true, true);
+    const meteorCount = 3 + Math.floor(Math.random() * 3); // 3-5
+    for (let i = 0; i < meteorCount; i++) {
+      const mx = (Math.random() - 0.5) * ARENA.size * 0.7;
+      const mz = (Math.random() - 0.5) * ARENA.size * 0.7;
+      const my = this.getTerrainHeight(mx, mz);
+      // Warning circle
+      const warnGeo = new THREE.CircleGeometry(5, 16);
+      const warnMat = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.4, side: THREE.DoubleSide });
+      const warnMesh = new THREE.Mesh(warnGeo, warnMat);
+      warnMesh.rotation.x = -Math.PI / 2;
+      warnMesh.position.set(mx, my + 0.1, mz);
+      this.scene.add(warnMesh);
+      this.meteorWarnings.push({
+        position: new THREE.Vector3(mx, my, mz),
+        mesh: warnMesh,
+        timer: 2.0,
+      });
+    }
+    // Clear eruption warning after 5s
+    setTimeout(() => { this.onEruption?.(false, false); }, 5000);
   }
 
   private createPlayerMesh(charId = "knight") {
@@ -1788,6 +2037,19 @@ export class GameEngine {
     this.sandstormWarning = false;
     if (this.sandstormParticles) { this.scene.remove(this.sandstormParticles); this.sandstormParticles = null; }
 
+    // Reset volcanic
+    this.lavaPoolPositions = [];
+    this.lavaPoolMeshes = [];
+    this.lavaDamageTimer = 0;
+    this.volcanicEruptionTimer = 90;
+    this.meteorWarnings.forEach(w => this.scene.remove(w.mesh));
+    this.meteorWarnings = [];
+    this.meteorsFalling.forEach(m => this.scene.remove(m.mesh));
+    this.meteorsFalling = [];
+    if (this.emberParticles) { this.scene.remove(this.emberParticles); this.emberParticles = null; }
+    this.slowMoActive = false;
+    this.slowMoTimer = 0;
+
     const startY = this.getTerrainHeight(0, 0);
     this.playerMesh.position.set(0, startY - 2, 0);
     this.player.position.set(0, startY, 0);
@@ -1836,7 +2098,8 @@ export class GameEngine {
       return;
     }
 
-    const cappedDt = Math.min(dt, 0.05); // cap at 50ms
+    let cappedDt = Math.min(dt, 0.05); // cap at 50ms
+    if (this.slowMoActive) cappedDt *= 0.3;
 
     this.gameTime += cappedDt;
     this.stats.survivalTime = this.gameTime;
@@ -1873,6 +2136,7 @@ export class GameEngine {
     this.updateHPRegen(cappedDt);
     this.updateChests(cappedDt);
     this.updateSandstorm(cappedDt);
+    this.updateVolcanic(cappedDt);
     this.updateTimedRemovals();
     this.performanceCleanup();
 
@@ -2367,7 +2631,7 @@ export class GameEngine {
       const collDistSq = cdx * cdx + cdz * cdz;
       const collRadius = enemy.radius + PLAYER.radius;
       if (collDistSq < collRadius * collRadius && this.player.iFrameTimer <= 0) {
-        this.damagePlayer(enemy.damage);
+        this.damagePlayer(enemy.damage, enemy.position);
       }
     }
 
@@ -2439,7 +2703,7 @@ export class GameEngine {
       const epDistSq = epdx * epdx + epdz * epdz + epdy * epdy;
       const epRadius = PLAYER.radius + 0.2;
       if (epDistSq < epRadius * epRadius && this.player.iFrameTimer <= 0) {
-        this.damagePlayer(proj.damage);
+        this.damagePlayer(proj.damage, proj.position);
         proj.isAlive = false;
       }
     }
@@ -3038,7 +3302,7 @@ export class GameEngine {
     const bsdx = boss.position.x - this.player.position.x;
     const bsdz = boss.position.z - this.player.position.z;
     if (bsdx * bsdx + bsdz * bsdz < radius * radius && this.player.iFrameTimer <= 0) {
-      this.damagePlayer(damage);
+      this.damagePlayer(damage, boss.position);
     }
 
     Audio.playBossSlam();
@@ -3788,17 +4052,32 @@ export class GameEngine {
     }
   }
 
-  private damagePlayer(damage: number) {
+  private damagePlayer(damage: number, knockbackSource?: THREE.Vector3) {
     if (this.portalState === "dying") return; // Already dying
+    if (this.player.iFrameTimer > 0) return; // I-frames active
     const finalDamage = Math.max(1, damage - this.player.armor);
     this.player.hp -= finalDamage;
     this.player.iFrameTimer = PLAYER.iFrames;
     this.onDamage?.();
     Audio.playDamage();
 
+    // Knockback
+    if (knockbackSource) {
+      const kbDir = new THREE.Vector3()
+        .subVectors(this.player.position, knockbackSource).normalize();
+      this.player.velocity.x += kbDir.x * 3;
+      this.player.velocity.z += kbDir.z * 3;
+    }
+
     if (this.player.hp <= 0) {
       this.player.hp = 0;
-      this.gameOver();
+      // Slow-motion death
+      this.slowMoActive = true;
+      this.slowMoTimer = 1.5;
+      setTimeout(() => {
+        this.slowMoActive = false;
+        this.gameOver();
+      }, 1500);
     }
   }
 
@@ -4472,6 +4751,9 @@ export class GameEngine {
   // ========== HELPERS ==========
 
   private getTerrainHeight(x: number, z: number): number {
+    if (this.selectedMap === "volcanic") {
+      return Math.sin(x * 0.15) * Math.cos(z * 0.12) * 2.5 + Math.abs(Math.sin(x * 0.08 + z * 0.06)) * 1.5;
+    }
     if (this.selectedMap === "desert") {
       return Math.sin(x * 0.08) * Math.cos(z * 0.06) * 3 + Math.sin(x * 0.15) * 1.5 + Math.cos(z * 0.12) * 2;
     }
@@ -4868,13 +5150,42 @@ export class GameEngine {
     return this.metaState.achievements.maxSurvivalTime >= 600; // 10 minutes
   }
 
+  isVolcanicUnlockConditionMet(): boolean {
+    return this.metaState.unlockedMaps.includes("desert") &&
+      this.metaState.achievements.maxSurvivalTime >= 900; // 15 minutes on desert
+  }
+
   // Settings
-  private loadSettings(): { invertY: boolean; volume: number } {
+  private loadSettings(): { invertY: boolean; volume: number; quality: string } {
     try {
       const raw = secureGet("hordecraft_settings");
-      if (raw) return { invertY: false, volume: 1, ...JSON.parse(raw) };
+      if (raw) return { invertY: false, volume: 1, quality: "medium", ...JSON.parse(raw) };
     } catch {}
-    return { invertY: false, volume: 1 };
+    return { invertY: false, volume: 1, quality: "medium" };
+  }
+
+  applyQualitySettings() {
+    const q = this.settings.quality || "medium";
+    const isMobileDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+    if (q === "low") {
+      this.renderer.shadowMap.enabled = false;
+      this.renderer.setPixelRatio(1);
+      if (this.scene.fog instanceof THREE.Fog) {
+        this.scene.fog.near = Math.max(10, this.originalFogNear - 15);
+        this.scene.fog.far = Math.max(30, this.originalFogFar - 20);
+      }
+    } else if (q === "high") {
+      this.renderer.shadowMap.enabled = true;
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      if (this.scene.fog instanceof THREE.Fog) {
+        this.scene.fog.near = this.originalFogNear + 10;
+        this.scene.fog.far = this.originalFogFar + 20;
+      }
+    } else {
+      // medium
+      this.renderer.shadowMap.enabled = !isMobileDevice;
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    }
   }
 
   saveSettings() {

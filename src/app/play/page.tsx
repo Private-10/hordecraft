@@ -57,6 +57,9 @@ export default function PlayPage() {
   const [showMapSelect, setShowMapSelect] = useState(false);
   const [sandstormWarning, setSandstormWarning] = useState(false);
   const [sandstormActive, setSandstormActive] = useState(false);
+  const [eruptionWarning, setEruptionWarning] = useState(false);
+  const [eruptionActive, setEruptionActive] = useState(false);
+  const [graphicsQuality, setGraphicsQuality] = useState("medium");
   const [showChat, setShowChat] = useState(true);
   const [chatMessages, setChatMessages] = useState<{nickname:string;text:string;color:string}[]>([]);
   const [chatInput, setChatInput] = useState("");
@@ -151,6 +154,8 @@ export default function PlayPage() {
     engineRef.current = engine;
     engine.init(canvasRef.current);
     setInvertY(engine.settings.invertY);
+    setGraphicsQuality(engine.settings.quality || "medium");
+    engine.applyQualitySettings();
 
     engine.onStateChange = (state: GameState) => {
       setGameState(state);
@@ -237,6 +242,10 @@ export default function PlayPage() {
     engine.onSandstorm = (warning: boolean, active: boolean) => {
       setSandstormWarning(warning);
       setSandstormActive(active);
+    };
+    engine.onEruption = (warning: boolean, active: boolean) => {
+      setEruptionWarning(warning);
+      setEruptionActive(active);
     };
 
     const origStatsUpdate = engine.onStatsUpdate;
@@ -613,9 +622,13 @@ export default function PlayPage() {
                 <div className="char-grid">
                   {(Object.entries(MAPS) as [string, typeof MAPS.forest][]).map(([mapId, mapDef]) => {
                     const unlocked = metaState?.unlockedMaps?.includes(mapId) ?? mapId === "forest";
-                    const condMet = mapId === "desert" ? engineRef.current?.isDesertUnlockConditionMet() ?? false : true;
+                    const condMet = mapId === "desert"
+                      ? engineRef.current?.isDesertUnlockConditionMet() ?? false
+                      : mapId === "volcanic"
+                      ? engineRef.current?.isVolcanicUnlockConditionMet() ?? false
+                      : true;
                     const canAfford = (metaState?.gold ?? 0) >= mapDef.unlockCost;
-                    const descKey = `map.${mapId}_desc` as "map.forest_desc" | "map.desert_desc";
+                    const descKey = `map.${mapId}_desc` as "map.forest_desc" | "map.desert_desc" | "map.volcanic_desc";
                     return (
                       <button
                         key={mapId}
@@ -977,6 +990,22 @@ export default function PlayPage() {
         </div>
       )}
 
+      {/* Eruption Warning */}
+      {(eruptionWarning || eruptionActive) && gameState === "playing" && (
+        <div style={{
+          position: "fixed", top: "40%", left: "50%", transform: "translate(-50%, -50%)",
+          zIndex: 25, textAlign: "center", pointerEvents: "none",
+        }}>
+          <div style={{
+            fontSize: 32, fontWeight: 900, color: "#ff4400",
+            textShadow: "0 0 20px rgba(255,68,0,0.8), 0 0 40px rgba(255,50,0,0.4)",
+            animation: "pulse 0.5s ease-in-out infinite alternate",
+          }}>
+            {t("hud.eruption")}
+          </div>
+        </div>
+      )}
+
       {/* Sandstorm Warning */}
       {(sandstormWarning || sandstormActive) && gameState === "playing" && (
         <div style={{
@@ -1141,6 +1170,33 @@ export default function PlayPage() {
                   }}
                   className="settings-checkbox"
                 />
+              </label>
+              <label className="settings-row">
+                <span>{t("settings.quality")}</span>
+                <select
+                  value={graphicsQuality}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setGraphicsQuality(val);
+                    if (engineRef.current) {
+                      engineRef.current.settings.quality = val;
+                      engineRef.current.saveSettings();
+                      engineRef.current.applyQualitySettings();
+                    }
+                  }}
+                  style={{
+                    background: "rgba(255,255,255,0.1)",
+                    color: "white",
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    borderRadius: 6,
+                    padding: "4px 8px",
+                    fontSize: 14,
+                  }}
+                >
+                  <option value="low" style={{ background: "#1a1a2e" }}>{t("settings.quality.low")}</option>
+                  <option value="medium" style={{ background: "#1a1a2e" }}>{t("settings.quality.medium")}</option>
+                  <option value="high" style={{ background: "#1a1a2e" }}>{t("settings.quality.high")}</option>
+                </select>
               </label>
             </div>
           </div>

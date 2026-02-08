@@ -164,6 +164,19 @@ export const MAPS = {
     skyColor: 0x1a0a00,
     fogColor: 0x2a1500,
   },
+  volcanic: {
+    name: "Volcanic Depths",
+    nametr: "Volkanik Derinlikler",
+    icon: "🌋",
+    unlockCondition: "Survive 15min in Desert + 500G",
+    unlockConditiontr: "Çöl haritasında 15dk hayatta kal + 500G",
+    unlockCost: 500,
+    arenaSize: 120,
+    groundColor: 0x2a1515,
+    groundLineColor: 0x3a2020,
+    skyColor: 0x1a0500,
+    fogColor: 0x2a0a00,
+  },
 };
 
 export const COLORS = {
