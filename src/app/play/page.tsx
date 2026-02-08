@@ -849,7 +849,7 @@ export default function PlayPage() {
                 </div>
                 {/* Default (no skin) option */}
                 <div
-                  onClick={() => { engineRef.current?.selectSkin(showSkinSelect, null); refreshMeta(); }}
+                  onClick={() => { if (previewRef.current) previewRef.current.setCharacter(showSkinSelect!, null); engineRef.current?.selectSkin(showSkinSelect, null); refreshMeta(); }}
                   style={{
                     display: "flex", alignItems: "center", gap: 8, padding: 8, marginBottom: 4,
                     background: !metaState.selectedSkins?.[showSkinSelect] ? "rgba(255,140,66,0.2)" : "rgba(255,255,255,0.05)",
@@ -872,11 +872,16 @@ export default function PlayPage() {
                       style={{
                         display: "flex", alignItems: "center", gap: 8, padding: 8, marginBottom: 4,
                         background: equipped ? "rgba(255,140,66,0.2)" : "rgba(255,255,255,0.05)",
-                        borderRadius: 8, cursor: owned ? "pointer" : "default",
+                        borderRadius: 8, cursor: "pointer",
                         border: equipped ? "1px solid #ff8c42" : `1px solid ${rarityColor}33`,
-                        opacity: owned ? 1 : 0.6,
+                        opacity: owned ? 1 : 0.7,
                       }}
                       onClick={() => {
+                        // Always preview the skin in 3D
+                        if (previewRef.current) {
+                          previewRef.current.setCharacter(showSkinSelect!, skin.id);
+                        }
+                        // If owned, equip it
                         if (owned) {
                           engineRef.current?.selectSkin(showSkinSelect!, skin.id);
                           refreshMeta();
@@ -888,6 +893,7 @@ export default function PlayPage() {
                         <div style={{ fontSize: 12, fontWeight: 700, color: rarityColor }}>{skin.name()}</div>
                         <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>{skin.description()}</div>
                         {!owned && <div style={{ fontSize: 9, color: "rgba(255,255,255,0.3)" }}>{skin.unlockCondition}</div>}
+                        {!owned && <div style={{ fontSize: 8, color: "rgba(100,200,255,0.5)", marginTop: 2 }}>👁️ {lang === "tr" ? "Tıkla önizle" : "Tap to preview"}</div>}
                       </div>
                       {equipped && <span style={{ fontSize: 10, color: "#ff8c42" }}>✓</span>}
                       {!owned && (
