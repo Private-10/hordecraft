@@ -346,6 +346,7 @@ export default function PlayPage() {
   }, []);
 
   const actualStartGame = useCallback(() => {
+    console.log("[HordeCraft] actualStartGame called, engine:", !!engineRef.current, "char:", selectedChar, "map:", selectedMap);
     try {
       setMaxDps(0);
       setDps(0);
@@ -354,22 +355,26 @@ export default function PlayPage() {
       setEruptionWarning(false);
       setEruptionActive(false);
       if (!engineRef.current) {
-        console.error("Engine not initialized!");
-        alert("Game engine failed to load. Please refresh the page.");
+        console.error("[HordeCraft] Engine not initialized!");
+        alert("Oyun motoru yüklenemedi. Sayfayı yenile / Game engine failed. Refresh the page.");
         return;
       }
       engineRef.current.startGame(selectedChar, selectedMap);
+      console.log("[HordeCraft] startGame completed, state:", engineRef.current.state);
     } catch (e) {
-      console.error("startGame failed:", e);
-      alert("Failed to start game. Please refresh.");
+      console.error("[HordeCraft] startGame failed:", e);
+      alert("Oyun başlatılamadı / Failed to start: " + (e as Error).message);
     }
   }, [selectedChar, selectedMap]);
 
   const startGame = useCallback(() => {
+    console.log("[HordeCraft] startGame called, engine:", !!engineRef.current);
     const tutorialDone = secureGet("hordecraft_tutorial_done");
+    console.log("[HordeCraft] tutorialDone:", tutorialDone);
     if (!tutorialDone) {
-      setShowTutorial(true);
-      setTutorialStep(0);
+      // Skip tutorial on mobile — go straight to game
+      secureSet("hordecraft_tutorial_done", "1");
+      actualStartGame();
     } else {
       actualStartGame();
     }
@@ -1329,7 +1334,7 @@ export default function PlayPage() {
         const isLast = tutorialStep === steps.length - 1;
         return (
           <div style={{
-            position: "fixed", inset: 0, zIndex: 100,
+            position: "fixed", inset: 0, zIndex: 999,
             background: "rgba(0,0,0,0.85)",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>
