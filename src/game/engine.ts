@@ -4676,15 +4676,38 @@ export class GameEngine {
   private fireHolySmite(weapon: WeaponState) {
     const w = WEAPONS.holySmite;
     const evolved = weapon.level >= 6;
-    const damage = w.baseDamage * (1 + (weapon.level - 1) * 0.3) * this.player.damageMultiplier;
-    const radius = (w.range + weapon.level * 0.3) * (evolved ? 2 : 1);
-    const healAmount = (w.healAmount + weapon.level) * (evolved ? 3 : 1);
+    const damage = w.baseDamage * (1 + (weapon.level - 1) * 0.35) * this.player.damageMultiplier;
+    const radius = (w.range + weapon.level * 0.5) * (evolved ? 2 : 1);
+    const healAmount = (w.healAmount + weapon.level * 2) * (evolved ? 3 : 1);
 
-    // Random position near player
-    const angle = Math.random() * Math.PI * 2;
-    const dist = 3 + Math.random() * 8;
-    const sx = this.player.position.x + Math.cos(angle) * dist;
-    const sz = this.player.position.z + Math.sin(angle) * dist;
+    // Target nearest enemy cluster (find enemy with most neighbors)
+    let bestTarget: THREE.Vector3 | null = null;
+    let bestScore = -1;
+    for (const e of this.enemies) {
+      if (!e.isAlive) continue;
+      const dx = e.position.x - this.player.position.x;
+      const dz = e.position.z - this.player.position.z;
+      if (dx * dx + dz * dz > 400) continue; // within 20 units
+      let neighbors = 0;
+      for (const other of this.enemies) {
+        if (!other.isAlive || other === e) continue;
+        const ndx = other.position.x - e.position.x;
+        const ndz = other.position.z - e.position.z;
+        if (ndx * ndx + ndz * ndz < radius * radius * 4) neighbors++;
+      }
+      if (neighbors > bestScore) { bestScore = neighbors; bestTarget = e.position; }
+    }
+    // Fallback: random near player if no enemies
+    let sx: number, sz: number;
+    if (bestTarget) {
+      sx = bestTarget.x + (Math.random() - 0.5) * 2;
+      sz = bestTarget.z + (Math.random() - 0.5) * 2;
+    } else {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 3 + Math.random() * 8;
+      sx = this.player.position.x + Math.cos(angle) * dist;
+      sz = this.player.position.z + Math.sin(angle) * dist;
+    }
     const sy = this.getTerrainHeight(sx, sz);
 
     // Visual: golden light pillar
@@ -4729,14 +4752,19 @@ export class GameEngine {
       h.mesh.children.forEach(child => {
         if (child instanceof THREE.Mesh) (child.material as THREE.MeshBasicMaterial).opacity = fade * 0.6;
       });
-      // Damage enemies in radius
+      // Burst damage on first frame, then smaller ticks
+      const isBurst = h.timer > h.maxTime - dt * 2; // first frame
       for (const enemy of this.enemies) {
         if (!enemy.isAlive) continue;
         const dx = enemy.position.x - h.position.x;
         const dz = enemy.position.z - h.position.z;
-        if (dx * dx + dz * dz < h.radius * h.radius && enemy.hitTimer <= 0) {
-          this.damageEnemy(enemy, h.damage * dt * 2, true);
-          enemy.hitTimer = 0.3;
+        if (dx * dx + dz * dz < h.radius * h.radius) {
+          if (isBurst) {
+            this.damageEnemy(enemy, h.damage);
+          } else if (enemy.hitTimer <= 0) {
+            this.damageEnemy(enemy, h.damage * 0.3, true);
+            enemy.hitTimer = 0.4;
+          }
         }
       }
       // Heal player if in range

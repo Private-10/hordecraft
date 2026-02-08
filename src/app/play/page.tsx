@@ -608,8 +608,8 @@ export default function PlayPage() {
 
   // 3D Character Preview
   useEffect(() => {
-    if (!showCharSelect) {
-      // Dispose when panel closed
+    if (!showCharSelect || gameState !== "menu") {
+      // Dispose when panel closed or not in menu
       if (previewRef.current) {
         previewRef.current.dispose();
         previewRef.current = null;
@@ -619,6 +619,7 @@ export default function PlayPage() {
     // Small delay to let the canvas mount
     const timer = setTimeout(() => {
       if (!previewCanvasRef.current) return;
+      // Always recreate if disposed (e.g. after returning from game)
       if (!previewRef.current) {
         try {
           previewRef.current = new CharacterPreview(previewCanvasRef.current);
@@ -630,9 +631,9 @@ export default function PlayPage() {
       const skinId = metaState?.selectedSkins?.[previewChar] || null;
       previewRef.current.setCharacter(previewChar, skinId);
       previewRef.current.resize();
-    }, 50);
+    }, 100);
     return () => clearTimeout(timer);
-  }, [showCharSelect, previewChar, metaState?.selectedSkins]);
+  }, [showCharSelect, previewChar, metaState?.selectedSkins, gameState]);
 
   // Cleanup preview on unmount
   useEffect(() => {
@@ -739,6 +740,11 @@ export default function PlayPage() {
                   boneToss: { tr: "🦴 Kemik Fırlatma", en: "🦴 Bone Toss" },
                   shockWave: { tr: "💥 Şok Dalgası", en: "💥 Shock Wave" },
                   fireTrail: { tr: "🔥 Ateş İzi", en: "🔥 Fire Trail" },
+                  holySmite: { tr: "✨ Kutsal Darbe", en: "✨ Holy Smite" },
+                  shuriken: { tr: "✦ Shuriken", en: "✦ Shuriken" },
+                  bloodAxe: { tr: "🪓 Kan Baltası", en: "🪓 Blood Axe" },
+                  soulHarvest: { tr: "👻 Ruh Hasadı", en: "👻 Soul Harvest" },
+                  arcaneOrb: { tr: "🔮 Büyü Küresi", en: "🔮 Arcane Orb" },
                 };
                 const passiveDesc: Record<string, Record<string, string>> = {
                   knight: { tr: "🛡️ +2 Zırh", en: "🛡️ +2 Armor" },

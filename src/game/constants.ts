@@ -117,10 +117,10 @@ export const WEAPONS = {
   holySmite: {
     name: "Holy Smite",
     icon: "🌟",
-    baseDamage: 25,
-    fireRate: 0.33,
-    range: 4,
-    healAmount: 3,
+    baseDamage: 35,
+    fireRate: 0.5,
+    range: 5,
+    healAmount: 5,
   },
   shuriken: {
     name: "Shuriken",
