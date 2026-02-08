@@ -27,6 +27,8 @@ export class MobileInputManager {
     this.container = container;
     this.createUI();
     this.bindEvents();
+    // Start hidden — only show when game starts
+    this.setVisible(false);
   }
 
   private createUI() {
@@ -211,6 +213,7 @@ export class MobileInputManager {
   private _lastCameraY: number | null = null;
 
   private onTouchEnd = (e: TouchEvent) => {
+    if (!this._active) return;
     for (let i = 0; i < e.changedTouches.length; i++) {
       const touch = e.changedTouches[i];
 

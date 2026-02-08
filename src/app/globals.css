@@ -67,9 +67,12 @@ body.game-active {
 body {
   overflow: auto;
 }
-/* Lock scroll on play page */
-body.play-page {
+/* Lock scroll only during active gameplay */
+body.play-page.game-playing {
   overflow: hidden;
+  position: fixed;
+  width: 100%;
+  height: 100%;
 }
 
 ::selection { background: rgba(255, 107, 53, 0.3); color: white; }

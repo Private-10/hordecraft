@@ -142,11 +142,9 @@ export default function PlayPage() {
   // Control body overflow based on game state - iOS needs this
   useEffect(() => {
     if (gameState === "menu") {
-      document.body.style.overflow = "auto";
-      document.body.style.position = "static";
+      document.body.classList.remove("game-playing");
     } else {
-      document.body.style.overflow = "hidden";
-      document.body.style.position = "fixed";
+      document.body.classList.add("game-playing");
     }
   }, [gameState]);
 
@@ -160,8 +158,14 @@ export default function PlayPage() {
     if (!canvasRef.current) return;
 
     const engine = new GameEngine();
+    try {
+      engine.init(canvasRef.current);
+    } catch (e) {
+      console.error("Engine init failed:", e);
+      engineRef.current = null;
+      return;
+    }
     engineRef.current = engine;
-    engine.init(canvasRef.current);
     setInvertY(engine.settings.invertY);
     setGraphicsQuality(engine.settings.quality || "medium");
     engine.applyQualitySettings();
@@ -347,9 +351,17 @@ export default function PlayPage() {
       setDps(0);
       setSandstormWarning(false);
       setSandstormActive(false);
-      engineRef.current?.startGame(selectedChar, selectedMap);
+      setEruptionWarning(false);
+      setEruptionActive(false);
+      if (!engineRef.current) {
+        console.error("Engine not initialized!");
+        alert("Game engine failed to load. Please refresh the page.");
+        return;
+      }
+      engineRef.current.startGame(selectedChar, selectedMap);
     } catch (e) {
       console.error("startGame failed:", e);
+      alert("Failed to start game. Please refresh.");
     }
   }, [selectedChar, selectedMap]);
 
@@ -562,6 +574,7 @@ export default function PlayPage() {
           top: 0, left: 0,
           zIndex: gameState === "menu" ? -1 : 1,
           visibility: gameState === "menu" ? "hidden" : "visible",
+          pointerEvents: gameState === "menu" ? "none" : "auto",
         }}
         onContextMenu={(e) => e.preventDefault()}
       />
