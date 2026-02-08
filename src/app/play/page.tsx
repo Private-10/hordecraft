@@ -345,8 +345,7 @@ export default function PlayPage() {
     return () => { cancelAnimationFrame(animId); engine.dispose(); };
   }, []);
 
-  const actualStartGame = useCallback(() => {
-    console.log("[HordeCraft] actualStartGame called, engine:", !!engineRef.current, "char:", selectedChar, "map:", selectedMap);
+  const handleStartGame = useCallback(() => {
     try {
       setMaxDps(0);
       setDps(0);
@@ -355,23 +354,14 @@ export default function PlayPage() {
       setEruptionWarning(false);
       setEruptionActive(false);
       if (!engineRef.current) {
-        console.error("[HordeCraft] Engine not initialized!");
-        alert("Oyun motoru yüklenemedi. Sayfayı yenile / Game engine failed. Refresh the page.");
+        alert("Oyun motoru yüklenemedi. Sayfayı yenile!");
         return;
       }
       engineRef.current.startGame(selectedChar, selectedMap);
-      console.log("[HordeCraft] startGame completed, state:", engineRef.current.state);
     } catch (e) {
-      console.error("[HordeCraft] startGame failed:", e);
-      alert("Oyun başlatılamadı / Failed to start: " + (e as Error).message);
+      alert("Hata: " + (e as Error).message);
     }
   }, [selectedChar, selectedMap]);
-
-  const startGame = useCallback(() => {
-    alert("startGame called! Engine: " + !!engineRef.current);
-    secureSet("hordecraft_tutorial_done", "1");
-    actualStartGame();
-  }, [actualStartGame]);
 
   const selectUpgrade = useCallback((option: UpgradeOption) => {
     Audio.playSelect();
@@ -800,7 +790,7 @@ export default function PlayPage() {
                     <span className="auth-avatar">👤</span>
                     <span className="auth-name">{nickname}</span>
                   </div>
-                  <button className="btn-play" onPointerUp={() => { try { startGame(); } catch(e) { alert("Error: " + e); } }} onTouchEnd={(e) => { e.preventDefault(); try { startGame(); } catch(err) { alert("Touch Error: " + err); } }} onClick={() => { try { startGame(); } catch(e) { alert("Click Error: " + e); } }}>
+                  <button className="btn-play" onClick={handleStartGame}>
                     {lang === "tr" ? "⚔️ SAVAŞA GİR" : "⚔️ ENTER BATTLE"}
                   </button>
                   <button onClick={() => { logoutNickname(); setNickLoggedIn(false); setNicknameState(""); setPin(""); if (engineRef.current) { engineRef.current.setMetaState({ gold: 0, permanentUpgrades: {}, unlockedCharacters: ["knight"], unlockedMaps: ["forest"], totalRuns: 0, achievements: { maxKills: 0, maxSurvivalTime: 0, maxLevel: 0, totalRuns: 0 } }); } }} className="auth-logout">
@@ -926,7 +916,7 @@ export default function PlayPage() {
                   </div>
 
                   {/* Guest play */}
-                  <button className="btn-guest" onPointerUp={() => { try { logoutNickname(); setNicknameState(""); if (engineRef.current) { engineRef.current.setMetaState({ gold: 0, permanentUpgrades: {}, unlockedCharacters: ["knight"], unlockedMaps: ["forest"], totalRuns: 0, achievements: { maxKills: 0, maxSurvivalTime: 0, maxLevel: 0, totalRuns: 0 } }); } startGame(); } catch(e) { alert("Guest Error: " + e); } }} onClick={() => { try { logoutNickname(); setNicknameState(""); if (engineRef.current) { engineRef.current.setMetaState({ gold: 0, permanentUpgrades: {}, unlockedCharacters: ["knight"], unlockedMaps: ["forest"], totalRuns: 0, achievements: { maxKills: 0, maxSurvivalTime: 0, maxLevel: 0, totalRuns: 0 } }); } startGame(); } catch(e) { alert("Guest Click Error: " + e); } }}>
+                  <button className="btn-guest" onClick={() => { logoutNickname(); setNicknameState(""); if (engineRef.current) { engineRef.current.setMetaState({ gold: 0, permanentUpgrades: {}, unlockedCharacters: ["knight"], unlockedMaps: ["forest"], totalRuns: 0, achievements: { maxKills: 0, maxSurvivalTime: 0, maxLevel: 0, totalRuns: 0 } }); } handleStartGame(); }}>
                     👤 {lang === "tr" ? "Misafir Oyna" : "Play as Guest"}
                   </button>
                   <div className="auth-hint" style={{ marginTop: 4 }}>
@@ -1275,7 +1265,7 @@ export default function PlayPage() {
               );
             })()}
             <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
-              <button className="btn btn-primary" onClick={startGame}>{t("gameover.retry")}</button>
+              <button className="btn btn-primary" onClick={handleStartGame}>{t("gameover.retry")}</button>
               <button className="btn btn-secondary" onClick={() => setGameState("menu")}>{t("gameover.menu")}</button>
               <button className="btn btn-secondary" onClick={() => { window.location.href = "/leaderboard"; }}>
                 🏆 {lang === "tr" ? "Sıralama" : "Leaderboard"}
@@ -1333,7 +1323,7 @@ export default function PlayPage() {
           }}>
             {/* Skip button */}
             <button
-              onClick={() => { setShowTutorial(false); secureSet("hordecraft_tutorial_done", "1"); actualStartGame(); }}
+              onClick={() => { setShowTutorial(false); secureSet("hordecraft_tutorial_done", "1"); handleStartGame(); }}
               style={{
                 position: "absolute", top: 20, right: 20,
                 background: "rgba(255,255,255,0.1)", border: "none", color: "rgba(255,255,255,0.5)",
@@ -1396,7 +1386,7 @@ export default function PlayPage() {
                     if (isLast) {
                       setShowTutorial(false);
                       secureSet("hordecraft_tutorial_done", "1");
-                      actualStartGame();
+                      handleStartGame();
                     } else {
                       setTutorialStep(s => s + 1);
                     }
