@@ -2243,9 +2243,10 @@ export class GameEngine {
       enemy.mesh.position.copy(enemy.position);
       enemy.mesh.lookAt(playerPos.x, enemy.position.y, playerPos.z);
 
-      // Distance-based culling
-      const camDistSq = enemy.position.distanceToSquared(this.camera.position);
-      enemy.mesh.visible = camDistSq < 2500; // 50^2
+      // Distance-based culling (generous range to avoid pop-in)
+      const camDx = enemy.position.x - this.camera.position.x;
+      const camDz = enemy.position.z - this.camera.position.z;
+      enemy.mesh.visible = (camDx * camDx + camDz * camDz) < 10000; // 100^2
 
       // Bat wing flap animation
       if (isBat && enemy.mesh instanceof THREE.Group) {
@@ -2371,9 +2372,14 @@ export class GameEngine {
     if (pool && pool.length > 0) {
       const mesh = pool.pop()!;
       mesh.visible = true;
+      mesh.scale.set(1, 1, 1);
+      mesh.rotation.set(0, 0, 0);
       // Remove any elite glow/lights from previous use
-      const eliteGlow = mesh instanceof THREE.Group ? mesh.getObjectByName("eliteGlow") : null;
-      if (eliteGlow) mesh.remove(eliteGlow);
+      if (mesh instanceof THREE.Group) {
+        const toRemove: THREE.Object3D[] = [];
+        mesh.traverse(c => { if (c.name === "eliteGlow" || c.name === "eliteLight") toRemove.push(c); });
+        toRemove.forEach(c => mesh.remove(c));
+      }
       return mesh;
     }
     const factory = this.enemyMeshFactories[type];
@@ -2384,6 +2390,12 @@ export class GameEngine {
   }
 
   private returnEnemyMesh(type: string, mesh: THREE.Object3D) {
+    // Don't pool boss meshes — they have unique scale
+    const bossTypes = new Set(Object.keys(BOSSES));
+    if (bossTypes.has(type)) {
+      this.disposeMesh(mesh);
+      return;
+    }
     mesh.visible = false;
     if (!this.enemyMeshPools[type]) this.enemyMeshPools[type] = [];
     if (this.enemyMeshPools[type].length < 30) {
