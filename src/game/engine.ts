@@ -1764,6 +1764,8 @@ export class GameEngine {
     this.tier3TrollTimer = 20;
     this.shockWaves.forEach(s => { if (s.mesh.parent) this.scene.remove(s.mesh); });
     this.shockWaves = [];
+    this.shockColumns.forEach(c => { if (c.mesh.parent) this.scene.remove(c.mesh); (c.mesh.material as THREE.MeshBasicMaterial).dispose(); });
+    this.shockColumns = [];
     this.lightnings.forEach(l => { if (l.line.parent) this.scene.remove(l.line); });
     this.lightnings = [];
     this.fireSegments.forEach(f => { if (f.mesh.parent) this.scene.remove(f.mesh); });
@@ -2422,7 +2424,7 @@ export class GameEngine {
       if (proj.lifetime <= 0) { proj.isAlive = false; continue; }
       // Trail particles
       if (Math.random() < 0.3) {
-        const trail = new THREE.Mesh(this.sharedTinySphereGeo, new THREE.MeshBasicMaterial({ color: 0x9933ff, transparent: true }));
+        const trail = new THREE.Mesh(this.sharedTinySphereGeo, this.matTrailPurple);
         trail.position.copy(proj.position);
         this.scene.add(trail);
         this.particles.push({ mesh: trail, velocity: new THREE.Vector3((Math.random() - 0.5) * 0.3, 0.2, (Math.random() - 0.5) * 0.3), life: 0, maxLife: 0.3 });
@@ -3299,10 +3301,7 @@ export class GameEngine {
       for (let pi = 0; pi < 3; pi++) {
         const t = Math.random();
         const pp = start.clone().lerp(end, t);
-        const spark = new THREE.Mesh(
-          this.sharedSmallOctGeo,
-          new THREE.MeshBasicMaterial({ color: 0xaaddff, transparent: true })
-        );
+        const spark = new THREE.Mesh(this.sharedSmallOctGeo, this.matLightningFlash);
         spark.position.copy(pp);
         this.scene.add(spark);
         this.particles.push({ mesh: spark, velocity: new THREE.Vector3((Math.random() - 0.5) * 3, Math.random() * 2, (Math.random() - 0.5) * 3), life: 0, maxLife: 0.25 });
@@ -3310,20 +3309,14 @@ export class GameEngine {
 
       // Impact electric sparks at target
       for (let si = 0; si < 4; si++) {
-        const spark = new THREE.Mesh(
-          this.sharedTinyOctGeo,
-          new THREE.MeshBasicMaterial({ color: 0xffff88, transparent: true })
-        );
+        const spark = new THREE.Mesh(this.sharedTinyOctGeo, this.matElecSpark);
         spark.position.copy(end);
         this.scene.add(spark);
         this.particles.push({ mesh: spark, velocity: new THREE.Vector3((Math.random() - 0.5) * 4, Math.random() * 3 + 1, (Math.random() - 0.5) * 4), life: 0, maxLife: 0.3 });
       }
 
       // Impact flash at target
-      const flash = new THREE.Mesh(
-        new THREE.SphereGeometry(0.4, 6, 4),
-        new THREE.MeshBasicMaterial({ color: 0xaaddff, transparent: true, opacity: 0.8 })
-      );
+      const flash = new THREE.Mesh(this.sharedSmallFlashGeo, this.matLightningSpark);
       flash.position.copy(end);
       this.scene.add(flash);
       this.scheduleRemoval(flash, 0.12);
@@ -3420,18 +3413,14 @@ export class GameEngine {
     pos.y = this.getTerrainHeight(pos.x, pos.z); // always use terrain height
 
     // White flash at center
-    const flash = new THREE.Mesh(
-      new THREE.SphereGeometry(0.6, 6, 4),
-      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 })
-    );
+    const flash = new THREE.Mesh(this.sharedFlashGeo, this.matWhiteFlash);
     flash.position.copy(pos).add(new THREE.Vector3(0, 0.5, 0));
     this.scene.add(flash);
     this.scheduleRemoval(flash, 0.12);
 
     // Expanding icy blue ring
-    const ringGeo = new THREE.RingGeometry(0.1, 0.3, 32);
-    const ringMat = new THREE.MeshBasicMaterial({ color: 0x88ddff, transparent: true, opacity: 0.7, side: THREE.DoubleSide });
-    const ring = new THREE.Mesh(ringGeo, ringMat);
+    const ringMat = this.matIceRing.clone();
+    const ring = new THREE.Mesh(this.sharedRingGeo, ringMat);
     ring.rotation.x = -Math.PI / 2;
     ring.position.copy(pos).add(new THREE.Vector3(0, 0.5, 0));
     ring.renderOrder = 1;
@@ -3440,11 +3429,9 @@ export class GameEngine {
     this.shockWaves.push({ position: pos.clone(), mesh: ring, timer: 0, maxTime: 0.5, maxRadius: effectiveRange, damage: 0 });
 
     // Frozen ground disc (lingers 1s)
-    const groundDisc = new THREE.Mesh(
-      new THREE.CircleGeometry(effectiveRange, 24),
-      new THREE.MeshBasicMaterial({ color: 0x88ccff, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false })
-    );
+    const groundDisc = new THREE.Mesh(this.sharedCircleGeoLarge, this.matIceGround);
     groundDisc.rotation.x = -Math.PI / 2;
+    groundDisc.scale.setScalar(effectiveRange);
     groundDisc.renderOrder = 1;
     groundDisc.position.copy(pos).add(new THREE.Vector3(0, 0.5, 0));
     this.scene.add(groundDisc);
@@ -3453,10 +3440,7 @@ export class GameEngine {
     // Ice crystal shards flying outward
     for (let i = 0; i < 4; i++) {
       const a = (i / 4) * Math.PI * 2 + Math.random() * 0.3;
-      const crystal = new THREE.Mesh(
-        new THREE.OctahedronGeometry(0.12 + Math.random() * 0.08),
-        new THREE.MeshBasicMaterial({ color: 0xaaeeff, transparent: true })
-      );
+      const crystal = new THREE.Mesh(this.sharedSmallOctGeo, this.matIceCrystal);
       crystal.position.copy(pos).add(new THREE.Vector3(0, 0.5, 0));
       this.scene.add(crystal);
       this.particles.push({ mesh: crystal, velocity: new THREE.Vector3(Math.cos(a) * 6, 2 + Math.random() * 2, Math.sin(a) * 6), life: 0, maxLife: 0.6 });
@@ -3464,10 +3448,7 @@ export class GameEngine {
 
     // Snowflake particles floating up
     for (let i = 0; i < 3; i++) {
-      const snow = new THREE.Mesh(
-        new THREE.OctahedronGeometry(0.04),
-        new THREE.MeshBasicMaterial({ color: 0xeeffff, transparent: true })
-      );
+      const snow = new THREE.Mesh(this.sharedTinyOctGeo, this.matSnowflake);
       snow.position.copy(pos).add(new THREE.Vector3((Math.random() - 0.5) * effectiveRange, 0.3, (Math.random() - 0.5) * effectiveRange));
       this.scene.add(snow);
       this.particles.push({ mesh: snow, velocity: new THREE.Vector3((Math.random() - 0.5) * 0.5, 1 + Math.random(), (Math.random() - 0.5) * 0.5), life: 0, maxLife: 1.0 });
@@ -3504,31 +3485,26 @@ export class GameEngine {
     // Visual: dark purple vortex group
     const group = new THREE.Group();
     // Core torus
-    const coreMat = new THREE.MeshBasicMaterial({ color: 0x440088, transparent: true, opacity: 0.6 });
-    const core = new THREE.Mesh(new THREE.TorusGeometry(radius * 0.3, 0.2, 8, 16), coreMat);
+    const core = new THREE.Mesh(this.sharedTorusSmall, this.matVortexCore);
     core.rotation.x = -Math.PI / 2;
+    core.scale.setScalar(radius * 0.3);
     group.add(core);
     // Distortion ring (expanding/contracting torus)
-    const distortMat = new THREE.MeshBasicMaterial({ color: 0x6600aa, transparent: true, opacity: 0.25 });
-    const distortRing = new THREE.Mesh(new THREE.TorusGeometry(radius * 0.5, 0.1, 8, 16), distortMat);
+    const distortRing = new THREE.Mesh(this.sharedTorusMed, this.matVortexDistort);
     distortRing.rotation.x = -Math.PI / 2;
+    distortRing.scale.setScalar(radius * 0.5);
     group.add(distortRing);
     // Dark purple ground circle
-    const groundCircle = new THREE.Mesh(
-      new THREE.CircleGeometry(radius * 0.6, 16),
-      new THREE.MeshBasicMaterial({ color: 0x220044, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false })
-    );
+    const groundCircle = new THREE.Mesh(this.sharedCircleGeoMed, this.matVortexGround);
     groundCircle.rotation.x = -Math.PI / 2;
+    groundCircle.scale.setScalar(radius * 0.6);
     groundCircle.renderOrder = 1;
     groundCircle.position.y = 0.2;
     group.add(groundCircle);
     // Orbiting dark energy particles
     for (let i = 0; i < 4; i++) {
       const a = (i / 4) * Math.PI * 2;
-      const p = new THREE.Mesh(
-        new THREE.OctahedronGeometry(0.12),
-        new THREE.MeshBasicMaterial({ color: 0xaa44ff, transparent: true, opacity: 0.8 })
-      );
+      const p = new THREE.Mesh(this.sharedSmallOctGeo, this.matVortexParticle);
       p.position.set(Math.cos(a) * radius * 0.4, 0.2 + Math.sin(a * 2) * 0.3, Math.sin(a) * radius * 0.4);
       group.add(p);
     }
@@ -3615,7 +3591,7 @@ export class GameEngine {
 
       // Trail particles for bone projectiles
       if (Math.random() < 0.3) {
-        const trail = new THREE.Mesh(this.sharedTinySphereGeo, new THREE.MeshBasicMaterial({ color: COLORS.projectile, transparent: true }));
+        const trail = new THREE.Mesh(this.sharedTinySphereGeo, this.matTrailBone);
         trail.position.copy(proj.position);
         this.scene.add(trail);
         this.particles.push({ mesh: trail, velocity: new THREE.Vector3((Math.random() - 0.5) * 0.5, 0.3, (Math.random() - 0.5) * 0.5), life: 0, maxLife: 0.3 });
