@@ -549,7 +549,7 @@ export class GameEngine {
       if (this.sunLight) { this.sunLight.color.set(0xffeedd); this.sunLight.intensity = 1.6; this.sunLight.position.set(50, 80, 30); }
       if (this.hemiLight) { this.hemiLight.color.set(0x88bbff); (this.hemiLight as THREE.HemisphereLight).groundColor.set(0x3a5a3a); this.hemiLight.intensity = 0.8; }
       // Green-tinted fog for forest
-      this.scene.fog = new THREE.Fog(0x1a2a1a, 40, 90);
+      this.scene.fog = new THREE.Fog(0x1a2a1a, 50, 110);
       this.originalFogNear = 30;
       this.originalFogFar = 70;
     }
