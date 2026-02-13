@@ -544,11 +544,11 @@ export class GameEngine {
       this.originalFogFar = 70;
     } else {
       // Forest - enhanced lighting
-      if (this.ambientLight) { this.ambientLight.color.set(0x4a6a4a); this.ambientLight.intensity = 0.8; }
-      if (this.sunLight) { this.sunLight.color.set(0xffeedd); this.sunLight.intensity = 1.4; this.sunLight.position.set(50, 80, 30); }
-      if (this.hemiLight) { this.hemiLight.color.set(0x88bbff); (this.hemiLight as THREE.HemisphereLight).groundColor.set(0x2a4a2a); this.hemiLight.intensity = 0.6; }
+      if (this.ambientLight) { this.ambientLight.color.set(0x6a8a6a); this.ambientLight.intensity = 1.2; }
+      if (this.sunLight) { this.sunLight.color.set(0xffeedd); this.sunLight.intensity = 1.8; this.sunLight.position.set(50, 80, 30); }
+      if (this.hemiLight) { this.hemiLight.color.set(0x88bbff); (this.hemiLight as THREE.HemisphereLight).groundColor.set(0x3a5a3a); this.hemiLight.intensity = 0.8; }
       // Green-tinted fog for forest
-      this.scene.fog = new THREE.Fog(0x112211, 30, 70);
+      this.scene.fog = new THREE.Fog(0x1a331a, 40, 90);
       this.originalFogNear = 30;
       this.originalFogFar = 70;
     }
@@ -590,7 +590,7 @@ export class GameEngine {
 
     // Borders
     const borderGeo = new THREE.BoxGeometry(ARENA.size, 3, 0.5);
-    const borderMat = new THREE.MeshLambertMaterial({ color: mapId === "volcanic" ? 0x441111 : mapId === "desert" ? 0x443322 : 0x332244, transparent: true, opacity: 0.3 });
+    const borderMat = this.makeEnvMat({ color: mapId === "volcanic" ? 0x441111 : mapId === "desert" ? 0x443322 : 0x332244, transparent: true, opacity: 0.3 });
     const borders = [
       { pos: [0, 1.5, -ARENA.halfSize], rot: 0 },
       { pos: [0, 1.5, ARENA.halfSize], rot: 0 },
@@ -638,11 +638,11 @@ export class GameEngine {
 
     // ===== ORGANIC ROCKS (25 big, 30 medium, 40 small) =====
     const rockMats = [
-      new THREE.MeshLambertMaterial({ color: 0x556655 }),
-      new THREE.MeshLambertMaterial({ color: 0x667766 }),
-      new THREE.MeshLambertMaterial({ color: 0x445544 }),
+      this.makeEnvMat({ color: 0x556655 }),
+      this.makeEnvMat({ color: 0x667766 }),
+      this.makeEnvMat({ color: 0x445544 }),
     ];
-    const mossMat = new THREE.MeshLambertMaterial({ color: 0x2a5a2a });
+    const mossMat = this.makeEnvMat({ color: 0x2a5a2a });
     const rockConfigs = [
       { count: 25, minR: 2, maxR: 3, deform: 0.3 },    // big
       { count: 30, minR: 0.8, maxR: 1.5, deform: 0.2 }, // medium
@@ -685,19 +685,19 @@ export class GameEngine {
 
     // ===== DETAILED TREES =====
     // --- Shared materials ---
-    const oakTrunkMat = new THREE.MeshLambertMaterial({ color: 0x5c3a1e });
+    const oakTrunkMat = this.makeEnvMat({ color: 0x5c3a1e });
     const oakLeafMats = [
-      new THREE.MeshLambertMaterial({ color: 0x2d8a4e }),
-      new THREE.MeshLambertMaterial({ color: 0x3aa85c }),
-      new THREE.MeshLambertMaterial({ color: 0x1d6b3a }),
+      this.makeEnvMat({ color: 0x2d8a4e }),
+      this.makeEnvMat({ color: 0x3aa85c }),
+      this.makeEnvMat({ color: 0x1d6b3a }),
     ];
-    const pineTrunkMat = new THREE.MeshLambertMaterial({ color: 0x5c3a1e });
+    const pineTrunkMat = this.makeEnvMat({ color: 0x5c3a1e });
     const pineLeafMats = [
-      new THREE.MeshLambertMaterial({ color: 0x1a5c2a }),
-      new THREE.MeshLambertMaterial({ color: 0x0d4420 }),
+      this.makeEnvMat({ color: 0x1a5c2a }),
+      this.makeEnvMat({ color: 0x0d4420 }),
     ];
-    const birchTrunkMat = new THREE.MeshLambertMaterial({ color: 0xddccaa });
-    const birchLeafMat = new THREE.MeshLambertMaterial({ color: 0x88cc44 });
+    const birchTrunkMat = this.makeEnvMat({ color: 0xddccaa });
+    const birchLeafMat = this.makeEnvMat({ color: 0x88cc44 });
 
     // --- Shared geometries ---
     const oakTrunkGeo = new THREE.CylinderGeometry(0.15, 0.35, 3, 7);
@@ -844,9 +844,9 @@ export class GameEngine {
 
     // ===== GRASS TUFTS (400) =====
     const grassMats = [
-      new THREE.MeshLambertMaterial({ color: 0x33aa44, side: THREE.DoubleSide }),
-      new THREE.MeshLambertMaterial({ color: 0x2d8a3e, side: THREE.DoubleSide }),
-      new THREE.MeshLambertMaterial({ color: 0x44bb55, side: THREE.DoubleSide }),
+      this.makeEnvMat({ color: 0x33aa44, side: THREE.DoubleSide }),
+      this.makeEnvMat({ color: 0x2d8a3e, side: THREE.DoubleSide }),
+      this.makeEnvMat({ color: 0x44bb55, side: THREE.DoubleSide }),
     ];
     const grassBladeGeo = new THREE.PlaneGeometry(0.05, 0.4);
     for (let i = 0; i < 400; i++) {
@@ -872,12 +872,12 @@ export class GameEngine {
     // ===== FLOWERS (60) =====
     const flowerHeadGeo = new THREE.SphereGeometry(0.06, 5, 4);
     const flowerStemGeo = new THREE.CylinderGeometry(0.015, 0.02, 0.25, 4);
-    const flowerStemMat = new THREE.MeshLambertMaterial({ color: 0x228833 });
+    const flowerStemMat = this.makeEnvMat({ color: 0x228833 });
     const flowerMats = [
-      new THREE.MeshLambertMaterial({ color: 0xffdd44 }),
-      new THREE.MeshLambertMaterial({ color: 0xffffff }),
-      new THREE.MeshLambertMaterial({ color: 0xaa44cc }),
-      new THREE.MeshLambertMaterial({ color: 0xff4444 }),
+      this.makeEnvMat({ color: 0xffdd44 }),
+      this.makeEnvMat({ color: 0xffffff }),
+      this.makeEnvMat({ color: 0xaa44cc }),
+      this.makeEnvMat({ color: 0xff4444 }),
     ];
     for (let i = 0; i < 60; i++) {
       const fx = (rng() - 0.5) * ARENA.size * 0.85;
@@ -900,13 +900,13 @@ export class GameEngine {
     // ===== MUSHROOMS (30) =====
     const mushroomCapGeo = new THREE.SphereGeometry(0.25, 7, 5, 0, Math.PI * 2, 0, Math.PI / 2);
     const mushroomStemGeo = new THREE.CylinderGeometry(0.06, 0.1, 0.25, 6);
-    const stemMat = new THREE.MeshLambertMaterial({ color: 0xeeeecc });
+    const stemMat = this.makeEnvMat({ color: 0xeeeecc });
     const dotGeo = new THREE.SphereGeometry(0.03, 4, 3);
-    const dotMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const dotMat = this.makeEnvMat({ color: 0xffffff });
     const mushroomMats = [
-      new THREE.MeshLambertMaterial({ color: 0xff3333 }),
-      new THREE.MeshLambertMaterial({ color: 0xddaa33 }),
-      new THREE.MeshLambertMaterial({ color: 0xaa66cc }),
+      this.makeEnvMat({ color: 0xff3333 }),
+      this.makeEnvMat({ color: 0xddaa33 }),
+      this.makeEnvMat({ color: 0xaa66cc }),
     ];
     for (let i = 0; i < 30; i++) {
       const mx = (rng() - 0.5) * ARENA.size * 0.8;
@@ -938,8 +938,8 @@ export class GameEngine {
 
     // ===== FALLEN LOGS (12) with moss & mushrooms =====
     const logGeo = new THREE.CylinderGeometry(0.3, 0.35, 4, 7);
-    const logMat = new THREE.MeshLambertMaterial({ color: 0x553311 });
-    const logMossMat = new THREE.MeshLambertMaterial({ color: 0x2a5a2a });
+    const logMat = this.makeEnvMat({ color: 0x553311 });
+    const logMossMat = this.makeEnvMat({ color: 0x2a5a2a });
     for (let i = 0; i < 12; i++) {
       const lx = (rng() - 0.5) * ARENA.size * 0.8;
       const lz = (rng() - 0.5) * ARENA.size * 0.8;
@@ -989,7 +989,7 @@ export class GameEngine {
       color: 0x2244aa, transparent: true, opacity: 0.6,
       roughness: 0.1, metalness: 0.3, side: THREE.DoubleSide,
     });
-    const pondStoneMat = new THREE.MeshLambertMaterial({ color: 0x667766 });
+    const pondStoneMat = this.makeEnvMat({ color: 0x667766 });
     const pondCount = 3 + Math.floor(rng() * 3);
     for (let i = 0; i < pondCount; i++) {
       const px = (rng() - 0.5) * ARENA.size * 0.7;
@@ -1067,8 +1067,8 @@ export class GameEngine {
 
     // ===== 1. ROCK PILLARS (Mesa/Butte style) =====
     const pillarMats = [
-      new THREE.MeshLambertMaterial({ color: 0xaa7744 }),
-      new THREE.MeshLambertMaterial({ color: 0x996633 }),
+      this.makeEnvMat({ color: 0xaa7744 }),
+      this.makeEnvMat({ color: 0x996633 }),
     ];
     const pillarPositions: THREE.Vector3[] = [];
     for (let i = 0; i < 10; i++) {
@@ -1120,9 +1120,9 @@ export class GameEngine {
 
     // ===== 2. SMALL ROCKS (organic, vertex noise) =====
     const rockMats = [
-      new THREE.MeshLambertMaterial({ color: 0xbb8855 }),
-      new THREE.MeshLambertMaterial({ color: 0xaa7744 }),
-      new THREE.MeshLambertMaterial({ color: 0x997755 }),
+      this.makeEnvMat({ color: 0xbb8855 }),
+      this.makeEnvMat({ color: 0xaa7744 }),
+      this.makeEnvMat({ color: 0x997755 }),
     ];
     for (let i = 0; i < 45; i++) {
       const rx = (rng() - 0.5) * ARENA.size * 0.85;
@@ -1143,7 +1143,7 @@ export class GameEngine {
     }
 
     // ===== 3. SAGUARO CACTI (15) =====
-    const saguaroMat = new THREE.MeshLambertMaterial({ color: 0x2d5a1e });
+    const saguaroMat = this.makeEnvMat({ color: 0x2d5a1e });
     const saguaroTrunkGeo = new THREE.CylinderGeometry(0.12, 0.18, 1, 6); // reused, scaled
     for (let i = 0; i < 15; i++) {
       const cx = (rng() - 0.5) * ARENA.size * 0.8;
@@ -1185,8 +1185,8 @@ export class GameEngine {
     }
 
     // ===== 4. BARREL CACTI (20) =====
-    const barrelMat = new THREE.MeshLambertMaterial({ color: 0x2d5a1e });
-    const flowerMat = new THREE.MeshLambertMaterial({ color: 0xcc2222 });
+    const barrelMat = this.makeEnvMat({ color: 0x2d5a1e });
+    const flowerMat = this.makeEnvMat({ color: 0xcc2222 });
     for (let i = 0; i < 20; i++) {
       const cx = (rng() - 0.5) * ARENA.size * 0.85;
       const cz = (rng() - 0.5) * ARENA.size * 0.85;
@@ -1208,7 +1208,7 @@ export class GameEngine {
     }
 
     // ===== 5. SMALL CACTUS GROUPS (25) =====
-    const smallCactusMat = new THREE.MeshLambertMaterial({ color: 0x3a6b2a });
+    const smallCactusMat = this.makeEnvMat({ color: 0x3a6b2a });
     for (let i = 0; i < 25; i++) {
       const cx = (rng() - 0.5) * ARENA.size * 0.85;
       const cz = (rng() - 0.5) * ARENA.size * 0.85;
@@ -1228,7 +1228,7 @@ export class GameEngine {
     }
 
     // ===== 6. DEAD TREES (15) =====
-    const deadWoodMat = new THREE.MeshLambertMaterial({ color: 0x665544 });
+    const deadWoodMat = this.makeEnvMat({ color: 0x665544 });
     for (let i = 0; i < 15; i++) {
       const tx = (rng() - 0.5) * ARENA.size * 0.8;
       const tz = (rng() - 0.5) * ARENA.size * 0.8;
@@ -1279,8 +1279,8 @@ export class GameEngine {
     }
 
     // ===== 8. SKULLS & BONES (12) =====
-    const boneMat = new THREE.MeshLambertMaterial({ color: 0xeeddcc });
-    const eyeMat = new THREE.MeshLambertMaterial({ color: 0x332211 });
+    const boneMat = this.makeEnvMat({ color: 0xeeddcc });
+    const eyeMat = this.makeEnvMat({ color: 0x332211 });
     for (let i = 0; i < 12; i++) {
       const sx = (rng() - 0.5) * ARENA.size * 0.8;
       const sz = (rng() - 0.5) * ARENA.size * 0.8;
@@ -1318,7 +1318,7 @@ export class GameEngine {
     }
 
     // ===== 9. RUINED WALLS (2) =====
-    const ruinMat = new THREE.MeshLambertMaterial({ color: 0x887766 });
+    const ruinMat = this.makeEnvMat({ color: 0x887766 });
     for (let i = 0; i < 2; i++) {
       const wx = (rng() - 0.5) * ARENA.size * 0.6;
       const wz = (rng() - 0.5) * ARENA.size * 0.6;
@@ -1375,7 +1375,7 @@ export class GameEngine {
 
     // ===== LAVA POOLS (enhanced with rock borders) =====
     const lavaCount = Math.floor(18 * (0.8 + rng() * 0.4));
-    const lavaBorderMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
+    const lavaBorderMat = this.makeEnvMat({ color: 0x111111 });
     for (let i = 0; i < lavaCount; i++) {
       const lx = (rng() - 0.5) * ARENA.size * 0.8;
       const lz = (rng() - 0.5) * ARENA.size * 0.8;
@@ -1450,9 +1450,9 @@ export class GameEngine {
 
     // ===== VOLCANIC ROCKS (50, jagged with lava veins) =====
     const volcanicRockMats = [
-      new THREE.MeshLambertMaterial({ color: 0x2a2a2a }),
-      new THREE.MeshLambertMaterial({ color: 0x1a1a1a }),
-      new THREE.MeshLambertMaterial({ color: 0x333333 }),
+      this.makeEnvMat({ color: 0x2a2a2a }),
+      this.makeEnvMat({ color: 0x1a1a1a }),
+      this.makeEnvMat({ color: 0x333333 }),
     ];
     const rockConfigs = [
       { count: 15, minR: 1.5, maxR: 2.5, deform: 0.4 },
@@ -1492,7 +1492,7 @@ export class GameEngine {
     }
 
     // ===== ASH TREES (10, burned dead trees with embers) =====
-    const ashTreeMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
+    const ashTreeMat = this.makeEnvMat({ color: 0x111111 });
     const emberDotMat = new THREE.MeshStandardMaterial({ color: 0xff6600, emissive: 0xff4400, emissiveIntensity: 0.8 });
     for (let i = 0; i < 10; i++) {
       const tx = (rng() - 0.5) * ARENA.size * 0.85;
@@ -1568,7 +1568,7 @@ export class GameEngine {
       if (Math.abs(vx) < 6 && Math.abs(vz) < 6) continue;
       const vy = this.getTerrainHeight(vx, vz);
       // Vent hole
-      const ventMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
+      const ventMat = this.makeEnvMat({ color: 0x222222 });
       const vent = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.5, 0.3, 8), ventMat);
       vent.position.set(vx, vy + 0.15, vz);
       this.scene.add(vent);
@@ -1901,7 +1901,7 @@ export class GameEngine {
 
     // 0,1: Boots
     const bootGeo = new THREE.BoxGeometry(0.22, 0.2, 0.35);
-    const bootMat = new THREE.MeshLambertMaterial({ color: bootColor });
+    const bootMat = this.makeToonMat({ color: bootColor });
     const leftBoot = new THREE.Mesh(bootGeo, bootMat);
     leftBoot.position.set(-0.15, 0.1, 0.03);
     this.playerMesh.add(leftBoot);
@@ -1911,7 +1911,7 @@ export class GameEngine {
 
     // 2,3: Legs
     const legGeo = new THREE.CapsuleGeometry(0.1, 0.35, 4, 6);
-    const legMat = new THREE.MeshLambertMaterial({ color: legColor });
+    const legMat = this.makeToonMat({ color: legColor });
     const leftLeg = new THREE.Mesh(legGeo, legMat);
     leftLeg.position.set(-0.15, 0.45, 0);
     this.playerMesh.add(leftLeg);
@@ -1921,7 +1921,7 @@ export class GameEngine {
 
     // 4: Torso
     const torsoGeo = new THREE.CapsuleGeometry(charId === "berserker" ? 0.35 : 0.3, 0.5, 4, 8);
-    const torsoMat = new THREE.MeshLambertMaterial({ color: torsoColor });
+    const torsoMat = this.makeToonMat({ color: torsoColor });
     const torso = new THREE.Mesh(torsoGeo, torsoMat);
     torso.position.y = 0.95;
     torso.castShadow = true;
@@ -1931,14 +1931,14 @@ export class GameEngine {
     if (charId === "mage" || charId === "necromancer" || charId === "priest") {
       // Robe — wider, longer
       const robeGeo = new THREE.ConeGeometry(0.4, 0.8, 8);
-      const robeMat = new THREE.MeshLambertMaterial({ color: chestColor });
+      const robeMat = this.makeToonMat({ color: chestColor });
       const robe = new THREE.Mesh(robeGeo, robeMat);
       robe.position.set(0, 0.6, 0);
       this.playerMesh.add(robe);
     } else if (charId === "berserker") {
       // Fur collar
       const furGeo = new THREE.TorusGeometry(0.32, 0.08, 6, 8);
-      const furMat = new THREE.MeshLambertMaterial({ color: 0x886644 });
+      const furMat = this.makeToonMat({ color: 0x886644 });
       const fur = new THREE.Mesh(furGeo, furMat);
       fur.position.set(0, 1.2, 0);
       fur.rotation.x = Math.PI / 2;
@@ -1946,7 +1946,7 @@ export class GameEngine {
     } else {
       // Chest plate
       const chestGeo = new THREE.BoxGeometry(0.45, 0.35, 0.2);
-      const chestMat = new THREE.MeshLambertMaterial({ color: chestColor });
+      const chestMat = this.makeToonMat({ color: chestColor });
       const chest = new THREE.Mesh(chestGeo, chestMat);
       chest.position.set(0, 1.0, 0.18);
       this.playerMesh.add(chest);
@@ -1990,7 +1990,7 @@ export class GameEngine {
       // Scarf
       const scarf = new THREE.Mesh(
         new THREE.PlaneGeometry(0.15, 0.4),
-        new THREE.MeshLambertMaterial({ color: 0x882222, side: THREE.DoubleSide })
+        this.makeToonMat({ color: 0x882222, side: THREE.DoubleSide })
       );
       scarf.position.set(0.2, 1.15, -0.2);
       scarf.rotation.z = -0.3;
@@ -1999,7 +1999,7 @@ export class GameEngine {
       // Knight: shield on back
       const shield = new THREE.Mesh(
         new THREE.CircleGeometry(0.2, 6),
-        new THREE.MeshLambertMaterial({ color: 0xaabbcc, side: THREE.DoubleSide })
+        this.makeToonMat({ color: 0xaabbcc, side: THREE.DoubleSide })
       );
       shield.position.set(-0.2, 1.0, -0.28);
       this.playerMesh.add(shield);
@@ -2007,7 +2007,7 @@ export class GameEngine {
 
     // 7,8: Arms
     const armGeo = new THREE.CapsuleGeometry(charId === "berserker" ? 0.12 : 0.09, 0.4, 4, 6);
-    const armMat = new THREE.MeshLambertMaterial({ color: armColor });
+    const armMat = this.makeToonMat({ color: armColor });
     const leftArm = new THREE.Mesh(armGeo, armMat);
     leftArm.position.set(-0.4, 0.9, 0);
     leftArm.rotation.z = 0.2;
@@ -2019,7 +2019,7 @@ export class GameEngine {
 
     // 9,10: Hands
     const handGeo = new THREE.SphereGeometry(0.1, 6, 4);
-    const handMat = new THREE.MeshLambertMaterial({ color: skin });
+    const handMat = this.makeToonMat({ color: skin });
     const leftHand = new THREE.Mesh(handGeo, handMat);
     leftHand.position.set(-0.45, 0.6, 0);
     this.playerMesh.add(leftHand);
@@ -2029,7 +2029,7 @@ export class GameEngine {
 
     // 11: Head
     const headGeo = new THREE.SphereGeometry(0.25, 8, 6);
-    const headMat = new THREE.MeshLambertMaterial({ color: skin });
+    const headMat = this.makeToonMat({ color: skin });
     const head = new THREE.Mesh(headGeo, headMat);
     head.position.y = 1.5;
     head.castShadow = true;
@@ -2059,14 +2059,14 @@ export class GameEngine {
       // Full helmet
       const helmet = new THREE.Mesh(
         new THREE.SphereGeometry(0.28, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.6),
-        new THREE.MeshLambertMaterial({ color: headgearColor })
+        this.makeToonMat({ color: headgearColor })
       );
       helmet.position.y = 1.55;
       this.playerMesh.add(helmet);
       // Visor
       const visor = new THREE.Mesh(
         new THREE.BoxGeometry(0.3, 0.06, 0.1),
-        new THREE.MeshLambertMaterial({ color: 0x556677 })
+        this.makeToonMat({ color: 0x556677 })
       );
       visor.position.set(0, 1.5, 0.22);
       this.playerMesh.add(visor);
@@ -2074,14 +2074,14 @@ export class GameEngine {
       // Wizard hat (cone)
       const hat = new THREE.Mesh(
         new THREE.ConeGeometry(0.25, 0.6, 8),
-        new THREE.MeshLambertMaterial({ color: headgearColor })
+        this.makeToonMat({ color: headgearColor })
       );
       hat.position.y = 1.85;
       this.playerMesh.add(hat);
       // Hat brim
       const brim = new THREE.Mesh(
         new THREE.CylinderGeometry(0.35, 0.35, 0.04, 12),
-        new THREE.MeshLambertMaterial({ color: headgearColor })
+        this.makeToonMat({ color: headgearColor })
       );
       brim.position.y = 1.58;
       this.playerMesh.add(brim);
@@ -2089,14 +2089,14 @@ export class GameEngine {
       // Hood
       const hood = new THREE.Mesh(
         new THREE.SphereGeometry(0.3, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.55),
-        new THREE.MeshLambertMaterial({ color: headgearColor })
+        this.makeToonMat({ color: headgearColor })
       );
       hood.position.y = 1.55;
       this.playerMesh.add(hood);
       // Mask across face
       const mask = new THREE.Mesh(
         new THREE.BoxGeometry(0.28, 0.08, 0.12),
-        new THREE.MeshLambertMaterial({ color: 0x111111 })
+        this.makeToonMat({ color: 0x111111 })
       );
       mask.position.set(0, 1.48, 0.2);
       this.playerMesh.add(mask);
@@ -2104,7 +2104,7 @@ export class GameEngine {
       // Crown/Mitre
       const mitre = new THREE.Mesh(
         new THREE.BoxGeometry(0.18, 0.35, 0.18),
-        new THREE.MeshLambertMaterial({ color: headgearColor })
+        this.makeToonMat({ color: headgearColor })
       );
       mitre.position.y = 1.78;
       this.playerMesh.add(mitre);
@@ -2118,13 +2118,13 @@ export class GameEngine {
       // Horned helmet
       const helmet = new THREE.Mesh(
         new THREE.SphereGeometry(0.27, 8, 4, 0, Math.PI * 2, 0, Math.PI * 0.5),
-        new THREE.MeshLambertMaterial({ color: headgearColor })
+        this.makeToonMat({ color: headgearColor })
       );
       helmet.position.y = 1.56;
       this.playerMesh.add(helmet);
       // Horns
       const hornGeo = new THREE.ConeGeometry(0.06, 0.3, 5);
-      const hornMat = new THREE.MeshLambertMaterial({ color: 0xccbb99 });
+      const hornMat = this.makeToonMat({ color: 0xccbb99 });
       const lHorn = new THREE.Mesh(hornGeo, hornMat);
       lHorn.position.set(-0.22, 1.7, 0);
       lHorn.rotation.z = 0.5;
@@ -2137,7 +2137,7 @@ export class GameEngine {
       // Dark hood with glowing trim
       const hood = new THREE.Mesh(
         new THREE.SphereGeometry(0.3, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.55),
-        new THREE.MeshLambertMaterial({ color: headgearColor })
+        this.makeToonMat({ color: headgearColor })
       );
       hood.position.y = 1.55;
       this.playerMesh.add(hood);
@@ -2153,13 +2153,13 @@ export class GameEngine {
     // Weapon on back (character-specific)
     if (charId === "knight" || charId === "berserker") {
       const bladeGeo = new THREE.BoxGeometry(charId === "berserker" ? 0.1 : 0.06, 0.8, 0.02);
-      const bladeMat = new THREE.MeshLambertMaterial({ color: 0xccccdd });
+      const bladeMat = this.makeToonMat({ color: 0xccccdd });
       const blade = new THREE.Mesh(bladeGeo, bladeMat);
       blade.position.set(0.15, 1.1, -0.25);
       blade.rotation.z = 0.15;
       this.playerMesh.add(blade);
       const handleGeo = new THREE.BoxGeometry(0.08, 0.15, 0.04);
-      const handleMat = new THREE.MeshLambertMaterial({ color: 0x664422 });
+      const handleMat = this.makeToonMat({ color: 0x664422 });
       const handle = new THREE.Mesh(handleGeo, handleMat);
       handle.position.set(0.15, 0.65, -0.25);
       handle.rotation.z = 0.15;
@@ -2168,7 +2168,7 @@ export class GameEngine {
       // Staff
       const staff = new THREE.Mesh(
         new THREE.CylinderGeometry(0.03, 0.03, 1.2, 5),
-        new THREE.MeshLambertMaterial({ color: 0x664422 })
+        this.makeToonMat({ color: 0x664422 })
       );
       staff.position.set(0.2, 1.0, -0.25);
       this.playerMesh.add(staff);
@@ -2181,7 +2181,7 @@ export class GameEngine {
     } else if (charId === "rogue") {
       // Daggers
       const daggerGeo = new THREE.BoxGeometry(0.03, 0.35, 0.02);
-      const daggerMat = new THREE.MeshLambertMaterial({ color: 0xccccdd });
+      const daggerMat = this.makeToonMat({ color: 0xccccdd });
       const d1 = new THREE.Mesh(daggerGeo, daggerMat);
       d1.position.set(-0.2, 0.8, -0.22);
       d1.rotation.z = 0.3;
@@ -2194,7 +2194,7 @@ export class GameEngine {
       // Staff with cross
       const staff = new THREE.Mesh(
         new THREE.CylinderGeometry(0.03, 0.03, 1.2, 5),
-        new THREE.MeshLambertMaterial({ color: 0xccaa66 })
+        this.makeToonMat({ color: 0xccaa66 })
       );
       staff.position.set(0.2, 1.0, -0.25);
       this.playerMesh.add(staff);
@@ -2208,13 +2208,13 @@ export class GameEngine {
       // Scythe
       const shaft = new THREE.Mesh(
         new THREE.CylinderGeometry(0.025, 0.025, 1.3, 5),
-        new THREE.MeshLambertMaterial({ color: 0x333333 })
+        this.makeToonMat({ color: 0x333333 })
       );
       shaft.position.set(0.2, 1.0, -0.25);
       shaft.rotation.z = 0.1;
       this.playerMesh.add(shaft);
       const bladeGeo = new THREE.BoxGeometry(0.3, 0.04, 0.02);
-      const bladeMat = new THREE.MeshLambertMaterial({ color: 0xaaccaa });
+      const bladeMat = this.makeToonMat({ color: 0xaaccaa });
       const blade = new THREE.Mesh(bladeGeo, bladeMat);
       blade.position.set(0.3, 1.6, -0.25);
       blade.rotation.z = -0.4;
@@ -2268,20 +2268,20 @@ export class GameEngine {
       // Body
       const body = new THREE.Mesh(
         new THREE.CapsuleGeometry(0.25, 0.35, 4, 6),
-        new THREE.MeshLambertMaterial({ color: 0x44aa44 })
+        this.makeToonMat({ color: 0x44aa44 })
       );
       body.position.y = 0.45;
       g.add(body);
       // Head
       const head = new THREE.Mesh(
         new THREE.SphereGeometry(0.2, 6, 5),
-        new THREE.MeshLambertMaterial({ color: 0x55cc55 })
+        this.makeToonMat({ color: 0x55cc55 })
       );
       head.position.y = 0.85;
       g.add(head);
       // Pointy ears
       const earGeo = new THREE.ConeGeometry(0.06, 0.2, 4);
-      const earMat = new THREE.MeshLambertMaterial({ color: 0x55cc55 });
+      const earMat = this.makeToonMat({ color: 0x55cc55 });
       const leftEar = new THREE.Mesh(earGeo, earMat);
       leftEar.position.set(-0.2, 0.9, 0);
       leftEar.rotation.z = 0.8;
@@ -2302,7 +2302,7 @@ export class GameEngine {
       // Small dagger
       const dagger = new THREE.Mesh(
         new THREE.BoxGeometry(0.04, 0.25, 0.02),
-        new THREE.MeshLambertMaterial({ color: 0xaaaacc })
+        this.makeToonMat({ color: 0xaaaacc })
       );
       dagger.position.set(0.28, 0.4, 0);
       g.add(dagger);
@@ -2314,7 +2314,7 @@ export class GameEngine {
       // Blobby body
       const body = new THREE.Mesh(
         new THREE.SphereGeometry(0.45, 8, 6),
-        new THREE.MeshPhongMaterial({ color: 0x44dd55, transparent: true, opacity: 0.8, shininess: 80 })
+        this.makeSlimeMat({ color: 0x44dd55, transparent: true, opacity: 0.8, shininess: 80 })
       );
       body.position.y = 0.35;
       body.scale.y = 0.7;
@@ -2350,7 +2350,7 @@ export class GameEngine {
       const g = new THREE.Group();
       const body = new THREE.Mesh(
         new THREE.SphereGeometry(0.25, 8, 6),
-        new THREE.MeshPhongMaterial({ color: 0x88ee88, transparent: true, opacity: 0.8, shininess: 80 })
+        this.makeSlimeMat({ color: 0x88ee88, transparent: true, opacity: 0.8, shininess: 80 })
       );
       body.position.y = 0.2;
       body.scale.y = 0.7;
@@ -2374,7 +2374,7 @@ export class GameEngine {
 
     this.enemyMeshFactories.skeleton = () => {
       const g = new THREE.Group();
-      const boneMat = new THREE.MeshLambertMaterial({ color: 0xddddbb });
+      const boneMat = this.makeToonMat({ color: 0xddddbb });
       // Ribcage/body
       const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 0.5, 4, 6), boneMat);
       body.position.y = 0.65;
@@ -2421,7 +2421,7 @@ export class GameEngine {
       // Bow
       const bow = new THREE.Mesh(
         new THREE.TorusGeometry(0.2, 0.02, 4, 8, Math.PI),
-        new THREE.MeshLambertMaterial({ color: 0x664422 })
+        this.makeToonMat({ color: 0x664422 })
       );
       bow.position.set(-0.35, 0.65, 0.1);
       bow.rotation.y = Math.PI / 2;
@@ -2434,12 +2434,12 @@ export class GameEngine {
       // Body
       const body = new THREE.Mesh(
         new THREE.SphereGeometry(0.2, 6, 5),
-        new THREE.MeshLambertMaterial({ color: 0x553377 })
+        this.makeToonMat({ color: 0x553377 })
       );
       g.add(body);
       // Wings
       const wingGeo = new THREE.PlaneGeometry(0.6, 0.3);
-      const wingMat = new THREE.MeshLambertMaterial({ color: 0x442266, side: THREE.DoubleSide });
+      const wingMat = this.makeToonMat({ color: 0x442266, side: THREE.DoubleSide });
       const leftWing = new THREE.Mesh(wingGeo, wingMat);
       leftWing.position.set(-0.4, 0, 0);
       leftWing.rotation.y = 0.3;
@@ -2473,7 +2473,7 @@ export class GameEngine {
       const g = new THREE.Group();
       // Legs
       const legGeo = new THREE.CapsuleGeometry(0.2, 0.4, 4, 5);
-      const legMat = new THREE.MeshLambertMaterial({ color: 0x775533 });
+      const legMat = this.makeToonMat({ color: 0x775533 });
       const ll = new THREE.Mesh(legGeo, legMat);
       ll.position.set(-0.3, 0.3, 0);
       g.add(ll);
@@ -2483,7 +2483,7 @@ export class GameEngine {
       // Big body
       const body = new THREE.Mesh(
         new THREE.CapsuleGeometry(0.6, 0.7, 4, 8),
-        new THREE.MeshLambertMaterial({ color: 0x886644 })
+        this.makeToonMat({ color: 0x886644 })
       );
       body.position.y = 0.95;
       body.castShadow = true;
@@ -2491,14 +2491,14 @@ export class GameEngine {
       // Belly
       const belly = new THREE.Mesh(
         new THREE.SphereGeometry(0.45, 6, 5),
-        new THREE.MeshLambertMaterial({ color: 0x997755 })
+        this.makeToonMat({ color: 0x997755 })
       );
       belly.position.set(0, 0.8, 0.2);
       g.add(belly);
       // Head
       const head = new THREE.Mesh(
         new THREE.SphereGeometry(0.35, 6, 5),
-        new THREE.MeshLambertMaterial({ color: 0x886644 })
+        this.makeToonMat({ color: 0x886644 })
       );
       head.position.y = 1.65;
       g.add(head);
@@ -2513,7 +2513,7 @@ export class GameEngine {
       g.add(re);
       // Horns
       const hornGeo = new THREE.ConeGeometry(0.08, 0.3, 5);
-      const hornMat = new THREE.MeshLambertMaterial({ color: 0x554433 });
+      const hornMat = this.makeToonMat({ color: 0x554433 });
       const lh = new THREE.Mesh(hornGeo, hornMat);
       lh.position.set(-0.2, 1.9, 0);
       lh.rotation.z = 0.4;
@@ -2524,7 +2524,7 @@ export class GameEngine {
       g.add(rh);
       // Club weapon
       const clubGeo = new THREE.CapsuleGeometry(0.1, 0.6, 4, 5);
-      const clubMat = new THREE.MeshLambertMaterial({ color: 0x553322 });
+      const clubMat = this.makeToonMat({ color: 0x553322 });
       const club = new THREE.Mesh(clubGeo, clubMat);
       club.position.set(0.65, 0.8, 0);
       club.rotation.z = -0.5;
@@ -2532,7 +2532,7 @@ export class GameEngine {
       // Club head (big round end)
       const clubHead = new THREE.Mesh(
         new THREE.SphereGeometry(0.18, 5, 4),
-        new THREE.MeshLambertMaterial({ color: 0x443322 })
+        this.makeToonMat({ color: 0x443322 })
       );
       clubHead.position.set(0.75, 1.15, 0);
       g.add(clubHead);
@@ -2548,7 +2548,7 @@ export class GameEngine {
       // Body
       const body = new THREE.Mesh(
         new THREE.SphereGeometry(0.2, 6, 5),
-        new THREE.MeshLambertMaterial({ color: 0x332222 })
+        this.makeToonMat({ color: 0x332222 })
       );
       body.position.y = 0.15;
       body.scale.set(1, 0.6, 1.2);
@@ -2556,7 +2556,7 @@ export class GameEngine {
       // Abdomen
       const abd = new THREE.Mesh(
         new THREE.SphereGeometry(0.18, 6, 5),
-        new THREE.MeshLambertMaterial({ color: 0x221111 })
+        this.makeToonMat({ color: 0x221111 })
       );
       abd.position.set(0, 0.12, -0.22);
       g.add(abd);
@@ -2570,7 +2570,7 @@ export class GameEngine {
       }
       // 4 leg pairs
       const legGeo = new THREE.CylinderGeometry(0.012, 0.012, 0.35, 4);
-      const legMat = new THREE.MeshLambertMaterial({ color: 0x221111 });
+      const legMat = this.makeToonMat({ color: 0x221111 });
       for (let li = 0; li < 8; li++) {
         const leg = new THREE.Mesh(legGeo, legMat);
         const side = li < 4 ? -1 : 1;
@@ -2589,8 +2589,8 @@ export class GameEngine {
 
     this.enemyMeshFactories.zombie = () => {
       const g = new THREE.Group();
-      const skinMat = new THREE.MeshLambertMaterial({ color: 0x556644 });
-      const clothMat = new THREE.MeshLambertMaterial({ color: 0x443333 });
+      const skinMat = this.makeToonMat({ color: 0x556644 });
+      const clothMat = this.makeToonMat({ color: 0x443333 });
       // Body
       const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 0.5, 4, 6), clothMat);
       body.position.y = 0.6;
@@ -2635,7 +2635,7 @@ export class GameEngine {
 
     this.enemyMeshFactories.wolf = () => {
       const g = new THREE.Group();
-      const furMat = new THREE.MeshLambertMaterial({ color: 0x666666 });
+      const furMat = this.makeToonMat({ color: 0x666666 });
       // Body (long, low)
       const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.6, 4, 6), furMat);
       body.position.set(0, 0.35, 0);
@@ -2665,7 +2665,7 @@ export class GameEngine {
       g.add(re);
       // Pointed ears
       const earGeo = new THREE.ConeGeometry(0.05, 0.15, 4);
-      const earMat = new THREE.MeshLambertMaterial({ color: 0x555555 });
+      const earMat = this.makeToonMat({ color: 0x555555 });
       const lEar = new THREE.Mesh(earGeo, earMat);
       lEar.position.set(-0.1, 0.58, 0.38);
       g.add(lEar);
@@ -2694,8 +2694,8 @@ export class GameEngine {
     // === BOSS MESH: Stone Golem ===
     this.enemyMeshFactories.stoneGolem = () => {
       const g = new THREE.Group();
-      const stoneMat = new THREE.MeshLambertMaterial({ color: 0x888888 });
-      const darkStoneMat = new THREE.MeshLambertMaterial({ color: 0x666666 });
+      const stoneMat = this.makeToonMat({ color: 0x888888 });
+      const darkStoneMat = this.makeToonMat({ color: 0x666666 });
       const crystalMat = new THREE.MeshBasicMaterial({ color: 0x44ffaa });
 
       // Legs (thick)
@@ -2746,7 +2746,7 @@ export class GameEngine {
       const g = new THREE.Group();
       const fireMat = new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.8 });
       const coreMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
-      const darkMat = new THREE.MeshLambertMaterial({ color: 0x220000 });
+      const darkMat = this.makeToonMat({ color: 0x220000 });
 
       // Floating body (no legs)
       const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.7, 1.5, 6, 8), darkMat);
@@ -2777,7 +2777,7 @@ export class GameEngine {
     // === BOSS MESH: Shadow Lord ===
     this.enemyMeshFactories.shadowLord = () => {
       const g = new THREE.Group();
-      const shadowMat = new THREE.MeshLambertMaterial({ color: 0x220033 });
+      const shadowMat = this.makeToonMat({ color: 0x220033 });
       const purpleMat = new THREE.MeshBasicMaterial({ color: 0xaa00ff, transparent: true, opacity: 0.6 });
       const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff00ff });
 
@@ -2814,8 +2814,8 @@ export class GameEngine {
     // === MAP BOSS: Treant Guardian (Forest Mini) ===
     this.enemyMeshFactories.treantGuardian = () => {
       const g = new THREE.Group();
-      const barkMat = new THREE.MeshLambertMaterial({ color: 0x5a3a1a });
-      const leafMat = new THREE.MeshLambertMaterial({ color: 0x228833 });
+      const barkMat = this.makeToonMat({ color: 0x5a3a1a });
+      const leafMat = this.makeToonMat({ color: 0x228833 });
       const body = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.7, 2.5, 6), barkMat);
       body.position.y = 1.25; body.castShadow = true; g.add(body);
       const head = new THREE.Mesh(new THREE.SphereGeometry(0.8, 6, 5), leafMat);
@@ -2829,8 +2829,8 @@ export class GameEngine {
     // === MAP BOSS: Ancient Oak (Forest Boss) ===
     this.enemyMeshFactories.ancientOak = () => {
       const g = new THREE.Group();
-      const barkMat = new THREE.MeshLambertMaterial({ color: 0x3a2a0a });
-      const leafMat = new THREE.MeshLambertMaterial({ color: 0x1a5c1a });
+      const barkMat = this.makeToonMat({ color: 0x3a2a0a });
+      const leafMat = this.makeToonMat({ color: 0x1a5c1a });
       const body = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.2, 3.5, 8), barkMat);
       body.position.y = 1.75; body.castShadow = true; g.add(body);
       // Branches
@@ -2849,7 +2849,7 @@ export class GameEngine {
     // === MAP BOSS: Forest Warden (Forest Final) ===
     this.enemyMeshFactories.forestWarden = () => {
       const g = new THREE.Group();
-      const greenMat = new THREE.MeshLambertMaterial({ color: 0x33aa33 });
+      const greenMat = this.makeToonMat({ color: 0x33aa33 });
       const goldMat = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
       const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.8, 2.0, 6, 8), greenMat);
       body.position.y = 2.0; body.castShadow = true; g.add(body);
@@ -2869,8 +2869,8 @@ export class GameEngine {
     // === MAP BOSS: Sand Scorpion (Desert Mini) ===
     this.enemyMeshFactories.sandScorpion = () => {
       const g = new THREE.Group();
-      const shellMat = new THREE.MeshLambertMaterial({ color: 0xaa8833 });
-      const darkMat = new THREE.MeshLambertMaterial({ color: 0x664422 });
+      const shellMat = this.makeToonMat({ color: 0xaa8833 });
+      const darkMat = this.makeToonMat({ color: 0x664422 });
       const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.5, 1.2, 5, 6), shellMat);
       body.rotation.x = Math.PI / 2; body.position.set(0, 0.6, 0); g.add(body);
       // Tail
@@ -2888,8 +2888,8 @@ export class GameEngine {
     // === MAP BOSS: Desert Colossus (Desert Boss) ===
     this.enemyMeshFactories.desertColossus = () => {
       const g = new THREE.Group();
-      const sandMat = new THREE.MeshLambertMaterial({ color: 0xbbaa77 });
-      const darkMat = new THREE.MeshLambertMaterial({ color: 0x886644 });
+      const sandMat = this.makeToonMat({ color: 0xbbaa77 });
+      const darkMat = this.makeToonMat({ color: 0x886644 });
       const body = new THREE.Mesh(new THREE.CapsuleGeometry(1.0, 1.5, 6, 8), sandMat);
       body.position.y = 2.0; body.castShadow = true; g.add(body);
       const head = new THREE.Mesh(new THREE.DodecahedronGeometry(0.6, 0), darkMat);
@@ -2911,7 +2911,7 @@ export class GameEngine {
       body.position.y = 2.5; g.add(body);
       const aura = new THREE.Mesh(new THREE.SphereGeometry(1.3, 8, 6), purpleMat);
       aura.position.y = 2.5; g.add(aura);
-      const head = new THREE.Mesh(new THREE.SphereGeometry(0.45, 6, 5), new THREE.MeshLambertMaterial({ color: 0xccaa33 }));
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.45, 6, 5), this.makeToonMat({ color: 0xccaa33 }));
       head.position.y = 4.0; g.add(head);
       const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff00ff });
       const le = new THREE.Mesh(new THREE.SphereGeometry(0.08, 4, 4), eyeMat); le.position.set(-0.15, 4.05, 0.35); g.add(le);
@@ -2937,7 +2937,7 @@ export class GameEngine {
     // === MAP BOSS: Obsidian Golem (Volcanic Boss) ===
     this.enemyMeshFactories.obsidianGolem = () => {
       const g = new THREE.Group();
-      const obsidianMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+      const obsidianMat = this.makeEnvMat({ color: 0x1a1a1a });
       const glowMat = new THREE.MeshBasicMaterial({ color: 0xff2200 });
       const body = new THREE.Mesh(new THREE.CapsuleGeometry(1.0, 1.2, 6, 8), obsidianMat);
       body.position.y = 1.8; body.castShadow = true; g.add(body);
@@ -2956,7 +2956,7 @@ export class GameEngine {
     // === MAP BOSS: Inferno Dragon (Volcanic Final) ===
     this.enemyMeshFactories.infernoDragon = () => {
       const g = new THREE.Group();
-      const dragonMat = new THREE.MeshLambertMaterial({ color: 0xcc2200 });
+      const dragonMat = this.makeToonMat({ color: 0xcc2200 });
       const fireMat = new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.7 });
       const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.8, 2.0, 6, 8), dragonMat);
       body.position.y = 2.5; body.castShadow = true; g.add(body);
@@ -2967,7 +2967,7 @@ export class GameEngine {
       const re = new THREE.Mesh(new THREE.SphereGeometry(0.08, 4, 4), eyeMat); re.position.set(0.15, 3.85, 0.6); g.add(re);
       // Wings
       const wingGeo = new THREE.PlaneGeometry(2, 1.5);
-      const wingMat = new THREE.MeshLambertMaterial({ color: 0x991100, side: THREE.DoubleSide });
+      const wingMat = this.makeToonMat({ color: 0x991100, side: THREE.DoubleSide });
       const lw = new THREE.Mesh(wingGeo, wingMat); lw.position.set(-1.5, 3.0, 0); lw.rotation.y = -0.3; g.add(lw);
       const rw = new THREE.Mesh(wingGeo, wingMat); rw.position.set(1.5, 3.0, 0); rw.rotation.y = 0.3; g.add(rw);
       const aura = new THREE.Mesh(new THREE.SphereGeometry(1.5, 8, 6), fireMat);
@@ -2978,8 +2978,8 @@ export class GameEngine {
     // === MAP BOSS: Frost Wolf Alpha (Frozen Mini) ===
     this.enemyMeshFactories.frostWolfAlpha = () => {
       const g = new THREE.Group();
-      const furMat = new THREE.MeshLambertMaterial({ color: 0xaaddff });
-      const darkMat = new THREE.MeshLambertMaterial({ color: 0x6699cc });
+      const furMat = this.makeEnvMat({ color: 0xaaddff });
+      const darkMat = this.makeToonMat({ color: 0x6699cc });
       const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.5, 1.2, 5, 6), furMat);
       body.rotation.x = Math.PI / 2; body.position.set(0, 0.7, 0); g.add(body);
       const head = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.6, 5), furMat);
@@ -2998,7 +2998,7 @@ export class GameEngine {
     // === MAP BOSS: Ice Golem (Frozen Boss) ===
     this.enemyMeshFactories.iceGolem = () => {
       const g = new THREE.Group();
-      const iceMat = new THREE.MeshLambertMaterial({ color: 0x88ccff });
+      const iceMat = this.makeToonMat({ color: 0x88ccff });
       const crystalMat = new THREE.MeshBasicMaterial({ color: 0x44aaff });
       const body = new THREE.Mesh(new THREE.CapsuleGeometry(1.0, 1.2, 6, 8), iceMat);
       body.position.y = 1.8; body.castShadow = true; g.add(body);
@@ -3014,8 +3014,8 @@ export class GameEngine {
     // === MAP BOSS: Blizzard Titan (Frozen Final) ===
     this.enemyMeshFactories.blizzardTitan = () => {
       const g = new THREE.Group();
-      const iceMat = new THREE.MeshLambertMaterial({ color: 0xeeeeff });
-      const darkIceMat = new THREE.MeshLambertMaterial({ color: 0x4466aa });
+      const iceMat = this.makeEnvMat({ color: 0xeeeeff });
+      const darkIceMat = this.makeToonMat({ color: 0x4466aa });
       const body = new THREE.Mesh(new THREE.CapsuleGeometry(1.1, 1.8, 6, 8), iceMat);
       body.position.y = 2.0; body.castShadow = true; g.add(body);
       // Shoulder ice spikes
@@ -3035,9 +3035,9 @@ export class GameEngine {
     // === TIER 3: Necromancer ===
     this.enemyMeshFactories.necromancer = () => {
       const g = new THREE.Group();
-      const robeMat = new THREE.MeshLambertMaterial({ color: 0x221133 });
+      const robeMat = this.makeToonMat({ color: 0x221133 });
       const purpleMat = new THREE.MeshBasicMaterial({ color: 0x9933ff });
-      const skinMat = new THREE.MeshLambertMaterial({ color: 0x443355 });
+      const skinMat = this.makeToonMat({ color: 0x443355 });
       // Robe body
       const body = new THREE.Mesh(new THREE.ConeGeometry(0.4, 1.5, 6), robeMat);
       body.position.y = 0.75; g.add(body);
@@ -3052,12 +3052,12 @@ export class GameEngine {
       const le = new THREE.Mesh(eyeGeo, purpleMat); le.position.set(-0.08, 1.62, 0.18); g.add(le);
       const re = new THREE.Mesh(eyeGeo, purpleMat); re.position.set(0.08, 1.62, 0.18); g.add(re);
       // Staff
-      const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1.8, 5), new THREE.MeshLambertMaterial({ color: 0x332244 }));
+      const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1.8, 5), this.makeToonMat({ color: 0x332244 }));
       staff.position.set(0.35, 0.9, 0); g.add(staff);
       const orb = new THREE.Mesh(new THREE.SphereGeometry(0.1, 6, 6), purpleMat);
       orb.position.set(0.35, 1.85, 0); g.add(orb);
       // Floating skull orbiting (will animate in update)
-      const skull = new THREE.Mesh(new THREE.SphereGeometry(0.08, 5, 4), new THREE.MeshLambertMaterial({ color: 0xccccaa }));
+      const skull = new THREE.Mesh(new THREE.SphereGeometry(0.08, 5, 4), this.makeToonMat({ color: 0xccccaa }));
       skull.position.set(0.6, 1.4, 0); skull.name = "orbitSkull"; g.add(skull);
       return g;
     };
@@ -3065,8 +3065,8 @@ export class GameEngine {
     // === TIER 3: Troll ===
     this.enemyMeshFactories.troll = () => {
       const g = new THREE.Group();
-      const trollMat = new THREE.MeshLambertMaterial({ color: 0x447744 });
-      const darkMat = new THREE.MeshLambertMaterial({ color: 0x335533 });
+      const trollMat = this.makeToonMat({ color: 0x447744 });
+      const darkMat = this.makeToonMat({ color: 0x335533 });
       // Body (large)
       const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.5, 1.0, 5, 6), trollMat);
       body.position.y = 1.2; g.add(body);
@@ -3087,7 +3087,7 @@ export class GameEngine {
       const ll = new THREE.Mesh(legGeo, darkMat); ll.position.set(-0.25, 0.3, 0); g.add(ll);
       const rl = new THREE.Mesh(legGeo, darkMat); rl.position.set(0.25, 0.3, 0); g.add(rl);
       // Club in right hand
-      const club = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.1, 0.8, 5), new THREE.MeshLambertMaterial({ color: 0x664422 }));
+      const club = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.1, 0.8, 5), this.makeToonMat({ color: 0x664422 }));
       club.position.set(0.8, 0.5, 0); club.rotation.z = -0.4; g.add(club);
       g.scale.set(1.2, 1.2, 1.2);
       return g;
@@ -3096,9 +3096,9 @@ export class GameEngine {
     // === TIER 3: Shaman ===
     this.enemyMeshFactories.shaman = () => {
       const g = new THREE.Group();
-      const skinMat = new THREE.MeshLambertMaterial({ color: 0x886644 });
+      const skinMat = this.makeToonMat({ color: 0x886644 });
       const goldMat = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
-      const maskMat = new THREE.MeshLambertMaterial({ color: 0xccaa66 });
+      const maskMat = this.makeToonMat({ color: 0xccaa66 });
       // Small body
       const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 0.5, 5, 5), skinMat);
       body.position.y = 0.5; g.add(body);
@@ -3112,13 +3112,13 @@ export class GameEngine {
       const rs = new THREE.Mesh(slotGeo, slotMat); rs.position.set(0.06, 1.02, 0.17); g.add(rs);
       // Feathered headdress
       for (let i = 0; i < 5; i++) {
-        const feather = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.25, 4), new THREE.MeshLambertMaterial({ color: [0xff4400, 0xffcc00, 0x44aa44, 0xff4400, 0xffcc00][i] }));
+        const feather = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.25, 4), this.makeToonMat({ color: [0xff4400, 0xffcc00, 0x44aa44, 0xff4400, 0xffcc00][i] }));
         const a = (i / 5) * Math.PI - Math.PI / 2;
         feather.position.set(Math.cos(a) * 0.12, 1.25 + Math.abs(Math.cos(a)) * 0.08, Math.sin(a) * 0.05 - 0.05);
         g.add(feather);
       }
       // Golden staff
-      const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.0, 5), new THREE.MeshLambertMaterial({ color: 0x886622 }));
+      const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.0, 5), this.makeToonMat({ color: 0x886622 }));
       staff.position.set(0.25, 0.5, 0); g.add(staff);
       const staffOrb = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 6), goldMat);
       staffOrb.position.set(0.25, 1.05, 0); g.add(staffOrb);
@@ -3822,8 +3822,8 @@ export class GameEngine {
         // Red tint
         if (enemy.mesh instanceof THREE.Group) {
           enemy.mesh.traverse((child) => {
-            if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshLambertMaterial) {
-              child.material.emissive.setHex(0x440000);
+            if (child instanceof THREE.Mesh && child.material && 'emissive' in child.material) {
+              (child.material as THREE.MeshLambertMaterial).emissive.setHex(0x440000);
             }
           });
         }
@@ -5137,7 +5137,7 @@ export class GameEngine {
         const wx = boss.position.x + (Math.random() - 0.5) * 8;
         const wz = boss.position.z + (Math.random() - 0.5) * 8;
         const wy = this.getTerrainHeight(wx, wz);
-        const wall = new THREE.Mesh(new THREE.BoxGeometry(4, 3, 0.5), new THREE.MeshLambertMaterial({ color: 0xaaddff, transparent: true, opacity: 0.7 }));
+        const wall = new THREE.Mesh(new THREE.BoxGeometry(4, 3, 0.5), this.makeEnvMat({ color: 0xaaddff, transparent: true, opacity: 0.7 }));
         wall.position.set(wx, wy + 1.5, wz);
         wall.rotation.y = Math.random() * Math.PI;
         this.scene.add(wall); this.environmentObjects.push(wall);
@@ -7738,8 +7738,8 @@ export class GameEngine {
 
     // ===== SNOW MOUNDS (30-40) =====
     const snowMats = [
-      new THREE.MeshLambertMaterial({ color: 0xeeeeff }),
-      new THREE.MeshLambertMaterial({ color: 0xddeeff }),
+      this.makeEnvMat({ color: 0xeeeeff }),
+      this.makeEnvMat({ color: 0xddeeff }),
     ];
     const moundCount = Math.floor(35 * (0.8 + rng() * 0.4));
     for (let i = 0; i < moundCount; i++) {
@@ -7758,10 +7758,10 @@ export class GameEngine {
     }
 
     // ===== FROZEN PINE TREES (20, ice-coated) =====
-    const frozenTrunkMat = new THREE.MeshLambertMaterial({ color: 0x8899aa });
+    const frozenTrunkMat = this.makeEnvMat({ color: 0x8899aa });
     const iceLeafMats = [
-      new THREE.MeshLambertMaterial({ color: 0xaaddff }),
-      new THREE.MeshLambertMaterial({ color: 0xbbddee }),
+      this.makeEnvMat({ color: 0xaaddff }),
+      this.makeEnvMat({ color: 0xbbddee }),
     ];
     const icicleMat = new THREE.MeshStandardMaterial({ color: 0xaaddff, transparent: true, opacity: 0.7 });
     for (let i = 0; i < 20; i++) {
@@ -7835,8 +7835,8 @@ export class GameEngine {
     }
 
     // ===== SNOW-COVERED ROCKS (40) =====
-    const stoneRockMat = new THREE.MeshLambertMaterial({ color: 0x667788 });
-    const snowCapMat = new THREE.MeshLambertMaterial({ color: 0xeeeeff });
+    const stoneRockMat = this.makeEnvMat({ color: 0x667788 });
+    const snowCapMat = this.makeEnvMat({ color: 0xeeeeff });
     for (let i = 0; i < 40; i++) {
       const rx = (rng() - 0.5) * ARENA.size * 0.85;
       const rz = (rng() - 0.5) * ARENA.size * 0.85;
@@ -7876,7 +7876,7 @@ export class GameEngine {
       arch.castShadow = true;
       cave.add(arch);
       // Dark interior
-      const interiorMat = new THREE.MeshLambertMaterial({ color: 0x112233 });
+      const interiorMat = this.makeEnvMat({ color: 0x112233 });
       const interior = new THREE.Mesh(new THREE.PlaneGeometry(2.5, 2.5), interiorMat);
       interior.position.y = 1.2;
       interior.position.z = 0.2;
@@ -7889,9 +7889,9 @@ export class GameEngine {
     }
 
     // ===== SNOWMEN / TOTEMS (2-3, easter egg) =====
-    const snowmanMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-    const coalMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
-    const carrotMat = new THREE.MeshLambertMaterial({ color: 0xff6600 });
+    const snowmanMat = this.makeEnvMat({ color: 0xffffff });
+    const coalMat = this.makeEnvMat({ color: 0x111111 });
+    const carrotMat = this.makeEnvMat({ color: 0xff6600 });
     const snowmanCount = 2 + Math.floor(rng() * 2);
     for (let i = 0; i < snowmanCount; i++) {
       const sx = (rng() - 0.5) * ARENA.size * 0.7;
