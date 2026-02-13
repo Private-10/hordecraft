@@ -98,7 +98,13 @@ export class GameEngine {
 
   // Pools & shared geometry
   private enemyGeometries: Record<string, THREE.BufferGeometry> = {};
-  private enemyMaterials: Record<string, THREE.MeshLambertMaterial> = {};
+  private enemyMaterials: Record<string, THREE.MeshLambertMaterial | THREE.MeshToonMaterial> = {};
+
+  // Toon shading shared gradient (cel-shading look)
+  private toonGradient!: THREE.DataTexture;
+  private get useToonShading(): boolean {
+    return this.settings.quality !== "low";
+  }
 
   // Rock colliders
   private rockColliders: { position: THREE.Vector3; radius: number; mesh?: THREE.Object3D }[] = [];
@@ -292,6 +298,8 @@ export class GameEngine {
   private meteorWarnings: { position: THREE.Vector3; mesh: THREE.Mesh; timer: number }[] = [];
   private meteorsFalling: { position: THREE.Vector3; mesh: THREE.Mesh; targetY: number; speed: number; damage: number }[] = [];
   private emberParticles: THREE.Points | null = null;
+  private ashParticles: { mesh: THREE.Mesh; velocity: THREE.Vector3; phase: number }[] = [];
+  private volcanicPointLights: THREE.PointLight[] = [];
   onEruption?: (warning: boolean, active: boolean) => void;
 
   // Blizzard (frozen tundra)
@@ -303,6 +311,10 @@ export class GameEngine {
   private blizzardParticles: THREE.Points | null = null;
   onBlizzardWarning?: (active: boolean) => void;
   onBlizzardActive?: (active: boolean) => void;
+
+  // Snow particles & lights (frozen tundra)
+  private snowParticles: { mesh: THREE.Mesh; velocity: THREE.Vector3; phase: number }[] = [];
+  private frozenPointLights: THREE.PointLight[] = [];
 
   // Slow-motion death
   private slowMoTimer = 0;
@@ -416,6 +428,15 @@ export class GameEngine {
     this.matVortexDistort = new THREE.MeshBasicMaterial({ color: 0x6600aa, transparent: true, opacity: 0.25 });
     this.matVortexGround = new THREE.MeshBasicMaterial({ color: 0x220044, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false });
     this.matVortexParticle = new THREE.MeshBasicMaterial({ color: 0xaa44ff, transparent: true, opacity: 0.8 });
+
+    // Shared toon gradient texture for cel-shading
+    this.toonGradient = new THREE.DataTexture(
+      new Uint8Array([40,40,40,255, 80,80,80,255, 160,160,160,255, 255,255,255,255]),
+      4, 1, THREE.RGBAFormat
+    );
+    this.toonGradient.minFilter = THREE.NearestFilter;
+    this.toonGradient.magFilter = THREE.NearestFilter;
+    this.toonGradient.needsUpdate = true;
 
     // Auto quality detection (only if user hasn't manually set)
     this.autoDetectQuality();
@@ -555,7 +576,7 @@ export class GameEngine {
       posAttr.setZ(i, height);
     }
     groundGeo.computeVertexNormals();
-    const groundMat = new THREE.MeshLambertMaterial({ color: mapDef.groundColor });
+    const groundMat = this.makeEnvMat({ color: mapDef.groundColor });
     this.groundMesh = new THREE.Mesh(groundGeo, groundMat);
     this.groundMesh.rotation.x = -Math.PI / 2;
     this.groundMesh.receiveShadow = true;
@@ -2231,15 +2252,15 @@ export class GameEngine {
   private initEnemyAssets() {
     // Still need geometries/materials for simple hit flash
     this.enemyGeometries.goblin = new THREE.CapsuleGeometry(0.3, 0.5, 4, 6);
-    this.enemyMaterials.goblin = new THREE.MeshLambertMaterial({ color: ENEMIES.goblin.color });
+    this.enemyMaterials.goblin = this.makeToonMat({ color: ENEMIES.goblin.color });
     this.enemyGeometries.slime = new THREE.SphereGeometry(0.45, 6, 6);
-    this.enemyMaterials.slime = new THREE.MeshLambertMaterial({ color: ENEMIES.slime.color });
+    this.enemyMaterials.slime = this.makeToonMat({ color: ENEMIES.slime.color });
     this.enemyGeometries.skeleton = new THREE.CapsuleGeometry(0.25, 0.7, 4, 6);
-    this.enemyMaterials.skeleton = new THREE.MeshLambertMaterial({ color: ENEMIES.skeleton.color });
+    this.enemyMaterials.skeleton = this.makeToonMat({ color: ENEMIES.skeleton.color });
     this.enemyGeometries.bat = new THREE.OctahedronGeometry(0.3, 0);
-    this.enemyMaterials.bat = new THREE.MeshLambertMaterial({ color: ENEMIES.bat.color });
+    this.enemyMaterials.bat = this.makeToonMat({ color: ENEMIES.bat.color });
     this.enemyGeometries.ogre = new THREE.CapsuleGeometry(0.7, 1.0, 4, 6);
-    this.enemyMaterials.ogre = new THREE.MeshLambertMaterial({ color: ENEMIES.ogre.color });
+    this.enemyMaterials.ogre = this.makeToonMat({ color: ENEMIES.ogre.color });
 
     // Detailed mesh factories
     this.enemyMeshFactories.goblin = () => {
@@ -2520,7 +2541,7 @@ export class GameEngine {
 
     // === Spider ===
     this.enemyGeometries.spider = new THREE.SphereGeometry(0.25, 6, 5);
-    this.enemyMaterials.spider = new THREE.MeshLambertMaterial({ color: ENEMIES.spider.color });
+    this.enemyMaterials.spider = this.makeToonMat({ color: ENEMIES.spider.color });
 
     this.enemyMeshFactories.spider = () => {
       const g = new THREE.Group();
@@ -2564,7 +2585,7 @@ export class GameEngine {
 
     // === Zombie ===
     this.enemyGeometries.zombie = new THREE.CapsuleGeometry(0.35, 0.6, 4, 6);
-    this.enemyMaterials.zombie = new THREE.MeshLambertMaterial({ color: ENEMIES.zombie.color });
+    this.enemyMaterials.zombie = this.makeToonMat({ color: ENEMIES.zombie.color });
 
     this.enemyMeshFactories.zombie = () => {
       const g = new THREE.Group();
@@ -2610,7 +2631,7 @@ export class GameEngine {
 
     // === Wolf ===
     this.enemyGeometries.wolf = new THREE.CapsuleGeometry(0.3, 0.5, 4, 6);
-    this.enemyMaterials.wolf = new THREE.MeshLambertMaterial({ color: ENEMIES.wolf.color });
+    this.enemyMaterials.wolf = this.makeToonMat({ color: ENEMIES.wolf.color });
 
     this.enemyMeshFactories.wolf = () => {
       const g = new THREE.Group();
@@ -4465,8 +4486,8 @@ export class GameEngine {
   // ========== LOD SYSTEM ==========
   private lastLODTime = 0;
   private lodLowGeo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
-  private lodLowMat = new THREE.MeshLambertMaterial({ color: 0x888888 });
-  private lodMedMat = new THREE.MeshLambertMaterial({ color: 0x888888, flatShading: true });
+  private lodLowMat: THREE.MeshLambertMaterial = new THREE.MeshLambertMaterial({ color: 0x888888 });
+  private lodMedMat: THREE.MeshLambertMaterial = new THREE.MeshLambertMaterial({ color: 0x888888, flatShading: true });
   private enemyLODLevel: Map<number, number> = new Map(); // enemy id -> 0=high, 1=med, 2=low
 
   private updateLOD() {
@@ -8612,6 +8633,31 @@ export class GameEngine {
   }
 
   // Settings
+  /** Quality-aware material: MeshToonMaterial for medium+high, MeshLambertMaterial for low */
+  private makeToonMat(opts: { color: number; side?: THREE.Side; transparent?: boolean; opacity?: number; emissive?: number }): THREE.MeshToonMaterial | THREE.MeshLambertMaterial {
+    if (!this.useToonShading) {
+      return new THREE.MeshLambertMaterial(opts as any);
+    }
+    return new THREE.MeshToonMaterial({ ...opts, gradientMap: this.toonGradient } as any);
+  }
+
+  /** Quality-aware environment material: MeshStandardMaterial for medium+high, MeshLambertMaterial for low */
+  private makeEnvMat(opts: { color: number; side?: THREE.Side; transparent?: boolean; opacity?: number }): THREE.MeshStandardMaterial | THREE.MeshLambertMaterial {
+    if (!this.useToonShading) {
+      return new THREE.MeshLambertMaterial(opts as any);
+    }
+    return new THREE.MeshStandardMaterial({ ...opts, roughness: 0.85, metalness: 0 } as any);
+  }
+
+  /** Quality-aware slime material: MeshPhysicalMaterial for medium+high, MeshPhongMaterial for low */
+  private makeSlimeMat(opts: { color: number; transparent?: boolean; opacity?: number; shininess?: number }): THREE.MeshPhysicalMaterial | THREE.MeshPhongMaterial {
+    if (!this.useToonShading) {
+      return new THREE.MeshPhongMaterial(opts as any);
+    }
+    const { shininess, ...rest } = opts as any;
+    return new THREE.MeshPhysicalMaterial({ ...rest, roughness: 0.2, metalness: 0, transmission: 0.3, thickness: 0.5 });
+  }
+
   private loadSettings(): { invertY: boolean; volume: number; quality: string } {
     try {
       const raw = secureGet("hordecraft_settings");
