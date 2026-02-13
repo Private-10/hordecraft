@@ -5,6 +5,7 @@ import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPa
 import { SMAAPass } from "three/examples/jsm/postprocessing/SMAAPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { FXAAShader } from "three/examples/jsm/shaders/FXAAShader.js";
+import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { InputManager } from "./input";
 import { MobileInputManager } from "./mobile-input";
 import { PLAYER, CAMERA, ARENA, ENEMIES, WEAPONS, XP_TABLE, SCORE, COLORS, BOSSES, EVOLUTIONS, MAPS, MAP_BOSSES } from "./constants";
@@ -431,7 +432,7 @@ export class GameEngine {
 
     // Shared toon gradient texture for cel-shading
     this.toonGradient = new THREE.DataTexture(
-      new Uint8Array([100,100,100,255, 160,160,160,255, 210,210,210,255, 255,255,255,255]),
+      new Uint8Array([60,60,60,255, 120,120,120,255, 200,200,200,255, 255,255,255,255]),
       4, 1, THREE.RGBAFormat
     );
     this.toonGradient.minFilter = THREE.NearestFilter;
@@ -544,11 +545,11 @@ export class GameEngine {
       this.originalFogFar = 70;
     } else {
       // Forest - enhanced lighting
-      if (this.ambientLight) { this.ambientLight.color.set(0x7a9a7a); this.ambientLight.intensity = 1.4; }
-      if (this.sunLight) { this.sunLight.color.set(0xffeedd); this.sunLight.intensity = 2.0; this.sunLight.position.set(50, 80, 30); }
-      if (this.hemiLight) { this.hemiLight.color.set(0x99bbff); (this.hemiLight as THREE.HemisphereLight).groundColor.set(0x4a6a4a); this.hemiLight.intensity = 1.0; }
+      if (this.ambientLight) { this.ambientLight.color.set(0x6a8a6a); this.ambientLight.intensity = 1.0; }
+      if (this.sunLight) { this.sunLight.color.set(0xffeedd); this.sunLight.intensity = 1.6; this.sunLight.position.set(50, 80, 30); }
+      if (this.hemiLight) { this.hemiLight.color.set(0x88bbff); (this.hemiLight as THREE.HemisphereLight).groundColor.set(0x3a5a3a); this.hemiLight.intensity = 0.8; }
       // Green-tinted fog for forest
-      this.scene.fog = new THREE.Fog(0x223322, 45, 100);
+      this.scene.fog = new THREE.Fog(0x1a2a1a, 40, 90);
       this.originalFogNear = 30;
       this.originalFogFar = 70;
     }
@@ -8548,6 +8549,10 @@ export class GameEngine {
     this.fxaaPass = new ShaderPass(FXAAShader);
     this.fxaaPass.material.uniforms["resolution"].value.set(1 / w, 1 / h);
     this.composer.addPass(this.fxaaPass);
+
+    // 6. OutputPass — converts linear → sRGB color space
+    const outputPass = new OutputPass();
+    this.composer.addPass(outputPass);
 
     // Apply quality tier
     this.applyPostProcessingQuality();
