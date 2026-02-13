@@ -564,7 +564,9 @@ export class GameEngine {
     this.terrainVariation = terrainVar;
 
     // Ground
-    const groundGeo = new THREE.PlaneGeometry(ARENA.size, ARENA.size, 40, 40);
+    const groundExtend = 40;
+    const groundFullSize = ARENA.size + groundExtend * 2;
+    const groundGeo = new THREE.PlaneGeometry(groundFullSize, groundFullSize, 50, 50);
     const posAttr = groundGeo.getAttribute("position");
     for (let i = 0; i < posAttr.count; i++) {
       const x = posAttr.getX(i);
@@ -591,61 +593,105 @@ export class GameEngine {
     (this.gridHelper.material as THREE.Material).transparent = true;
     this.scene.add(this.gridHelper);
 
-    // Mountain borders
+    // Natural border: rocks + trees along arena edges
     {
-      const mRng = this.seededRandom(this.mapSeed + 99);
-      const mountainColors: [number, number] = mapId === "volcanic" ? [0x2a1515, 0x1a0a0a]
-        : mapId === "desert" ? [0x8a6a3a, 0x6a5030]
-        : mapId === "frozen" ? [0xaabbcc, 0x88aacc]
-        : [0x3a5a3a, 0x555555];
-      const mMats = [
-        this.makeEnvMat({ color: mountainColors[0] }),
-        this.makeEnvMat({ color: mountainColors[1] }),
-      ];
+      const bRng = this.seededRandom(this.mapSeed + 99);
+      const rockColors: number[] = mapId === "volcanic" ? [0x2a1515, 0x1a0a0a, 0x332020]
+        : mapId === "desert" ? [0x8a6a3a, 0x6a5030, 0x9a7a4a]
+        : mapId === "frozen" ? [0x99aabb, 0x88aacc, 0xbbccdd]
+        : [0x555555, 0x666666, 0x4a4a4a];
+      const trunkColor = mapId === "volcanic" ? 0x221111 : mapId === "desert" ? 0x6a5030 : mapId === "frozen" ? 0x556677 : 0x4a3520;
+      const leafColor = mapId === "volcanic" ? 0x332200 : mapId === "desert" ? 0x556b2f : mapId === "frozen" ? 0x8899aa : 0x2d5a1e;
+      const rockMats = rockColors.map(c => this.makeEnvMat({ color: c }));
+      const trunkMat = this.makeEnvMat({ color: trunkColor });
+      const leafMat = this.makeEnvMat({ color: leafColor });
 
       const edges: Array<{ axis: "x" | "z"; sign: number }> = [
-        { axis: "z", sign: -1 },
-        { axis: "z", sign: 1 },
-        { axis: "x", sign: -1 },
-        { axis: "x", sign: 1 },
+        { axis: "z", sign: -1 }, { axis: "z", sign: 1 },
+        { axis: "x", sign: -1 }, { axis: "x", sign: 1 },
       ];
 
       for (const edge of edges) {
-        const count = 18 + Math.floor(mRng() * 8);
+        const count = 30 + Math.floor(bRng() * 20);
         for (let i = 0; i < count; i++) {
-          const height = 5 + mRng() * 10;
-          const radius = 2 + mRng() * 4;
-          const useType = mRng();
-          let geo: THREE.BufferGeometry;
-          if (useType < 0.5) {
-            geo = new THREE.ConeGeometry(radius, height, 5 + Math.floor(mRng() * 4));
-          } else {
-            geo = new THREE.DodecahedronGeometry(radius * 0.8, 1);
-            geo.scale(1, height / (radius * 1.6), 1);
-          }
-          // Deform vertices for organic look
-          const pos = geo.getAttribute("position");
-          for (let v = 0; v < pos.count; v++) {
-            pos.setX(v, pos.getX(v) + (mRng() - 0.5) * radius * 0.3);
-            pos.setZ(v, pos.getZ(v) + (mRng() - 0.5) * radius * 0.3);
-            if (pos.getY(v) > 0) pos.setY(v, pos.getY(v) + (mRng() - 0.5) * height * 0.15);
-          }
-          pos.needsUpdate = true;
-          geo.computeVertexNormals();
+          const isTree = bRng() < 0.3;
+          const spread = ARENA.halfSize + groundExtend * 0.8;
+          const along = (bRng() - 0.5) * spread * 2;
+          const offset = ARENA.halfSize + 2 + bRng() * 13;
 
-          const mesh = new THREE.Mesh(geo, mMats[Math.floor(mRng() * 2)]);
-          const spread = ARENA.size * 0.6;
-          const along = (mRng() - 0.5) * spread * 2;
-          const offset = ARENA.halfSize + 3 + mRng() * 12;
-          if (edge.axis === "z") {
-            mesh.position.set(along, height * 0.4, edge.sign * offset);
+          if (isTree) {
+            // Simple tree: trunk + foliage sphere
+            const tree = new THREE.Group();
+            const trunkH = 2 + bRng() * 3;
+            const trunkR = 0.15 + bRng() * 0.15;
+            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(trunkR * 0.7, trunkR, trunkH, 5), trunkMat);
+            trunk.position.y = trunkH / 2;
+            trunk.castShadow = true;
+            tree.add(trunk);
+
+            const foliageR = 1 + bRng() * 1.5;
+            const foliageGeo = new THREE.DodecahedronGeometry(foliageR, 1);
+            const fPos = foliageGeo.getAttribute("position");
+            for (let v = 0; v < fPos.count; v++) {
+              fPos.setX(v, fPos.getX(v) + (bRng() - 0.5) * foliageR * 0.3);
+              fPos.setY(v, fPos.getY(v) + (bRng() - 0.5) * foliageR * 0.3);
+              fPos.setZ(v, fPos.getZ(v) + (bRng() - 0.5) * foliageR * 0.3);
+            }
+            fPos.needsUpdate = true;
+            foliageGeo.computeVertexNormals();
+            const foliage = new THREE.Mesh(foliageGeo, leafMat);
+            foliage.position.y = trunkH + foliageR * 0.5;
+            foliage.castShadow = true;
+            tree.add(foliage);
+
+            if (edge.axis === "z") {
+              tree.position.set(along, 0, edge.sign * offset);
+            } else {
+              tree.position.set(edge.sign * offset, 0, along);
+            }
+            tree.rotation.y = bRng() * Math.PI * 2;
+            this.scene.add(tree);
+            this.environmentObjects.push(tree);
           } else {
-            mesh.position.set(edge.sign * offset, height * 0.4, along);
+            // Rock cluster: 1-3 rocks grouped
+            const group = new THREE.Group();
+            const clusterCount = 1 + Math.floor(bRng() * 3);
+            for (let c = 0; c < clusterCount; c++) {
+              // Size category: small 0.5-1, medium 1-2.5, large 2.5-4
+              const sizeRoll = bRng();
+              const radius = sizeRoll < 0.4 ? 0.5 + bRng() * 0.5
+                : sizeRoll < 0.8 ? 1 + bRng() * 1.5
+                : 2.5 + bRng() * 1.5;
+              const geo = bRng() < 0.5
+                ? new THREE.DodecahedronGeometry(radius, 1)
+                : new THREE.SphereGeometry(radius, 5 + Math.floor(bRng() * 3), 4 + Math.floor(bRng() * 3));
+              // Vertex deformation for organic look
+              const pos = geo.getAttribute("position");
+              for (let v = 0; v < pos.count; v++) {
+                const deform = radius * 0.25;
+                pos.setX(v, pos.getX(v) + (bRng() - 0.5) * deform);
+                pos.setY(v, pos.getY(v) + (bRng() - 0.5) * deform);
+                pos.setZ(v, pos.getZ(v) + (bRng() - 0.5) * deform);
+                // Flatten bottom
+                if (pos.getY(v) < -radius * 0.3) pos.setY(v, -radius * 0.3);
+              }
+              pos.needsUpdate = true;
+              geo.computeVertexNormals();
+              const rock = new THREE.Mesh(geo, rockMats[Math.floor(bRng() * rockMats.length)]);
+              rock.position.set((bRng() - 0.5) * radius, radius * 0.5, (bRng() - 0.5) * radius);
+              rock.rotation.set(bRng() * 0.4, bRng() * Math.PI * 2, bRng() * 0.4);
+              rock.castShadow = true;
+              group.add(rock);
+            }
+
+            if (edge.axis === "z") {
+              group.position.set(along, 0, edge.sign * offset);
+            } else {
+              group.position.set(edge.sign * offset, 0, along);
+            }
+            this.scene.add(group);
+            this.environmentObjects.push(group);
           }
-          mesh.rotation.y = mRng() * Math.PI * 2;
-          mesh.castShadow = true;
-          this.scene.add(mesh);
-          this.environmentObjects.push(mesh);
         }
       }
     }
