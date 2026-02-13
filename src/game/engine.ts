@@ -591,22 +591,64 @@ export class GameEngine {
     (this.gridHelper.material as THREE.Material).transparent = true;
     this.scene.add(this.gridHelper);
 
-    // Borders
-    const borderGeo = new THREE.BoxGeometry(ARENA.size, 3, 0.5);
-    const borderMat = this.makeEnvMat({ color: mapId === "volcanic" ? 0x441111 : mapId === "desert" ? 0x443322 : 0x332244, transparent: true, opacity: 0.3 });
-    const borders = [
-      { pos: [0, 1.5, -ARENA.halfSize], rot: 0 },
-      { pos: [0, 1.5, ARENA.halfSize], rot: 0 },
-      { pos: [-ARENA.halfSize, 1.5, 0], rot: Math.PI / 2 },
-      { pos: [ARENA.halfSize, 1.5, 0], rot: Math.PI / 2 },
-    ];
-    borders.forEach(b => {
-      const m = new THREE.Mesh(borderGeo, borderMat);
-      m.position.set(b.pos[0] as number, b.pos[1] as number, b.pos[2] as number);
-      m.rotation.y = b.rot;
-      this.scene.add(m);
-      this.environmentObjects.push(m);
-    });
+    // Mountain borders
+    {
+      const mRng = this.seededRandom(this.mapSeed + 99);
+      const mountainColors: [number, number] = mapId === "volcanic" ? [0x2a1515, 0x1a0a0a]
+        : mapId === "desert" ? [0x8a6a3a, 0x6a5030]
+        : mapId === "frozen" ? [0xaabbcc, 0x88aacc]
+        : [0x3a5a3a, 0x555555];
+      const mMats = [
+        this.makeEnvMat({ color: mountainColors[0] }),
+        this.makeEnvMat({ color: mountainColors[1] }),
+      ];
+
+      const edges: Array<{ axis: "x" | "z"; sign: number }> = [
+        { axis: "z", sign: -1 },
+        { axis: "z", sign: 1 },
+        { axis: "x", sign: -1 },
+        { axis: "x", sign: 1 },
+      ];
+
+      for (const edge of edges) {
+        const count = 18 + Math.floor(mRng() * 8);
+        for (let i = 0; i < count; i++) {
+          const height = 5 + mRng() * 10;
+          const radius = 2 + mRng() * 4;
+          const useType = mRng();
+          let geo: THREE.BufferGeometry;
+          if (useType < 0.5) {
+            geo = new THREE.ConeGeometry(radius, height, 5 + Math.floor(mRng() * 4));
+          } else {
+            geo = new THREE.DodecahedronGeometry(radius * 0.8, 1);
+            geo.scale(1, height / (radius * 1.6), 1);
+          }
+          // Deform vertices for organic look
+          const pos = geo.getAttribute("position");
+          for (let v = 0; v < pos.count; v++) {
+            pos.setX(v, pos.getX(v) + (mRng() - 0.5) * radius * 0.3);
+            pos.setZ(v, pos.getZ(v) + (mRng() - 0.5) * radius * 0.3);
+            if (pos.getY(v) > 0) pos.setY(v, pos.getY(v) + (mRng() - 0.5) * height * 0.15);
+          }
+          pos.needsUpdate = true;
+          geo.computeVertexNormals();
+
+          const mesh = new THREE.Mesh(geo, mMats[Math.floor(mRng() * 2)]);
+          const spread = ARENA.size * 0.6;
+          const along = (mRng() - 0.5) * spread * 2;
+          const offset = ARENA.halfSize + 3 + mRng() * 12;
+          if (edge.axis === "z") {
+            mesh.position.set(along, height * 0.4, edge.sign * offset);
+          } else {
+            mesh.position.set(edge.sign * offset, height * 0.4, along);
+          }
+          mesh.rotation.y = mRng() * Math.PI * 2;
+          mesh.castShadow = true;
+          this.scene.add(mesh);
+          this.environmentObjects.push(mesh);
+        }
+      }
+    }
 
     if (mapId === "volcanic") {
       this.setupVolcanicObjects();
