@@ -544,11 +544,11 @@ export class GameEngine {
       this.originalFogFar = 70;
     } else {
       // Forest - enhanced lighting
-      if (this.ambientLight) { this.ambientLight.color.set(0x6a8a6a); this.ambientLight.intensity = 1.2; }
-      if (this.sunLight) { this.sunLight.color.set(0xffeedd); this.sunLight.intensity = 1.8; this.sunLight.position.set(50, 80, 30); }
-      if (this.hemiLight) { this.hemiLight.color.set(0x88bbff); (this.hemiLight as THREE.HemisphereLight).groundColor.set(0x3a5a3a); this.hemiLight.intensity = 0.8; }
+      if (this.ambientLight) { this.ambientLight.color.set(0x88aa88); this.ambientLight.intensity = 1.8; }
+      if (this.sunLight) { this.sunLight.color.set(0xfff5e0); this.sunLight.intensity = 2.5; this.sunLight.position.set(50, 80, 30); }
+      if (this.hemiLight) { this.hemiLight.color.set(0xaaccff); (this.hemiLight as THREE.HemisphereLight).groundColor.set(0x557755); this.hemiLight.intensity = 1.2; }
       // Green-tinted fog for forest
-      this.scene.fog = new THREE.Fog(0x1a331a, 40, 90);
+      this.scene.fog = new THREE.Fog(0x2a4a2a, 50, 120);
       this.originalFogNear = 30;
       this.originalFogFar = 70;
     }
