@@ -1,4 +1,10 @@
 import * as THREE from "three";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+import { SMAAPass } from "three/examples/jsm/postprocessing/SMAAPass.js";
+import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
+import { FXAAShader } from "three/examples/jsm/shaders/FXAAShader.js";
 import { InputManager } from "./input";
 import { MobileInputManager } from "./mobile-input";
 import { PLAYER, CAMERA, ARENA, ENEMIES, WEAPONS, XP_TABLE, SCORE, COLORS, BOSSES, EVOLUTIONS, MAPS, MAP_BOSSES } from "./constants";
@@ -216,6 +222,16 @@ export class GameEngine {
 
   // Map system
   selectedMap = "forest";
+
+  // Post-processing
+  private composer!: EffectComposer;
+  private bloomPass!: UnrealBloomPass;
+  private smaaPass!: SMAAPass;
+  private fxaaPass!: ShaderPass;
+  private vignettePass!: ShaderPass;
+  private colorGradingPass!: ShaderPass;
+  private postProcessingEnabled = false;
+
   private groundMesh: THREE.Mesh | null = null;
   private gridHelper: THREE.GridHelper | null = null;
   private environmentObjects: THREE.Object3D[] = [];
@@ -310,7 +326,7 @@ export class GameEngine {
 
   init(canvas: HTMLCanvasElement) {
     // Renderer
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     const isMobileDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0;
@@ -404,6 +420,9 @@ export class GameEngine {
     // Auto quality detection (only if user hasn't manually set)
     this.autoDetectQuality();
 
+    // Post-processing pipeline
+    this.setupPostProcessing();
+
     // Ground - setup arena for current map
     this.setupArena(this.selectedMap);
 
@@ -424,9 +443,17 @@ export class GameEngine {
 
     // Resize
     window.addEventListener("resize", () => {
-      this.camera.aspect = window.innerWidth / window.innerHeight;
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      this.camera.aspect = w / h;
       this.camera.updateProjectionMatrix();
-      this.renderer.setSize(window.innerWidth, window.innerHeight);
+      this.renderer.setSize(w, h);
+      if (this.composer) {
+        this.composer.setSize(w, h);
+        if (this.fxaaPass) {
+          this.fxaaPass.material.uniforms["resolution"].value.set(1 / w, 1 / h);
+        }
+      }
     });
   }
 
@@ -465,6 +492,7 @@ export class GameEngine {
   }
 
   private setupArena(mapId: string) {
+    this.updatePostProcessingForMap(mapId);
     this.clearArena();
     const mapDef = MAPS[mapId as keyof typeof MAPS] || MAPS.forest;
 
@@ -1308,18 +1336,32 @@ export class GameEngine {
     this.rockColliders = [];
     this.lavaPoolPositions = [];
     this.lavaPoolMeshes = [];
+    this.ashParticles = [];
+    this.volcanicPointLights = [];
     const rng = this.seededRandom(this.mapSeed + 3);
 
-    // Lava pools (±20%)
-    const lavaPoolGeo = new THREE.CircleGeometry(2.5, 16);
+    // Helper: deform vertices for jagged volcanic look
+    const deformGeo = (geo: THREE.BufferGeometry, amount: number) => {
+      const pos = geo.getAttribute("position");
+      for (let i = 0; i < pos.count; i++) {
+        pos.setX(i, pos.getX(i) + (rng() - 0.5) * amount);
+        pos.setY(i, pos.getY(i) + (rng() - 0.5) * amount);
+        pos.setZ(i, pos.getZ(i) + (rng() - 0.5) * amount);
+      }
+      pos.needsUpdate = true;
+      geo.computeVertexNormals();
+    };
+
+    // ===== LAVA POOLS (enhanced with rock borders) =====
     const lavaCount = Math.floor(18 * (0.8 + rng() * 0.4));
+    const lavaBorderMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
     for (let i = 0; i < lavaCount; i++) {
       const lx = (rng() - 0.5) * ARENA.size * 0.8;
       const lz = (rng() - 0.5) * ARENA.size * 0.8;
       if (Math.abs(lx) < 8 && Math.abs(lz) < 8) continue;
       const ly = this.getTerrainHeight(lx, lz) + 0.05;
       const radius = 1.5 + rng() * 1.5;
-      const poolMat = new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.8 });
+      const poolMat = new THREE.MeshStandardMaterial({ color: 0xff4400, emissive: 0xff4400, emissiveIntensity: 0.8, transparent: true, opacity: 0.85 });
       const pool = new THREE.Mesh(new THREE.CircleGeometry(radius, 16), poolMat);
       pool.rotation.x = -Math.PI / 2;
       pool.position.set(lx, ly, lz);
@@ -1327,11 +1369,28 @@ export class GameEngine {
       this.environmentObjects.push(pool);
       this.lavaPoolMeshes.push(pool);
       this.lavaPoolPositions.push({ x: lx, z: lz, radius });
+
+      // Rock border around lava pool
+      const borderSegments = 6 + Math.floor(rng() * 4);
+      for (let b = 0; b < borderSegments; b++) {
+        const angle = (b / borderSegments) * Math.PI * 2 + rng() * 0.3;
+        const dist = radius + 0.2 + rng() * 0.3;
+        const bSize = 0.3 + rng() * 0.4;
+        const borderGeo = new THREE.DodecahedronGeometry(bSize, 0);
+        deformGeo(borderGeo, 0.1);
+        const border = new THREE.Mesh(borderGeo, lavaBorderMat);
+        border.position.set(lx + Math.cos(angle) * dist, ly + bSize * 0.3, lz + Math.sin(angle) * dist);
+        border.rotation.set(rng(), rng(), rng());
+        border.castShadow = true;
+        this.scene.add(border);
+        this.environmentObjects.push(border);
+      }
     }
 
-    // Obsidian pillars (±20%)
-    const obsidianMat = new THREE.MeshLambertMaterial({ color: 0x1a1a2e });
-    const obsidianCount = Math.floor(23 * (0.8 + rng() * 0.4));
+    // ===== OBSIDIAN PILLARS (10-12, glossy black with lava veins) =====
+    const obsidianMat = new THREE.MeshStandardMaterial({ color: 0x1a1a2a, metalness: 0.8, roughness: 0.2 });
+    const lavaVeinMat = new THREE.MeshStandardMaterial({ color: 0xff2200, emissive: 0xff2200, emissiveIntensity: 0.6, transparent: true, opacity: 0.8 });
+    const obsidianCount = Math.floor(11 * (0.8 + rng() * 0.4));
     for (let i = 0; i < obsidianCount; i++) {
       const px = (rng() - 0.5) * ARENA.size * 0.85;
       const pz = (rng() - 0.5) * ARENA.size * 0.85;
@@ -1348,32 +1407,180 @@ export class GameEngine {
       top.position.y = h;
       top.castShadow = true;
       pillar.add(top);
+
+      // Lava veins on some pillars
+      if (rng() > 0.4) {
+        const veinCount = 2 + Math.floor(rng() * 3);
+        for (let v = 0; v < veinCount; v++) {
+          const veinH = h * 0.3 + rng() * h * 0.5;
+          const vein = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, veinH, 4), lavaVeinMat);
+          const vAngle = rng() * Math.PI * 2;
+          vein.position.set(Math.cos(vAngle) * r * 0.65, h * 0.2 + rng() * h * 0.4, Math.sin(vAngle) * r * 0.65);
+          vein.rotation.set(rng() * 0.3, 0, rng() * 0.3);
+          pillar.add(vein);
+        }
+      }
+
       pillar.position.set(px, py, pz);
       this.scene.add(pillar);
       this.environmentObjects.push(pillar);
       this.rockColliders.push({ position: new THREE.Vector3(px, py, pz), radius: r });
     }
 
-    // Volcanic rocks (±20%)
-    const volcanicRockMat = new THREE.MeshLambertMaterial({ color: 0x2d1b1b });
-    const volcanicRockCount = Math.floor(30 * (0.8 + rng() * 0.4));
-    for (let i = 0; i < volcanicRockCount; i++) {
-      const rx = (rng() - 0.5) * ARENA.size * 0.85;
-      const rz = (rng() - 0.5) * ARENA.size * 0.85;
-      if (Math.abs(rx) < 5 && Math.abs(rz) < 5) continue;
-      const rr = rng() * 2 + 0.5;
-      const ry = this.getTerrainHeight(rx, rz) + rr * 0.3;
-      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(rr, 0), volcanicRockMat);
-      rock.position.set(rx, ry, rz);
-      rock.rotation.set(rng() * 0.5, rng() * Math.PI * 2, rng() * 0.5);
-      rock.castShadow = true;
-      rock.receiveShadow = true;
-      this.scene.add(rock);
-      this.environmentObjects.push(rock);
-      this.rockColliders.push({ position: new THREE.Vector3(rx, ry, rz), radius: rr * 0.8 });
+    // ===== VOLCANIC ROCKS (50, jagged with lava veins) =====
+    const volcanicRockMats = [
+      new THREE.MeshLambertMaterial({ color: 0x2a2a2a }),
+      new THREE.MeshLambertMaterial({ color: 0x1a1a1a }),
+      new THREE.MeshLambertMaterial({ color: 0x333333 }),
+    ];
+    const rockConfigs = [
+      { count: 15, minR: 1.5, maxR: 2.5, deform: 0.4 },
+      { count: 20, minR: 0.8, maxR: 1.5, deform: 0.25 },
+      { count: 15, minR: 0.3, maxR: 0.6, deform: 0.1 },
+    ];
+    for (const cfg of rockConfigs) {
+      for (let i = 0; i < cfg.count; i++) {
+        const rx = (rng() - 0.5) * ARENA.size * 0.85;
+        const rz = (rng() - 0.5) * ARENA.size * 0.85;
+        if (Math.abs(rx) < 5 && Math.abs(rz) < 5) continue;
+        const rr = cfg.minR + rng() * (cfg.maxR - cfg.minR);
+        const ry = this.getTerrainHeight(rx, rz) + rr * 0.3;
+        const rockGeo = new THREE.DodecahedronGeometry(rr, 0);
+        deformGeo(rockGeo, cfg.deform);
+        const rockGroup = new THREE.Group();
+        const rock = new THREE.Mesh(rockGeo, volcanicRockMats[Math.floor(rng() * 3)]);
+        rock.castShadow = true;
+        rock.receiveShadow = true;
+        rockGroup.add(rock);
+
+        // Lava vein detail on some big rocks
+        if (rr > 1.0 && rng() > 0.5) {
+          const veinGeo = new THREE.CylinderGeometry(0.02, 0.02, rr * 1.5, 4);
+          const vein = new THREE.Mesh(veinGeo, lavaVeinMat);
+          vein.position.set((rng() - 0.5) * rr * 0.5, (rng() - 0.5) * rr * 0.3, (rng() - 0.5) * rr * 0.5);
+          vein.rotation.set(rng() * Math.PI, rng() * Math.PI, rng() * Math.PI);
+          rockGroup.add(vein);
+        }
+
+        rockGroup.position.set(rx, ry, rz);
+        rockGroup.rotation.set(rng() * 0.5, rng() * Math.PI * 2, rng() * 0.5);
+        this.scene.add(rockGroup);
+        this.environmentObjects.push(rockGroup);
+        this.rockColliders.push({ position: new THREE.Vector3(rx, ry, rz), radius: rr * 0.8 });
+      }
     }
 
-    // Ember particles
+    // ===== ASH TREES (10, burned dead trees with embers) =====
+    const ashTreeMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
+    const emberDotMat = new THREE.MeshStandardMaterial({ color: 0xff6600, emissive: 0xff4400, emissiveIntensity: 0.8 });
+    for (let i = 0; i < 10; i++) {
+      const tx = (rng() - 0.5) * ARENA.size * 0.85;
+      const tz = (rng() - 0.5) * ARENA.size * 0.85;
+      if (Math.abs(tx) < 8 && Math.abs(tz) < 8) continue;
+      const ty = this.getTerrainHeight(tx, tz);
+      const tree = new THREE.Group();
+      const trunkH = 2 + rng() * 2.5;
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.2, trunkH, 5), ashTreeMat);
+      trunk.position.y = trunkH / 2;
+      trunk.castShadow = true;
+      tree.add(trunk);
+
+      // Broken branches
+      const branchCount = 3 + Math.floor(rng() * 3);
+      for (let b = 0; b < branchCount; b++) {
+        const bLen = 0.5 + rng() * 1.0;
+        const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.05, bLen, 4), ashTreeMat);
+        branch.position.y = trunkH * (0.4 + rng() * 0.5);
+        const angle = rng() * Math.PI * 2;
+        branch.rotation.z = (rng() - 0.5) * 1.5;
+        branch.rotation.y = angle;
+        branch.position.x = Math.sin(angle) * 0.15;
+        branch.position.z = Math.cos(angle) * 0.15;
+        tree.add(branch);
+
+        // Ember dots on some branches
+        if (rng() > 0.6) {
+          const dot = new THREE.Mesh(new THREE.SphereGeometry(0.05, 4, 4), emberDotMat);
+          dot.position.copy(branch.position);
+          dot.position.y += 0.2;
+          tree.add(dot);
+        }
+      }
+
+      tree.position.set(tx, ty, tz);
+      this.scene.add(tree);
+      this.environmentObjects.push(tree);
+      this.rockColliders.push({ position: new THREE.Vector3(tx, ty, tz), radius: 0.3 });
+    }
+
+    // ===== CRYSTALS (8-10, red/purple emissive) =====
+    const crystalMats = [
+      new THREE.MeshStandardMaterial({ color: 0xff2200, emissive: 0xff2200, emissiveIntensity: 0.5, transparent: true, opacity: 0.7 }),
+      new THREE.MeshStandardMaterial({ color: 0x8800aa, emissive: 0x8800aa, emissiveIntensity: 0.5, transparent: true, opacity: 0.7 }),
+    ];
+    const crystalCount = 8 + Math.floor(rng() * 3);
+    for (let i = 0; i < crystalCount; i++) {
+      const cx = (rng() - 0.5) * ARENA.size * 0.85;
+      const cz = (rng() - 0.5) * ARENA.size * 0.85;
+      if (Math.abs(cx) < 6 && Math.abs(cz) < 6) continue;
+      const cy = this.getTerrainHeight(cx, cz);
+      const group = new THREE.Group();
+      const spikes = 3 + Math.floor(rng() * 3);
+      for (let s = 0; s < spikes; s++) {
+        const sH = 0.5 + rng() * 1.5;
+        const sR = 0.1 + rng() * 0.2;
+        const spike = new THREE.Mesh(new THREE.ConeGeometry(sR, sH, 5), crystalMats[Math.floor(rng() * 2)]);
+        spike.position.set((rng() - 0.5) * 0.5, sH / 2, (rng() - 0.5) * 0.5);
+        spike.rotation.set((rng() - 0.5) * 0.3, rng() * Math.PI, (rng() - 0.5) * 0.3);
+        spike.castShadow = true;
+        group.add(spike);
+      }
+      group.position.set(cx, cy, cz);
+      this.scene.add(group);
+      this.environmentObjects.push(group);
+    }
+
+    // ===== STEAM VENTS (5-6) =====
+    for (let i = 0; i < 6; i++) {
+      const vx = (rng() - 0.5) * ARENA.size * 0.7;
+      const vz = (rng() - 0.5) * ARENA.size * 0.7;
+      if (Math.abs(vx) < 6 && Math.abs(vz) < 6) continue;
+      const vy = this.getTerrainHeight(vx, vz);
+      // Vent hole
+      const ventMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
+      const vent = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.5, 0.3, 8), ventMat);
+      vent.position.set(vx, vy + 0.15, vz);
+      this.scene.add(vent);
+      this.environmentObjects.push(vent);
+    }
+
+    // ===== POINT LIGHTS near lava pools =====
+    const lightCount = Math.min(4, this.lavaPoolPositions.length);
+    for (let i = 0; i < lightCount; i++) {
+      const lp = this.lavaPoolPositions[i];
+      const light = new THREE.PointLight(0xff4400, 1.5, 15);
+      light.position.set(lp.x, this.getTerrainHeight(lp.x, lp.z) + 2, lp.z);
+      this.scene.add(light);
+      this.volcanicPointLights.push(light);
+    }
+
+    // ===== ASH PARTICLES (30-40 falling) =====
+    const ashCount = 35;
+    for (let i = 0; i < ashCount; i++) {
+      const ashGeo = new THREE.PlaneGeometry(0.08, 0.08);
+      const ashMat = new THREE.MeshBasicMaterial({ color: 0x888888, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
+      const ash = new THREE.Mesh(ashGeo, ashMat);
+      ash.position.set(
+        (rng() - 0.5) * ARENA.size * 0.8,
+        5 + rng() * 10,
+        (rng() - 0.5) * ARENA.size * 0.8
+      );
+      ash.rotation.set(rng() * Math.PI, rng() * Math.PI, rng() * Math.PI);
+      this.scene.add(ash);
+      this.ashParticles.push({ mesh: ash, velocity: new THREE.Vector3((rng() - 0.5) * 0.3, -0.3 - rng() * 0.2, (rng() - 0.5) * 0.3), phase: rng() * Math.PI * 2 });
+    }
+
+    // ===== EMBER PARTICLES (existing system) =====
     const emberCount = 500;
     const emberGeo = new THREE.BufferGeometry();
     const emberPositions = new Float32Array(emberCount * 3);
@@ -3138,12 +3345,12 @@ export class GameEngine {
     if (this.portalState !== "none") {
       this.updatePortal(dt);
       this.updateCamera();
-      this.renderer.render(this.scene, this.camera);
+      this.renderFrame();
       if (this.state !== "playing") return;
     }
 
     if (this.state !== "playing") {
-      this.renderer.render(this.scene, this.camera);
+      this.renderFrame();
       return;
     }
 
@@ -3213,7 +3420,7 @@ export class GameEngine {
     this.performanceCleanup();
 
     this.onStatsUpdate?.();
-    this.renderer.render(this.scene, this.camera);
+    this.renderFrame();
   }
 
   private updatePlayer(dt: number) {
@@ -7470,80 +7677,264 @@ export class GameEngine {
 
   private setupFrozenObjects() {
     this.rockColliders = [];
+    this.snowParticles = [];
+    this.frozenPointLights = [];
     const rng = this.seededRandom(this.mapSeed + 1);
-    const half = ARENA.halfSize;
 
-    // Ice pillars: 30 transparent blue cylinders
-    const pillarMat = new THREE.MeshLambertMaterial({ color: 0x88bbdd, transparent: true, opacity: 0.7 });
-    const pillarCount = Math.floor(30 * (0.8 + rng() * 0.4));
+    // ===== ICE PILLARS (10-12, translucent crystal clusters) =====
+    const icePillarMat = new THREE.MeshStandardMaterial({ color: 0x88ccff, transparent: true, opacity: 0.6, metalness: 0.3, roughness: 0.1 });
+    const pillarCount = Math.floor(11 * (0.8 + rng() * 0.4));
     for (let i = 0; i < pillarCount; i++) {
       const px = (rng() - 0.5) * ARENA.size * 0.85;
       const pz = (rng() - 0.5) * ARENA.size * 0.85;
       if (Math.abs(px) < 6 && Math.abs(pz) < 6) continue;
-      const h = 3 + rng() * 5;
-      const r = 0.3 + rng() * 0.4;
-      const pillarGeo = new THREE.CylinderGeometry(r * 0.7, r, h, 8);
-      const pillar = new THREE.Mesh(pillarGeo, pillarMat);
       const py = this.getTerrainHeight(px, pz);
-      pillar.position.set(px, py + h / 2, pz);
-      pillar.castShadow = true;
-      this.scene.add(pillar);
-      this.environmentObjects.push(pillar);
+      const group = new THREE.Group();
+      // Main pillar
+      const h = 3 + rng() * 4;
+      const r = 0.3 + rng() * 0.3;
+      const mainPillar = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.5, r, h, 6), icePillarMat);
+      mainPillar.position.y = h / 2;
+      mainPillar.castShadow = true;
+      group.add(mainPillar);
+      // Smaller accompanying pillars
+      if (rng() > 0.4) {
+        const subCount = 1 + Math.floor(rng() * 2);
+        for (let s = 0; s < subCount; s++) {
+          const sh = h * (0.3 + rng() * 0.4);
+          const sr = r * (0.4 + rng() * 0.3);
+          const sub = new THREE.Mesh(new THREE.ConeGeometry(sr, sh, 5), icePillarMat);
+          sub.position.set((rng() - 0.5) * 1.0, sh / 2, (rng() - 0.5) * 1.0);
+          sub.rotation.set((rng() - 0.5) * 0.3, 0, (rng() - 0.5) * 0.3);
+          group.add(sub);
+        }
+      }
+      group.position.set(px, py, pz);
+      this.scene.add(group);
+      this.environmentObjects.push(group);
       this.rockColliders.push({ position: new THREE.Vector3(px, py, pz), radius: r * 1.2 });
     }
 
-    // Snow mounds: 40 white half-spheres
-    const snowMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-    const moundCount = Math.floor(40 * (0.8 + rng() * 0.4));
+    // ===== SNOW MOUNDS (30-40) =====
+    const snowMats = [
+      new THREE.MeshLambertMaterial({ color: 0xeeeeff }),
+      new THREE.MeshLambertMaterial({ color: 0xddeeff }),
+    ];
+    const moundCount = Math.floor(35 * (0.8 + rng() * 0.4));
     for (let i = 0; i < moundCount; i++) {
       const mx = (rng() - 0.5) * ARENA.size * 0.85;
       const mz = (rng() - 0.5) * ARENA.size * 0.85;
       if (Math.abs(mx) < 5 && Math.abs(mz) < 5) continue;
       const mr = 0.8 + rng() * 1.5;
-      const moundGeo = new THREE.SphereGeometry(mr, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2);
-      const mound = new THREE.Mesh(moundGeo, snowMat);
+      const mound = new THREE.Mesh(new THREE.SphereGeometry(mr, 8, 6), snowMats[Math.floor(rng() * 2)]);
       const my = this.getTerrainHeight(mx, mz);
       mound.position.set(mx, my, mz);
+      mound.scale.y = 0.4 + rng() * 0.2;
       mound.receiveShadow = true;
       this.scene.add(mound);
       this.environmentObjects.push(mound);
       this.rockColliders.push({ position: new THREE.Vector3(mx, my, mz), radius: mr * 0.7 });
     }
 
-    // Frozen trees: 25 dead trees (bare branches)
-    const trunkMat = new THREE.MeshLambertMaterial({ color: 0x4a3728 });
-    const branchMat = new THREE.MeshLambertMaterial({ color: 0x5a4838 });
-    const treeCount = Math.floor(25 * (0.8 + rng() * 0.4));
-    for (let i = 0; i < treeCount; i++) {
+    // ===== FROZEN PINE TREES (20, ice-coated) =====
+    const frozenTrunkMat = new THREE.MeshLambertMaterial({ color: 0x8899aa });
+    const iceLeafMats = [
+      new THREE.MeshLambertMaterial({ color: 0xaaddff }),
+      new THREE.MeshLambertMaterial({ color: 0xbbddee }),
+    ];
+    const icicleMat = new THREE.MeshStandardMaterial({ color: 0xaaddff, transparent: true, opacity: 0.7 });
+    for (let i = 0; i < 20; i++) {
       const tx = (rng() - 0.5) * ARENA.size * 0.85;
       const tz = (rng() - 0.5) * ARENA.size * 0.85;
       if (Math.abs(tx) < 8 && Math.abs(tz) < 8) continue;
       const ty = this.getTerrainHeight(tx, tz);
+      const scale = 0.7 + rng() * 0.5;
       const tree = new THREE.Group();
       // Trunk
-      const trunkH = 2 + rng() * 1.5;
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.15, trunkH, 6), trunkMat);
+      const trunkH = 3 * scale;
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.08 * scale, 0.16 * scale, trunkH, 6), frozenTrunkMat);
       trunk.position.y = trunkH / 2;
       trunk.castShadow = true;
       tree.add(trunk);
-      // Bare branches (3-5 thin cylinders)
-      const branchCount = 3 + Math.floor(rng() * 3);
-      for (let b = 0; b < branchCount; b++) {
-        const bLen = 0.8 + rng() * 1.2;
-        const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.04, bLen, 4), branchMat);
-        branch.position.y = trunkH * (0.5 + rng() * 0.4);
-        branch.rotation.z = (rng() - 0.5) * 1.2;
-        branch.rotation.y = rng() * Math.PI * 2;
-        branch.position.x = Math.sin(branch.rotation.y) * 0.3;
-        branch.position.z = Math.cos(branch.rotation.y) * 0.3;
-        tree.add(branch);
+      // Ice-coated cone layers
+      const layers = 3 + Math.floor(rng() * 2);
+      for (let l = 0; l < layers; l++) {
+        const leafR = (1.4 - l * 0.25) * scale;
+        const leafH = (1.8 - l * 0.2) * scale;
+        const leaf = new THREE.Mesh(new THREE.ConeGeometry(leafR, leafH, 7), iceLeafMats[Math.floor(rng() * 2)]);
+        leaf.position.y = (2.2 + l * 1.0) * scale;
+        leaf.castShadow = true;
+        tree.add(leaf);
+        // Icicles hanging from branches
+        if (rng() > 0.5) {
+          const icicleCount = 2 + Math.floor(rng() * 3);
+          for (let ic = 0; ic < icicleCount; ic++) {
+            const angle = (ic / icicleCount) * Math.PI * 2;
+            const icicle = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.3 + rng() * 0.3, 4), icicleMat);
+            icicle.position.set(Math.cos(angle) * leafR * 0.7, leaf.position.y - leafH * 0.4, Math.sin(angle) * leafR * 0.7);
+            icicle.rotation.x = Math.PI; // point down
+            tree.add(icicle);
+          }
+        }
       }
       tree.position.set(tx, ty, tz);
+      tree.rotation.y = rng() * Math.PI * 2;
       this.scene.add(tree);
       this.environmentObjects.push(tree);
+      this.rockColliders.push({ position: new THREE.Vector3(tx, ty, tz), radius: 0.4 });
     }
 
-    // Ice crystals: 20 octahedrons with emissive glow
+    // ===== FROZEN LAKES (2-3, with crack lines) =====
+    const iceLakeMat = new THREE.MeshStandardMaterial({ color: 0xbbddff, metalness: 0.5, roughness: 0.1, transparent: true, opacity: 0.85 });
+    const crackMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 });
+    const lakeCount = 2 + Math.floor(rng() * 2);
+    for (let i = 0; i < lakeCount; i++) {
+      const lx = (rng() - 0.5) * ARENA.size * 0.6;
+      const lz = (rng() - 0.5) * ARENA.size * 0.6;
+      if (Math.abs(lx) < 10 && Math.abs(lz) < 10) continue;
+      const ly = this.getTerrainHeight(lx, lz) + 0.05;
+      const lakeR = 3 + rng() * 3;
+      const lake = new THREE.Mesh(new THREE.CircleGeometry(lakeR, 16), iceLakeMat);
+      lake.rotation.x = -Math.PI / 2;
+      lake.position.set(lx, ly, lz);
+      lake.receiveShadow = true;
+      this.scene.add(lake);
+      this.environmentObjects.push(lake);
+      // Crack lines
+      const crackCount = 4 + Math.floor(rng() * 4);
+      for (let c = 0; c < crackCount; c++) {
+        const crackLen = lakeR * (0.3 + rng() * 0.6);
+        const crack = new THREE.Mesh(new THREE.PlaneGeometry(0.03, crackLen), crackMat);
+        crack.rotation.x = -Math.PI / 2;
+        crack.rotation.z = rng() * Math.PI;
+        crack.position.set(lx + (rng() - 0.5) * lakeR, ly + 0.02, lz + (rng() - 0.5) * lakeR);
+        this.scene.add(crack);
+        this.environmentObjects.push(crack);
+      }
+    }
+
+    // ===== SNOW-COVERED ROCKS (40) =====
+    const stoneRockMat = new THREE.MeshLambertMaterial({ color: 0x667788 });
+    const snowCapMat = new THREE.MeshLambertMaterial({ color: 0xeeeeff });
+    for (let i = 0; i < 40; i++) {
+      const rx = (rng() - 0.5) * ARENA.size * 0.85;
+      const rz = (rng() - 0.5) * ARENA.size * 0.85;
+      if (Math.abs(rx) < 5 && Math.abs(rz) < 5) continue;
+      const rr = 0.5 + rng() * 1.5;
+      const ry = this.getTerrainHeight(rx, rz) + rr * 0.3;
+      const rockGroup = new THREE.Group();
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(rr, 0), stoneRockMat);
+      rock.castShadow = true;
+      rock.receiveShadow = true;
+      rockGroup.add(rock);
+      // Snow cap on top
+      const snowCap = new THREE.Mesh(new THREE.SphereGeometry(rr * 0.7, 6, 4), snowCapMat);
+      snowCap.position.y = rr * 0.5;
+      snowCap.scale.y = 0.3;
+      rockGroup.add(snowCap);
+      rockGroup.position.set(rx, ry, rz);
+      rockGroup.rotation.set(rng() * 0.3, rng() * Math.PI * 2, rng() * 0.3);
+      this.scene.add(rockGroup);
+      this.environmentObjects.push(rockGroup);
+      this.rockColliders.push({ position: new THREE.Vector3(rx, ry, rz), radius: rr * 0.8 });
+    }
+
+    // ===== ICE CAVE ENTRANCES (1-2, decorative) =====
+    const iceCaveMat = new THREE.MeshStandardMaterial({ color: 0x88ccff, transparent: true, opacity: 0.5, metalness: 0.2, roughness: 0.1 });
+    const caveCount = 1 + Math.floor(rng() * 2);
+    for (let i = 0; i < caveCount; i++) {
+      const cx = (rng() - 0.5) * ARENA.size * 0.7;
+      const cz = (rng() - 0.5) * ARENA.size * 0.7;
+      if (Math.abs(cx) < 10 && Math.abs(cz) < 10) continue;
+      const cy = this.getTerrainHeight(cx, cz);
+      const cave = new THREE.Group();
+      // Arch
+      const archGeo = new THREE.TorusGeometry(1.5, 0.4, 8, 12, Math.PI);
+      const arch = new THREE.Mesh(archGeo, iceCaveMat);
+      arch.position.y = 1.5;
+      arch.castShadow = true;
+      cave.add(arch);
+      // Dark interior
+      const interiorMat = new THREE.MeshLambertMaterial({ color: 0x112233 });
+      const interior = new THREE.Mesh(new THREE.PlaneGeometry(2.5, 2.5), interiorMat);
+      interior.position.y = 1.2;
+      interior.position.z = 0.2;
+      cave.add(interior);
+      cave.position.set(cx, cy, cz);
+      cave.rotation.y = rng() * Math.PI * 2;
+      this.scene.add(cave);
+      this.environmentObjects.push(cave);
+      this.rockColliders.push({ position: new THREE.Vector3(cx, cy, cz), radius: 2.0 });
+    }
+
+    // ===== SNOWMEN / TOTEMS (2-3, easter egg) =====
+    const snowmanMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const coalMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
+    const carrotMat = new THREE.MeshLambertMaterial({ color: 0xff6600 });
+    const snowmanCount = 2 + Math.floor(rng() * 2);
+    for (let i = 0; i < snowmanCount; i++) {
+      const sx = (rng() - 0.5) * ARENA.size * 0.7;
+      const sz = (rng() - 0.5) * ARENA.size * 0.7;
+      if (Math.abs(sx) < 8 && Math.abs(sz) < 8) continue;
+      const sy = this.getTerrainHeight(sx, sz);
+      const snowman = new THREE.Group();
+      // Bottom ball
+      const bottom = new THREE.Mesh(new THREE.SphereGeometry(0.6, 8, 8), snowmanMat);
+      bottom.position.y = 0.6;
+      snowman.add(bottom);
+      // Middle ball
+      const middle = new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 8), snowmanMat);
+      middle.position.y = 1.5;
+      snowman.add(middle);
+      // Head
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), snowmanMat);
+      head.position.y = 2.15;
+      snowman.add(head);
+      // Eyes (coal)
+      for (let e = 0; e < 2; e++) {
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.04, 4, 4), coalMat);
+        eye.position.set(e === 0 ? -0.1 : 0.1, 2.25, 0.25);
+        snowman.add(eye);
+      }
+      // Nose (carrot)
+      const nose = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.2, 5), carrotMat);
+      nose.position.set(0, 2.15, 0.32);
+      nose.rotation.x = -Math.PI / 2;
+      snowman.add(nose);
+      snowman.position.set(sx, sy, sz);
+      snowman.rotation.y = rng() * Math.PI * 2;
+      this.scene.add(snowman);
+      this.environmentObjects.push(snowman);
+    }
+
+    // ===== POINT LIGHTS (cold blue) =====
+    for (let i = 0; i < 3; i++) {
+      const lx = (rng() - 0.5) * ARENA.size * 0.5;
+      const lz = (rng() - 0.5) * ARENA.size * 0.5;
+      const ly = this.getTerrainHeight(lx, lz) + 3;
+      const light = new THREE.PointLight(0x4488ff, 1.0, 20);
+      light.position.set(lx, ly, lz);
+      this.scene.add(light);
+      this.frozenPointLights.push(light);
+    }
+
+    // ===== SNOW PARTICLES (50-60 falling with wind) =====
+    const snowCount = 55;
+    for (let i = 0; i < snowCount; i++) {
+      const flakeGeo = new THREE.PlaneGeometry(0.06, 0.06);
+      const flakeMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7, side: THREE.DoubleSide });
+      const flake = new THREE.Mesh(flakeGeo, flakeMat);
+      flake.position.set(
+        (rng() - 0.5) * ARENA.size * 0.8,
+        3 + rng() * 12,
+        (rng() - 0.5) * ARENA.size * 0.8
+      );
+      flake.rotation.set(rng() * Math.PI, rng() * Math.PI, rng() * Math.PI);
+      this.scene.add(flake);
+      this.snowParticles.push({ mesh: flake, velocity: new THREE.Vector3(0.5 + rng() * 0.3, -0.4 - rng() * 0.3, (rng() - 0.5) * 0.2), phase: rng() * Math.PI * 2 });
+    }
+
+    // ===== ICE CRYSTALS (existing, enhanced) =====
     const crystalMat = new THREE.MeshStandardMaterial({ color: 0x44aaff, emissive: 0x2266cc, emissiveIntensity: 0.5, transparent: true, opacity: 0.8 });
     const crystalCount = Math.floor(20 * (0.8 + rng() * 0.4));
     for (let i = 0; i < crystalCount; i++) {
@@ -8036,6 +8427,190 @@ export class GameEngine {
     this.saveMetaState();
   }
 
+  // ─── Post-Processing Pipeline ─────────────────────────────────────────────
+
+  private setupPostProcessing() {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const q = this.settings.quality || "medium";
+
+    this.composer = new EffectComposer(this.renderer);
+
+    // 1. RenderPass
+    const renderPass = new RenderPass(this.scene, this.camera);
+    this.composer.addPass(renderPass);
+
+    // 2. UnrealBloomPass
+    this.bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(w, h),
+      0.4,  // strength
+      0.3,  // radius
+      0.8   // threshold
+    );
+    this.composer.addPass(this.bloomPass);
+
+    // 3. Color Grading ShaderPass
+    this.colorGradingPass = new ShaderPass({
+      uniforms: {
+        tDiffuse: { value: null },
+        tint: { value: new THREE.Vector3(1, 1, 1) },
+        saturation: { value: 1.0 },
+        contrast: { value: 1.0 },
+        brightness: { value: 0.0 },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D tDiffuse;
+        uniform vec3 tint;
+        uniform float saturation;
+        uniform float contrast;
+        uniform float brightness;
+        varying vec2 vUv;
+        void main() {
+          vec4 color = texture2D(tDiffuse, vUv);
+          // Tint
+          color.rgb *= tint;
+          // Saturation
+          float grey = dot(color.rgb, vec3(0.299, 0.587, 0.114));
+          color.rgb = mix(vec3(grey), color.rgb, saturation);
+          // Contrast
+          color.rgb = (color.rgb - 0.5) * contrast + 0.5;
+          // Brightness
+          color.rgb += brightness;
+          gl_FragColor = color;
+        }
+      `,
+    });
+    this.composer.addPass(this.colorGradingPass);
+
+    // 4. Vignette ShaderPass
+    this.vignettePass = new ShaderPass({
+      uniforms: {
+        tDiffuse: { value: null },
+        offset: { value: 1.0 },
+        darkness: { value: 1.2 },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D tDiffuse;
+        uniform float offset;
+        uniform float darkness;
+        varying vec2 vUv;
+        void main() {
+          vec4 color = texture2D(tDiffuse, vUv);
+          vec2 uv = (vUv - 0.5) * 2.0;
+          float vig = 1.0 - dot(uv, uv) * darkness * 0.25;
+          vig = clamp(pow(vig, offset), 0.0, 1.0);
+          color.rgb *= vig;
+          gl_FragColor = color;
+        }
+      `,
+    });
+    this.composer.addPass(this.vignettePass);
+
+    // 5. SMAA (high/medium) or FXAA (low)
+    this.smaaPass = new SMAAPass();
+    this.composer.addPass(this.smaaPass);
+
+    this.fxaaPass = new ShaderPass(FXAAShader);
+    this.fxaaPass.material.uniforms["resolution"].value.set(1 / w, 1 / h);
+    this.composer.addPass(this.fxaaPass);
+
+    // Apply quality tier
+    this.applyPostProcessingQuality();
+    this.postProcessingEnabled = true;
+  }
+
+  private applyPostProcessingQuality() {
+    const q = this.settings.quality || "medium";
+
+    if (q === "low") {
+      // LOW: FXAA only, no bloom/vignette/color grading
+      this.bloomPass.enabled = false;
+      this.vignettePass.enabled = false;
+      this.colorGradingPass.enabled = false;
+      this.smaaPass.enabled = false;
+      this.fxaaPass.enabled = true;
+    } else if (q === "medium") {
+      // MEDIUM: SMAA + vignette, bloom half-res
+      this.bloomPass.enabled = true;
+      this.bloomPass.resolution.set(
+        Math.floor(window.innerWidth / 2),
+        Math.floor(window.innerHeight / 2)
+      );
+      this.vignettePass.enabled = true;
+      this.colorGradingPass.enabled = false;
+      this.smaaPass.enabled = true;
+      this.fxaaPass.enabled = false;
+    } else {
+      // HIGH: Full pipeline
+      this.bloomPass.enabled = true;
+      this.bloomPass.resolution.set(window.innerWidth, window.innerHeight);
+      this.vignettePass.enabled = true;
+      this.colorGradingPass.enabled = true;
+      this.smaaPass.enabled = true;
+      this.fxaaPass.enabled = false;
+    }
+  }
+
+  updatePostProcessingForMap(mapId?: string) {
+    const map = mapId || this.selectedMap;
+    if (!this.colorGradingPass) return;
+    const u = this.colorGradingPass.material.uniforms;
+
+    switch (map) {
+      case "forest":
+        u["tint"].value.set(0.95, 1.05, 0.95);
+        u["saturation"].value = 0.9;
+        u["contrast"].value = 1.0;
+        u["brightness"].value = 0.0;
+        break;
+      case "desert":
+        u["tint"].value.set(1.1, 1.0, 0.85);
+        u["saturation"].value = 0.85;
+        u["contrast"].value = 1.05;
+        u["brightness"].value = 0.02;
+        break;
+      case "volcanic":
+        u["tint"].value.set(1.15, 0.9, 0.8);
+        u["saturation"].value = 1.0;
+        u["contrast"].value = 1.15;
+        u["brightness"].value = 0.0;
+        break;
+      case "frozen":
+        u["tint"].value.set(0.85, 0.95, 1.15);
+        u["saturation"].value = 0.75;
+        u["contrast"].value = 1.0;
+        u["brightness"].value = 0.02;
+        break;
+      default:
+        u["tint"].value.set(1, 1, 1);
+        u["saturation"].value = 1.0;
+        u["contrast"].value = 1.0;
+        u["brightness"].value = 0.0;
+    }
+  }
+
+  private renderFrame() {
+    if (this.postProcessingEnabled && this.composer) {
+      this.composer.render();
+    } else {
+      this.renderer.render(this.scene, this.camera);
+    }
+  }
+
   // Settings
   private loadSettings(): { invertY: boolean; volume: number; quality: string } {
     try {
@@ -8116,6 +8691,10 @@ export class GameEngine {
       // medium
       this.renderer.shadowMap.enabled = !isMobileDevice;
       this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    }
+    // Update post-processing quality tier
+    if (this.postProcessingEnabled) {
+      this.applyPostProcessingQuality();
     }
   }
 
