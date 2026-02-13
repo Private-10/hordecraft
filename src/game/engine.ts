@@ -364,7 +364,9 @@ export class GameEngine {
     this.sunLight = new THREE.DirectionalLight(0xffeedd, 1.2);
     this.sunLight.position.set(20, 30, 10);
     this.sunLight.castShadow = true;
-    this.sunLight.shadow.mapSize.set(1024, 1024);
+    this.sunLight.shadow.mapSize.set(2048, 2048);
+    this.sunLight.shadow.bias = -0.001;
+    this.sunLight.shadow.normalBias = 0.02;
     this.sunLight.shadow.camera.far = 160;
     this.sunLight.shadow.camera.left = -80;
     this.sunLight.shadow.camera.right = 80;
@@ -585,7 +587,7 @@ export class GameEngine {
 
     // Grid
     this.gridHelper = new THREE.GridHelper(ARENA.size, 40, mapDef.groundLineColor, mapDef.groundLineColor);
-    (this.gridHelper.material as THREE.Material).opacity = 0.15;
+    (this.gridHelper.material as THREE.Material).opacity = 0.05;
     (this.gridHelper.material as THREE.Material).transparent = true;
     this.scene.add(this.gridHelper);
 
